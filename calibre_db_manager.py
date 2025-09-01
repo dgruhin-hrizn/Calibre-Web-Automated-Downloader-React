@@ -440,6 +440,34 @@ class CalibreDBManager:
             return []
         finally:
             self.close_session(session)
+    
+    def get_book_cover(self, book_id: int) -> Optional[bytes]:
+        """Get book cover image data from the Calibre library"""
+        session = self.get_session()
+        try:
+            # Get the book to check if it has a cover
+            book = session.query(Books).filter(Books.id == book_id).first()
+            if not book or not book.has_cover:
+                return None
+            
+            # Calibre stores covers as cover.jpg in the book's directory
+            # The book path is stored relative to the library root
+            library_root = self.db_path.parent  # metadata.db is in the library root
+            book_path = library_root / book.path
+            cover_path = book_path / "cover.jpg"
+            
+            if cover_path.exists():
+                with open(cover_path, 'rb') as f:
+                    return f.read()
+            else:
+                logger.warning(f"Cover file not found for book {book_id}: {cover_path}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error fetching cover for book {book_id}: {e}")
+            return None
+        finally:
+            self.close_session(session)
 
 # Global instance
 _calibre_db_manager = None

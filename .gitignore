@@ -239,3 +239,15 @@ cwa-reference/
 
 # CWA data directory (contains library files, config, and databases)
 cwa-data/
+
+# Build artifacts and temporary files
+*.tmp
+*.bak
+.build/
+build-*.log
+
+# Backup directory for removed config files
+backup/
+
+# Local development environment file
+dev.env

@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Official Calibre-Web-Automated
   calibre-web-automated:
@@ -29,36 +27,11 @@ services:
       context: .
       dockerfile: Dockerfile.backend
     container_name: cwa-api
+    env_file:
+      - dev.env
     environment:
-      - FLASK_PORT=8084
-      - FLASK_HOST=0.0.0.0
-      - DEBUG=true
-      - APP_ENV=development
-      - LOG_LEVEL=DEBUG
-      - ENABLE_LOGGING=true
-      - BOOK_LANGUAGE=en
-      - USE_BOOK_TITLE=true
-      - MAX_CONCURRENT_DOWNLOADS=3
-      - TZ=America/New_York
-      
-      # Database paths (shared with CWA)
-      - CWA_DB_PATH=/app/data/cwa.db
-      
-      # CWA connection (internal network)
+      # Override specific settings for hybrid development
       - CWA_BASE_URL=http://calibre-web-automated:8083
-      - CWA_USERNAME=admin
-      - CWA_PASSWORD=your-cwa-password
-      
-      # Anna's Archive Donator Key (optional - speeds up downloads)
-      - AA_DONATOR_KEY=your-aa-donator-key-optional
-      
-      # Cloudflare bypass settings
-      - USE_CF_BYPASS=true
-      
-      # DNS settings - use Cloudflare DNS
-      - CUSTOM_DNS=cloudflare
-      
-      # Ingest directory - must match CWA's expected path
       - INGEST_DIR=/app/ingest
       
     ports:
@@ -69,8 +42,8 @@ services:
       - ./logs:/app/logs
       - ./ingest:/app/ingest
       
-      # Access to CWA's library data (read-write for advanced features)
-      - ./cwa-data/library:/app/cwa-library
+      # Access to CWA's library data - SAME PATH as production for metadata.db access
+      - ./cwa-data/library:/calibre-library
       
     restart: unless-stopped
     depends_on:

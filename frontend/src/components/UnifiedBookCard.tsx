@@ -81,7 +81,7 @@ export function UnifiedBookCard({
       if (book.preview) {
         return book.preview
       }
-      return book.has_cover ? `/api/cwa/library/books/${book.id}/cover/md` : null
+      return book.has_cover ? `/api/metadata/books/${book.id}/cover` : null
     }
   }
   

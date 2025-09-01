@@ -39,17 +39,40 @@ echo ""
 echo "📊 Container status:"
 docker-compose -f docker-compose.hybrid.yml ps
 echo ""
-echo "🌐 To start the React frontend:"
-echo "   cd frontend"
-echo "   npm run dev"
-echo "   Then visit: http://localhost:5173"
+echo "🌐 Starting React frontend (Vite dev server)..."
+cd frontend
+
+# Check if node_modules exists
+if [ ! -d "node_modules" ]; then
+    echo "📦 Installing frontend dependencies..."
+    npm install
+fi
+
+# Start Vite dev server in background
+echo "🚀 Starting Vite dev server..."
+npm run dev &
+VITE_PID=$!
+
+# Return to root directory
+cd ..
+
+echo ""
+echo "✅ Frontend started! PID: $VITE_PID"
+echo "   🌐 React App: http://localhost:5173"
 echo ""
 echo "📝 Useful commands:"
 echo "   View all logs:      docker-compose -f docker-compose.hybrid.yml logs -f"
 echo "   View CWA logs:      docker-compose -f docker-compose.hybrid.yml logs -f calibre-web-automated"
 echo "   View API logs:      docker-compose -f docker-compose.hybrid.yml logs -f cwa-downloader-api"
 echo "   Stop backend:       docker-compose -f docker-compose.hybrid.yml down"
+echo "   Stop frontend:      kill $VITE_PID"
+echo "   Stop everything:    ./stop-hybrid.sh"
 echo ""
 echo "🎉 Hybrid development environment ready!"
 echo "   - CWA and Flask API in Docker with local database access"
-echo "   - React frontend runs locally with hot reload"
+echo "   - React frontend running locally with hot reload"
+echo ""
+echo "📍 All access points:"
+echo "   📚 CWA Web Interface: http://localhost:8083"
+echo "   🔧 Flask API: http://localhost:8084"
+echo "   🌐 React Frontend: http://localhost:5173"
