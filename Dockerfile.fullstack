@@ -1,0 +1,88 @@
+# Multi-stage build: Frontend + Backend
+FROM node:20-alpine AS frontend-builder
+
+# Build React frontend
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN rm -rf node_modules package-lock.json && npm install
+
+COPY frontend/ ./
+RUN npm run build:production
+
+# Backend stage
+FROM python:3.10-slim
+
+# Environment setup
+ENV DEBIAN_FRONTEND=noninteractive \
+    DOCKERMODE=true \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    FLASK_PORT=8084 \
+    FLASK_HOST=0.0.0.0 \
+    PYTHONPATH=/app
+
+# Install system dependencies including Cloudflare bypasser requirements
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    curl \
+    dumb-init \
+    locales \
+    tzdata \
+    # Cloudflare bypasser dependencies
+    xvfb \
+    chromium \
+    chromium-driver \
+    fonts-liberation \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libatk1.0-0 \
+    libatspi2.0-0 \
+    libdrm2 \
+    libgtk-3-0 \
+    libnspr4 \
+    libnss3 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    libxss1 \
+    libxtst6 && \
+    # Configure locale
+    sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && \
+    locale-gen en_US.UTF-8 && \
+    # Cleanup
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set locale environment
+ENV LANG=en_US.UTF-8 \
+    LANGUAGE=en_US:en \
+    LC_ALL=en_US.UTF-8
+
+WORKDIR /app
+
+# Install Python dependencies
+COPY requirements-base.txt requirements-cwa-bd.txt ./
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements-base.txt && \
+    pip install --no-cache-dir -r requirements-cwa-bd.txt && \
+    rm -rf /root/.cache
+
+# Copy Flask application
+COPY . .
+
+# Copy built frontend from previous stage
+COPY --from=frontend-builder /app/frontend/dist ./frontend/dist/
+
+# Create necessary directories
+RUN mkdir -p /app/logs /app/smb_data /app/ingest && \
+    chmod 755 /app/logs /app/smb_data /app/ingest
+
+EXPOSE 8084
+
+# Health check for Flask API only
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8084/api/status || exit 1
+
+# Use dumb-init and start Flask service only
+ENTRYPOINT ["/usr/bin/dumb-init", "--"]
+CMD ["python", "app.py"]

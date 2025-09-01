@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # Flask backend only - for database access
+  flask-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: cwa-flask-dev
+    environment:
+      # Flask settings
+      FLASK_PORT: 8084
+      FLASK_HOST: 0.0.0.0
+      DEBUG: true
+      APP_ENV: dev
+      
+      # Database paths - mounted from your Mac's SMB shares
+      CWA_DB_PATH: /app/smb_data/cwa.db
+      
+      # Your CWA integration settings
+      CWA_BASE_URL: http://your-cwa-server:8083
+      CWA_USERNAME: admin
+      CWA_PASSWORD: your-cwa-password
+      
+      # Paths and directories
+      INGEST_DIR: /app/ingest
+      LOG_ROOT: /app/logs
+      TMP_DIR: /tmp/cwa-book-downloader
+      
+      # Other settings
+      LOG_LEVEL: DEBUG
+      ENABLE_LOGGING: true
+      BOOK_LANGUAGE: en
+      USE_BOOK_TITLE: true
+      MAX_CONCURRENT_DOWNLOADS: 3
+      TZ: America/New_York
+      
+    ports:
+      - "8084:8084"
+    volumes:
+      # Key solution: Docker mounts SMB shares as local volumes
+      - /Volumes/appdata/calibre-web:/app/smb_data:ro
+      - /Volumes/ebook-import:/app/ingest
+      - ./logs:/app/logs
+      - /tmp/cwa-book-downloader:/tmp/cwa-book-downloader
+      
+      # Mount source code for hot reload
+      - ./app.py:/app/app.py
+      - ./cwa_proxy.py:/app/cwa_proxy.py
+      - ./cwa_client.py:/app/cwa_client.py
+      - ./models.py:/app/models.py
+      - ./env.py:/app/env.py
+      - ./logger.py:/app/logger.py
+      - ./backend.py:/app/backend.py
+      - ./book_manager.py:/app/book_manager.py
+      - ./config.py:/app/config.py
+      - ./network.py:/app/network.py
+      - ./cwa_settings.py:/app/cwa_settings.py
+      - ./downloader.py:/app/downloader.py
+      
+    restart: unless-stopped

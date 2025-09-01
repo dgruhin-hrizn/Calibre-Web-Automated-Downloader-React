@@ -1,0 +1,49 @@
+.git
+.github
+.vscode
+.mypy_cache
+README_images
+.gitignore
+Dockerfile
+.dockerignore
+.DS_Store
+docker-compose.yml
+docker-compose.*.yml
+readme.md
+
+# Python specific
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment files
+.env*
+
+# Test & Coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Development databases and data directories (should be mounted at runtime)
+cwa-data/
+cwa.db
+data/cwa.db
+
+# Exclude only the database files from cwa-reference, not the whole directory
+cwa-reference/app.db
+cwa-reference/calibre-web.log
+cwa-reference/empty_library/

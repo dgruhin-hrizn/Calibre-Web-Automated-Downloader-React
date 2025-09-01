@@ -1,0 +1,69 @@
+# Flask backend only - no frontend build
+FROM python:3.10-slim
+
+# Environment setup
+ENV DEBIAN_FRONTEND=noninteractive \
+    DOCKERMODE=true \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    FLASK_PORT=8084 \
+    FLASK_HOST=0.0.0.0 \
+    PYTHONPATH=/app
+
+# Install system dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    curl \
+    dumb-init \
+    locales \
+    tzdata \
+    xvfb \
+    chromium \
+    chromium-driver \
+    fonts-liberation \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libdrm2 \
+    libgtk-3-0 \
+    libnspr4 \
+    libnss3 \
+    libxss1 \
+    libxtst6 \
+    xdg-utils && \
+    # Configure locale
+    sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && \
+    locale-gen en_US.UTF-8 && \
+    # Cleanup
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set locale environment
+ENV LANG=en_US.UTF-8 \
+    LANGUAGE=en_US:en \
+    LC_ALL=en_US.UTF-8
+
+WORKDIR /app
+
+# Install Python dependencies
+COPY requirements-base.txt requirements-cwa-bd.txt ./
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements-base.txt && \
+    pip install --no-cache-dir -r requirements-cwa-bd.txt && \
+    rm -rf /root/.cache
+
+# Copy Flask application
+COPY . .
+
+# Create necessary directories
+RUN mkdir -p /app/logs /app/smb_data /app/ingest && \
+    chmod 755 /app/logs /app/smb_data /app/ingest
+
+EXPOSE 8084
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8084/api/status || exit 1
+
+# Use dumb-init and enable Flask debug mode for development
+ENTRYPOINT ["/usr/bin/dumb-init", "--"]
+CMD ["python", "app.py"]

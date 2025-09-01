@@ -1,0 +1,61 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>CWA-Book-Downloader</Name>
+  <Repository>ghcr.io/dgruhin-hrizn/cwa-book-downloader:latest</Repository>
+  <Registry>https://ghcr.io/dgruhin-hrizn/cwa-book-downloader</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/dgruhin-hrizn/Calibre-Web-Automated-Downloader-React</Support>
+  <Project>https://github.com/dgruhin-hrizn/Calibre-Web-Automated-Downloader-React</Project>
+  <Overview>Modern React frontend for Calibre-Web-Automated book downloading. Provides a beautiful interface to search, download, and manage books from Anna's Archive and other sources, integrated with your existing Calibre-Web-Automated setup.</Overview>
+  <Category>MediaApp:Books</Category>
+  <WebUI>http://[IP]:[PORT:8084]</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/dgruhin-hrizn/Calibre-Web-Automated-Downloader-React/main/unraid-template.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/dgruhin-hrizn/Calibre-Web-Automated-Downloader-React/main/static/media/logo.png</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled>1756755762</DateInstalled>
+  <DonateText/>
+  <DonateLink/>
+  <Requires>Calibre-Web-Automated container must be running and accessible</Requires>
+  <Config Name="Web UI Port" Target="8084" Default="8084" Mode="tcp" Description="Port for accessing the web interface" Type="Port" Display="always" Required="true" Mask="false">8084</Config>
+  
+  <!-- Volume Mappings -->
+  <Config Name="Config Directory" Target="/config" Default="/mnt/user/appdata/calibre-web/config" Mode="rw" Description="Path to CWA config directory (contains app.db for authentication)" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/calibre-web/config</Config>
+  <Config Name="Calibre Library" Target="/calibre-library" Default="/mnt/user/media/books/calibre-library" Mode="ro" Description="Path to your Calibre library directory" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media/books/calibre-library</Config>
+  <Config Name="Book Ingest Directory" Target="/ingest" Default="/mnt/user/media/books/ingest" Mode="rw" Description="Directory where downloaded books are placed for CWA processing" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media/books/ingest</Config>
+  <Config Name="App Data Directory" Target="/app/data" Default="/mnt/user/appdata/cwa-book-downloader/data" Mode="rw" Description="Application data directory" Type="Path" Display="always" Required="false" Mask="false">/mnt/user/appdata/cwa-book-downloader/data</Config>
+  <Config Name="Logs Directory" Target="/logs" Default="/mnt/user/appdata/cwa-book-downloader/logs" Mode="rw" Description="Application logs directory" Type="Path" Display="always" Required="false" Mask="false">/mnt/user/appdata/cwa-book-downloader/logs</Config>
+  
+  <!-- Required Environment Variables -->
+  <Config Name="CWA Base URL" Target="CWA_BASE_URL" Default="http://192.168.1.100:8083" Mode="" Description="URL of your Calibre-Web-Automated instance" Type="Variable" Display="always" Required="true" Mask="false">http://192.168.1.100:8083</Config>
+  <Config Name="CWA Username" Target="CWA_USERNAME" Default="admin" Mode="" Description="CWA admin username" Type="Variable" Display="always" Required="true" Mask="false">admin</Config>
+  <Config Name="CWA Password" Target="CWA_PASSWORD" Default="" Mode="" Description="CWA admin password" Type="Variable" Display="always" Required="true" Mask="true"></Config>
+  
+  <!-- System Settings -->
+  <Config Name="Timezone" Target="TZ" Default="America/New_York" Mode="" Description="Container timezone" Type="Variable" Display="always" Required="false" Mask="false">America/New_York</Config>
+  <Config Name="User ID" Target="PUID" Default="1000" Mode="" Description="User ID for file permissions" Type="Variable" Display="always" Required="false" Mask="false">1000</Config>
+  <Config Name="Group ID" Target="PGID" Default="1000" Mode="" Description="Group ID for file permissions" Type="Variable" Display="always" Required="false" Mask="false">1000</Config>
+  
+  <!-- Authentication Settings -->
+  <Config Name="CWA Database Path" Target="CWA_DB_PATH" Default="/config/app.db" Mode="" Description="Path to CWA's app.db file (inside container)" Type="Variable" Display="advanced" Required="false" Mask="false">/config/app.db</Config>
+  <Config Name="Disable Authentication" Target="DISABLE_AUTH" Default="false" Mode="" Description="Disable authentication (NOT recommended for production)" Type="Variable" Display="advanced" Required="false" Mask="false">false</Config>
+  
+  <!-- Download Settings -->
+  <Config Name="Book Language" Target="BOOK_LANGUAGE" Default="en" Mode="" Description="Default book language" Type="Variable" Display="advanced" Required="false" Mask="false">en</Config>
+  <Config Name="Use Book Title" Target="USE_BOOK_TITLE" Default="true" Mode="" Description="Include book title in filename" Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
+  <Config Name="Max Concurrent Downloads" Target="MAX_CONCURRENT_DOWNLOADS" Default="3" Mode="" Description="Maximum concurrent downloads" Type="Variable" Display="advanced" Required="false" Mask="false">3</Config>
+  <Config Name="Anna's Archive Donator Key" Target="AA_DONATOR_KEY" Default="" Mode="" Description="Anna's Archive donator key (optional - improves download speed)" Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
+  
+  <!-- Network Settings -->
+  <Config Name="Use Cloudflare Bypass" Target="USE_CF_BYPASS" Default="true" Mode="" Description="Enable Cloudflare bypass" Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
+  <Config Name="HTTP Proxy" Target="HTTP_PROXY" Default="" Mode="" Description="HTTP proxy URL (optional)" Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
+  <Config Name="HTTPS Proxy" Target="HTTPS_PROXY" Default="" Mode="" Description="HTTPS proxy URL (optional)" Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
+  
+  <!-- Application Settings -->
+  <Config Name="Log Level" Target="LOG_LEVEL" Default="INFO" Mode="" Description="Application log level (DEBUG, INFO, WARNING, ERROR)" Type="Variable" Display="advanced" Required="false" Mask="false">INFO</Config>
+  <Config Name="Debug Mode" Target="DEBUG" Default="false" Mode="" Description="Enable debug mode" Type="Variable" Display="advanced" Required="false" Mask="false">false</Config>
+</Container>

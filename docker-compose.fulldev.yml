@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  # Flask backend with hot reload
+  flask-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: cwa-flask-fulldev
+    environment:
+      FLASK_PORT: 8084
+      FLASK_HOST: 0.0.0.0
+      DEBUG: true
+      APP_ENV: dev
+      CWA_DB_PATH: /app/smb_data/cwa.db
+      CWA_BASE_URL: http://your-cwa-server:8083
+      CWA_USERNAME: admin
+      CWA_PASSWORD: your-cwa-password
+      INGEST_DIR: /app/ingest
+      LOG_ROOT: /app/logs
+      TMP_DIR: /tmp/cwa-book-downloader
+      LOG_LEVEL: DEBUG
+      ENABLE_LOGGING: true
+      BOOK_LANGUAGE: en
+      USE_BOOK_TITLE: true
+      MAX_CONCURRENT_DOWNLOADS: 3
+      TZ: America/New_York
+    ports:
+      - "8084:8084"
+    volumes:
+      - /Volumes/appdata/calibre-web:/app/smb_data:ro
+      - /Volumes/ebook-import:/app/ingest
+      - ./logs:/app/logs
+      # Mount ALL source code for hot reload
+      - .:/app
+    restart: unless-stopped
+    networks:
+      - dev-network
+
+  # Vite frontend with hot reload
+  vite-frontend:
+    image: node:20-alpine
+    container_name: cwa-vite-fulldev
+    working_dir: /app
+    environment:
+      - NODE_ENV=development
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+    command: >
+      sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173"
+    depends_on:
+      - flask-backend
+    networks:
+      - dev-network
+
+networks:
+  dev-network:
+    driver: bridge

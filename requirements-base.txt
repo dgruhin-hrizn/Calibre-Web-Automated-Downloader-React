@@ -1,0 +1,10 @@
+flask
+flask-cors
+sqlalchemy
+requests[socks]
+beautifulsoup4
+tqdm
+dnspython
+gunicorn
+psutil
+emoji
