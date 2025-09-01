@@ -978,9 +978,17 @@ def api_metadata_books():
         if not db_manager:
             return jsonify({'error': 'Metadata database not available'}), 503
             
-        # Get query parameters
-        page = int(request.args.get('page', 1))
-        per_page = min(int(request.args.get('per_page', 18)), 100)
+        # Get query parameters - support both page/per_page and offset/limit styles
+        if 'offset' in request.args:
+            # Frontend is using offset/limit style
+            offset = int(request.args.get('offset', 0))
+            per_page = min(int(request.args.get('limit', 18)), 100)
+            page = (offset // per_page) + 1
+        else:
+            # Using page/per_page style
+            page = int(request.args.get('page', 1))
+            per_page = min(int(request.args.get('per_page', 18)), 100)
+            
         search = request.args.get('search', '').strip()
         sort_by = request.args.get('sort', 'timestamp')
         sort_order = request.args.get('order', 'desc')

@@ -68,9 +68,10 @@ export function useLibraryData() {
       setError(null)
       const offset = (page - 1) * perPage
       
-      const response: CWALibraryResponse = await apiRequest(
-        `/api/metadata/books?offset=${offset}&limit=${perPage}&sort=${sort}&order=${search ? `&search=${encodeURIComponent(search)}` : ''}`
-      )
+      const cacheBuster = Date.now()
+      const url = `/api/metadata/books?offset=${offset}&limit=${perPage}&sort=${sort}&order=${search ? `&search=${encodeURIComponent(search)}` : ''}&_t=${cacheBuster}`
+      console.log(`Calling API: ${url}`)
+      const response: CWALibraryResponse = await apiRequest(url)
 
       const transformedBooks: LibraryBook[] = (response.books || []).map((book: any) => ({
         id: book?.id || 0,
@@ -89,6 +90,8 @@ export function useLibraryData() {
         comments: book?.comments || undefined
       }))
 
+      console.log(`Loading page ${page}, got ${transformedBooks.length} books`)
+      console.log('First book title:', transformedBooks[0]?.title)
       setBooks(transformedBooks)
       setCurrentPage(page)
       setTotalPages(response.pages || 1)

@@ -251,3 +251,6 @@ backup/
 
 # Local development environment file
 dev.env
+
+# Local rebuild script for development
+rebuild.sh

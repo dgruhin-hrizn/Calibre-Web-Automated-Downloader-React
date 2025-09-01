@@ -194,7 +194,9 @@ docker buildx inspect --bootstrap
 # Check if we need to login for push
 if [[ "$PUSH" == true ]]; then
     print_status "Checking GitHub Container Registry authentication..."
-    if ! docker info | grep -q "ghcr.io"; then
+    
+    # Simply check if ghcr.io exists in Docker config - if not, prompt for login
+    if ! grep -q "ghcr.io" ~/.docker/config.json 2>/dev/null; then
         print_warning "Not logged in to GitHub Container Registry"
         echo "Please login with: docker login ghcr.io -u $GITHUB_USERNAME"
         read -p "Continue with login now? (y/N): " -n 1 -r
@@ -205,6 +207,8 @@ if [[ "$PUSH" == true ]]; then
             print_error "Cannot push without authentication"
             exit 1
         fi
+    else
+        print_status "Found GitHub Container Registry credentials"
     fi
 fi
 

@@ -45,17 +45,22 @@ class CalibreDBManager:
         """Get books from Calibre library with pagination"""
         session = self.get_session()
         try:
-            # Base query with joins for related data
-            query = session.query(Books).join(Authors, Books.authors).outerjoin(Series, Books.series)
+            # Base query with proper joins like CWA does
+            query = session.query(Books)
             
             # Apply search filter if provided
             if search:
                 search_term = f"%{search}%"
+                # Add joins needed for search
+                query = query.outerjoin(books_authors_link, Books.id == books_authors_link.c.book)
+                query = query.outerjoin(Authors)
+                query = query.outerjoin(books_series_link, Books.id == books_series_link.c.book)
+                query = query.outerjoin(Series)
                 query = query.filter(
                     Books.title.like(search_term) |
                     Authors.name.like(search_term) |
                     Series.name.like(search_term)
-                )
+                ).distinct()
             
             # Apply sorting
             if sort == 'new':
@@ -67,6 +72,10 @@ class CalibreDBManager:
             elif sort == 'zyx':
                 query = query.order_by(Books.sort.desc())
             elif sort == 'author':
+                # Add joins needed for author sorting if not already added
+                if not search:
+                    query = query.outerjoin(books_authors_link, Books.id == books_authors_link.c.book)
+                    query = query.outerjoin(Authors)
                 query = query.order_by(Authors.sort.asc())
             else:
                 query = query.order_by(Books.timestamp.desc())

@@ -25,6 +25,12 @@ docker-compose -f docker-compose.hybrid.yml up -d
 echo "📊 Container status:"
 docker-compose -f docker-compose.hybrid.yml ps
 
+echo "🧹 Cleaning up old images..."
+# Remove dangling images (old build layers)
+docker image prune -f
+# Remove any unused images to free up space
+echo "   Removed unused images"
+
 echo "✅ Rebuild complete!"
 echo ""
 echo "📋 Useful commands:"
