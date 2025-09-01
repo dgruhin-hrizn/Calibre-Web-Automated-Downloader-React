@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <Container version="2">
   <Name>CWA-Book-Downloader</Name>
-  <Repository>ghcr.io/dgruhin-hrizn/cwa-book-downloader:latest</Repository>
-  <Registry>https://ghcr.io/dgruhin-hrizn/cwa-book-downloader</Registry>
+  <Repository>ghcr.io/dgruhin-hrizn/calibre-web-automated-downloader-react:latest</Repository>
+  <Registry>https://ghcr.io/dgruhin-hrizn/calibre-web-automated-downloader-react</Registry>
   <Network>bridge</Network>
   <MyIP/>
   <Shell>bash</Shell>

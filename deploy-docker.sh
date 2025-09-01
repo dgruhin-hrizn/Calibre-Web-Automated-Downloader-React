@@ -10,7 +10,7 @@ echo "=========================================="
 
 # Configuration
 GITHUB_USERNAME="dgruhin-hrizn"
-DOCKER_IMAGE_NAME="cwa-book-downloader"
+DOCKER_IMAGE_NAME="calibre-web-automated-downloader-react"
 REPO_NAME="Calibre-Web-Automated-Downloader-React"
 
 echo "📋 Configuration:"
