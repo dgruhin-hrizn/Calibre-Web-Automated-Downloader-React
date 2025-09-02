@@ -1090,6 +1090,254 @@ def api_metadata_hot_books():
         logger.error(f"Error fetching hot books: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/metadata/new-books')
+def api_metadata_new_books():
+    """Get recently added books (equivalent to OPDS /new)"""
+    try:
+        db_manager = get_calibre_db_manager()
+        if not db_manager:
+            return jsonify({'error': 'Metadata database not available'}), 503
+        
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 18)), 100)
+        
+        # Get new books sorted by timestamp desc
+        result = db_manager.get_books(page=page, per_page=per_page, sort='new')
+        
+        return jsonify({
+            'books': result['books'],
+            'total': result['total'],
+            'page': result['page'],
+            'per_page': result['per_page'],
+            'pages': result['pages']
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching new books: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/metadata/discover-books')
+def api_metadata_discover_books():
+    """Get random books for discovery (equivalent to OPDS /discover)"""
+    try:
+        db_manager = get_calibre_db_manager()
+        if not db_manager:
+            return jsonify({'error': 'Metadata database not available'}), 503
+        
+        # Get per_page parameter (no pagination for random books)
+        per_page = min(int(request.args.get('per_page', 18)), 100)
+        
+        # Get random books
+        result = db_manager.get_random_books(limit=per_page)
+        
+        return jsonify({
+            'books': result['books'],
+            'total': result['total'],
+            'page': 1,
+            'per_page': per_page,
+            'pages': 1
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching random books: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/metadata/rated-books')
+def api_metadata_rated_books():
+    """Get best rated books (equivalent to OPDS /rated)"""
+    try:
+        db_manager = get_calibre_db_manager()
+        if not db_manager:
+            return jsonify({'error': 'Metadata database not available'}), 503
+        
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 18)), 100)
+        
+        # Get highly rated books (rating > 4.5 stars, which is 9/10 in Calibre)
+        result = db_manager.get_rated_books(page=page, per_page=per_page)
+        
+        return jsonify({
+            'books': result['books'],
+            'total': result['total'],
+            'page': result['page'],
+            'per_page': result['per_page'],
+            'pages': result['pages']
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching rated books: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/metadata/authors')
+def api_metadata_authors_list():
+    """Get list of all authors (equivalent to OPDS /author)"""
+    try:
+        db_manager = get_calibre_db_manager()
+        if not db_manager:
+            return jsonify({'error': 'Metadata database not available'}), 503
+        
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 50)), 200)
+        search = request.args.get('search', '').strip()
+        
+        # Get authors list with book counts
+        result = db_manager.get_authors_with_counts(page=page, per_page=per_page, search=search)
+        
+        return jsonify({
+            'authors': result['authors'],
+            'total': result['total'],
+            'page': result['page'],
+            'per_page': result['per_page'],
+            'pages': result['pages']
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching authors: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/metadata/authors/<int:author_id>/books')
+def api_metadata_author_books(author_id):
+    """Get books by specific author"""
+    try:
+        db_manager = get_calibre_db_manager()
+        if not db_manager:
+            return jsonify({'error': 'Metadata database not available'}), 503
+        
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 18)), 100)
+        
+        # Get books by author
+        result = db_manager.get_books_by_author(author_id, page=page, per_page=per_page)
+        
+        return jsonify({
+            'books': result['books'],
+            'author': result['author'],
+            'total': result['total'],
+            'page': result['page'],
+            'per_page': result['per_page'],
+            'pages': result['pages']
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching books by author: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/metadata/series')
+def api_metadata_series_list():
+    """Get list of all series (equivalent to OPDS /series)"""
+    try:
+        db_manager = get_calibre_db_manager()
+        if not db_manager:
+            return jsonify({'error': 'Metadata database not available'}), 503
+        
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 50)), 200)
+        search = request.args.get('search', '').strip()
+        
+        # Get series list with book counts
+        result = db_manager.get_series_with_counts(page=page, per_page=per_page, search=search)
+        
+        return jsonify({
+            'series': result['series'],
+            'total': result['total'],
+            'page': result['page'],
+            'per_page': result['per_page'],
+            'pages': result['pages']
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching series: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/metadata/series/<int:series_id>/books')
+def api_metadata_series_books(series_id):
+    """Get books in specific series"""
+    try:
+        db_manager = get_calibre_db_manager()
+        if not db_manager:
+            return jsonify({'error': 'Metadata database not available'}), 503
+        
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 18)), 100)
+        
+        # Get books in series
+        result = db_manager.get_books_in_series(series_id, page=page, per_page=per_page)
+        
+        return jsonify({
+            'books': result['books'],
+            'series': result['series'],
+            'total': result['total'],
+            'page': result['page'],
+            'per_page': result['per_page'],
+            'pages': result['pages']
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching books in series: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/metadata/tags')
+def api_metadata_tags_list():
+    """Get list of all tags/categories (equivalent to OPDS /category)"""
+    try:
+        db_manager = get_calibre_db_manager()
+        if not db_manager:
+            return jsonify({'error': 'Metadata database not available'}), 503
+        
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 50)), 200)
+        search = request.args.get('search', '').strip()
+        
+        # Get tags list with book counts
+        result = db_manager.get_tags_with_counts(page=page, per_page=per_page, search=search)
+        
+        return jsonify({
+            'tags': result['tags'],
+            'total': result['total'],
+            'page': result['page'],
+            'per_page': result['per_page'],
+            'pages': result['pages']
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching tags: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/metadata/tags/<int:tag_id>/books')
+def api_metadata_tag_books(tag_id):
+    """Get books with specific tag"""
+    try:
+        db_manager = get_calibre_db_manager()
+        if not db_manager:
+            return jsonify({'error': 'Metadata database not available'}), 503
+        
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 18)), 100)
+        
+        # Get books with tag
+        result = db_manager.get_books_by_tag(tag_id, page=page, per_page=per_page)
+        
+        return jsonify({
+            'books': result['books'],
+            'tag': result['tag'],
+            'total': result['total'],
+            'page': result['page'],
+            'per_page': result['per_page'],
+            'pages': result['pages']
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching books by tag: {e}")
+        return jsonify({'error': str(e)}), 500
+
 # ============================================================================
 # Admin API Endpoints (Direct Database Management)
 # ============================================================================

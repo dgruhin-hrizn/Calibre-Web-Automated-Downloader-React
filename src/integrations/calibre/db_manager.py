@@ -493,6 +493,613 @@ class CalibreDBManager:
         finally:
             self.close_session(session)
     
+    def get_random_books(self, limit: int = 18) -> Dict[str, Any]:
+        """Get random books for discovery"""
+        session = self.get_session()
+        try:
+            # Query random books using SQLite's RANDOM() function
+            query = session.query(Books).order_by(func.random()).limit(limit)
+            books = query.all()
+            
+            # Process books data (same as get_books method)
+            books_data = []
+            for book in books:
+                # Get related data
+                authors = [author.name for author in book.authors] if book.authors else ['Unknown Author']
+                series_info = []
+                if book.series:
+                    for series in book.series:
+                        series_info.append({
+                            'name': series.name,
+                            'index': float(book.series_index) if book.series_index else None
+                        })
+                
+                tags = [tag.name for tag in book.tags] if book.tags else []
+                languages = [lang.lang_code for lang in book.languages] if book.languages else []
+                formats = [data.format.upper() for data in book.data] if book.data else []
+                publishers = [pub.name for pub in book.publishers] if book.publishers else []
+                
+                # Calculate file sizes
+                file_sizes = {}
+                for data in book.data:
+                    file_sizes[data.format.upper()] = data.uncompressed_size
+                
+                # Check if book has cover
+                has_cover = bool(book.has_cover)
+                
+                # Get rating
+                rating = None
+                if book.ratings:
+                    rating = book.ratings[0].rating / 2.0  # Convert to 5-star scale
+                
+                book_data = {
+                    'id': book.id,
+                    'title': book.title,
+                    'sort': book.sort,
+                    'author_sort': book.author_sort,
+                    'timestamp': book.timestamp.isoformat() if book.timestamp else None,
+                    'pubdate': book.pubdate.isoformat() if book.pubdate else None,
+                    'series_index': float(book.series_index) if book.series_index else None,
+                    'last_modified': book.last_modified.isoformat() if book.last_modified else None,
+                    'authors': authors,
+                    'series': series_info,
+                    'rating': rating,
+                    'tags': tags,
+                    'languages': languages,
+                    'formats': formats,
+                    'path': book.path,
+                    'has_cover': has_cover,
+                    'comments': book.comments[0].text if book.comments else None,
+                    'isbn': book.isbn if book.isbn else None,
+                    'uuid': book.uuid if book.uuid else None,
+                    'publishers': publishers,
+                    'file_sizes': file_sizes
+                }
+                books_data.append(book_data)
+            
+            return {
+                'books': books_data,
+                'total': len(books_data),
+                'page': 1,
+                'per_page': limit,
+                'pages': 1
+            }
+            
+        except Exception as e:
+            logger.error(f"Error querying random books: {e}")
+            raise
+        finally:
+            self.close_session(session)
+    
+    def get_rated_books(self, page: int = 1, per_page: int = 18) -> Dict[str, Any]:
+        """Get highly rated books (rating > 4.5 stars)"""
+        session = self.get_session()
+        try:
+            # Base query for books with high ratings (> 9 out of 10, which is 4.5 stars)
+            query = session.query(Books).join(books_ratings_link, Books.id == books_ratings_link.c.book) \
+                .join(Ratings, books_ratings_link.c.rating == Ratings.id) \
+                .filter(Ratings.rating > 9) \
+                .order_by(Books.timestamp.desc())
+            
+            # Get total count
+            total_count = query.count()
+            
+            # Apply pagination
+            offset = (page - 1) * per_page
+            books = query.offset(offset).limit(per_page).all()
+            
+            # Process books data (same logic as other methods)
+            books_data = []
+            for book in books:
+                # Get related data
+                authors = [author.name for author in book.authors] if book.authors else ['Unknown Author']
+                series_info = []
+                if book.series:
+                    for series in book.series:
+                        series_info.append({
+                            'name': series.name,
+                            'index': float(book.series_index) if book.series_index else None
+                        })
+                
+                tags = [tag.name for tag in book.tags] if book.tags else []
+                languages = [lang.lang_code for lang in book.languages] if book.languages else []
+                formats = [data.format.upper() for data in book.data] if book.data else []
+                publishers = [pub.name for pub in book.publishers] if book.publishers else []
+                
+                # Calculate file sizes
+                file_sizes = {}
+                for data in book.data:
+                    file_sizes[data.format.upper()] = data.uncompressed_size
+                
+                # Check if book has cover
+                has_cover = bool(book.has_cover)
+                
+                # Get rating
+                rating = None
+                if book.ratings:
+                    rating = book.ratings[0].rating / 2.0  # Convert to 5-star scale
+                
+                book_data = {
+                    'id': book.id,
+                    'title': book.title,
+                    'sort': book.sort,
+                    'author_sort': book.author_sort,
+                    'timestamp': book.timestamp.isoformat() if book.timestamp else None,
+                    'pubdate': book.pubdate.isoformat() if book.pubdate else None,
+                    'series_index': float(book.series_index) if book.series_index else None,
+                    'last_modified': book.last_modified.isoformat() if book.last_modified else None,
+                    'authors': authors,
+                    'series': series_info,
+                    'rating': rating,
+                    'tags': tags,
+                    'languages': languages,
+                    'formats': formats,
+                    'path': book.path,
+                    'has_cover': has_cover,
+                    'comments': book.comments[0].text if book.comments else None,
+                    'isbn': book.isbn if book.isbn else None,
+                    'uuid': book.uuid if book.uuid else None,
+                    'publishers': publishers,
+                    'file_sizes': file_sizes
+                }
+                books_data.append(book_data)
+            
+            return {
+                'books': books_data,
+                'total': total_count,
+                'page': page,
+                'per_page': per_page,
+                'pages': (total_count + per_page - 1) // per_page
+            }
+            
+        except Exception as e:
+            logger.error(f"Error querying rated books: {e}")
+            raise
+        finally:
+            self.close_session(session)
+    
+    def get_authors_with_counts(self, page: int = 1, per_page: int = 50, search: str = None) -> Dict[str, Any]:
+        """Get authors list with book counts"""
+        session = self.get_session()
+        try:
+            # Base query for authors with book counts
+            query = session.query(
+                Authors.id,
+                Authors.name,
+                Authors.sort,
+                func.count(books_authors_link.c.book).label('book_count')
+            ).join(books_authors_link, Authors.id == books_authors_link.c.author) \
+             .group_by(Authors.id, Authors.name, Authors.sort) \
+             .order_by(Authors.sort)
+            
+            # Apply search filter if provided
+            if search:
+                search_term = f"%{search}%"
+                query = query.filter(Authors.name.like(search_term))
+            
+            # Get total count
+            total_count = query.count()
+            
+            # Apply pagination
+            offset = (page - 1) * per_page
+            authors = query.offset(offset).limit(per_page).all()
+            
+            # Format results
+            authors_data = []
+            for author in authors:
+                authors_data.append({
+                    'id': author.id,
+                    'name': author.name,
+                    'sort': author.sort,
+                    'book_count': author.book_count
+                })
+            
+            return {
+                'authors': authors_data,
+                'total': total_count,
+                'page': page,
+                'per_page': per_page,
+                'pages': (total_count + per_page - 1) // per_page
+            }
+            
+        except Exception as e:
+            logger.error(f"Error querying authors with counts: {e}")
+            raise
+        finally:
+            self.close_session(session)
+    
+    def get_books_by_author(self, author_id: int, page: int = 1, per_page: int = 18) -> Dict[str, Any]:
+        """Get books by specific author"""
+        session = self.get_session()
+        try:
+            # Get author info
+            author = session.query(Authors).filter(Authors.id == author_id).first()
+            if not author:
+                return {
+                    'books': [],
+                    'author': None,
+                    'total': 0,
+                    'page': page,
+                    'per_page': per_page,
+                    'pages': 0
+                }
+            
+            # Query books by author
+            query = session.query(Books).join(books_authors_link, Books.id == books_authors_link.c.book) \
+                .filter(books_authors_link.c.author == author_id) \
+                .order_by(Books.timestamp.desc())
+            
+            # Get total count
+            total_count = query.count()
+            
+            # Apply pagination
+            offset = (page - 1) * per_page
+            books = query.offset(offset).limit(per_page).all()
+            
+            # Process books data (same logic as other methods)
+            books_data = []
+            for book in books:
+                # Get related data (abbreviated for space)
+                authors = [a.name for a in book.authors] if book.authors else ['Unknown Author']
+                series_info = []
+                if book.series:
+                    for series in book.series:
+                        series_info.append({
+                            'name': series.name,
+                            'index': float(book.series_index) if book.series_index else None
+                        })
+                
+                tags = [tag.name for tag in book.tags] if book.tags else []
+                languages = [lang.lang_code for lang in book.languages] if book.languages else []
+                formats = [data.format.upper() for data in book.data] if book.data else []
+                publishers = [pub.name for pub in book.publishers] if book.publishers else []
+                
+                file_sizes = {}
+                for data in book.data:
+                    file_sizes[data.format.upper()] = data.uncompressed_size
+                
+                has_cover = bool(book.has_cover)
+                rating = None
+                if book.ratings:
+                    rating = book.ratings[0].rating / 2.0
+                
+                book_data = {
+                    'id': book.id,
+                    'title': book.title,
+                    'sort': book.sort,
+                    'author_sort': book.author_sort,
+                    'timestamp': book.timestamp.isoformat() if book.timestamp else None,
+                    'pubdate': book.pubdate.isoformat() if book.pubdate else None,
+                    'series_index': float(book.series_index) if book.series_index else None,
+                    'last_modified': book.last_modified.isoformat() if book.last_modified else None,
+                    'authors': authors,
+                    'series': series_info,
+                    'rating': rating,
+                    'tags': tags,
+                    'languages': languages,
+                    'formats': formats,
+                    'path': book.path,
+                    'has_cover': has_cover,
+                    'comments': book.comments[0].text if book.comments else None,
+                    'isbn': book.isbn if book.isbn else None,
+                    'uuid': book.uuid if book.uuid else None,
+                    'publishers': publishers,
+                    'file_sizes': file_sizes
+                }
+                books_data.append(book_data)
+            
+            return {
+                'books': books_data,
+                'author': {
+                    'id': author.id,
+                    'name': author.name,
+                    'sort': author.sort
+                },
+                'total': total_count,
+                'page': page,
+                'per_page': per_page,
+                'pages': (total_count + per_page - 1) // per_page
+            }
+            
+        except Exception as e:
+            logger.error(f"Error querying books by author: {e}")
+            raise
+        finally:
+            self.close_session(session)
+    
+    def get_series_with_counts(self, page: int = 1, per_page: int = 50, search: str = None) -> Dict[str, Any]:
+        """Get series list with book counts"""
+        session = self.get_session()
+        try:
+            # Base query for series with book counts
+            query = session.query(
+                Series.id,
+                Series.name,
+                Series.sort,
+                func.count(books_series_link.c.book).label('book_count')
+            ).join(books_series_link, Series.id == books_series_link.c.series) \
+             .group_by(Series.id, Series.name, Series.sort) \
+             .order_by(Series.sort)
+            
+            # Apply search filter if provided
+            if search:
+                search_term = f"%{search}%"
+                query = query.filter(Series.name.like(search_term))
+            
+            # Get total count
+            total_count = query.count()
+            
+            # Apply pagination
+            offset = (page - 1) * per_page
+            series = query.offset(offset).limit(per_page).all()
+            
+            # Format results
+            series_data = []
+            for s in series:
+                series_data.append({
+                    'id': s.id,
+                    'name': s.name,
+                    'sort': s.sort,
+                    'book_count': s.book_count
+                })
+            
+            return {
+                'series': series_data,
+                'total': total_count,
+                'page': page,
+                'per_page': per_page,
+                'pages': (total_count + per_page - 1) // per_page
+            }
+            
+        except Exception as e:
+            logger.error(f"Error querying series with counts: {e}")
+            raise
+        finally:
+            self.close_session(session)
+    
+    def get_books_in_series(self, series_id: int, page: int = 1, per_page: int = 18) -> Dict[str, Any]:
+        """Get books in specific series"""
+        session = self.get_session()
+        try:
+            # Get series info
+            series = session.query(Series).filter(Series.id == series_id).first()
+            if not series:
+                return {
+                    'books': [],
+                    'series': None,
+                    'total': 0,
+                    'page': page,
+                    'per_page': per_page,
+                    'pages': 0
+                }
+            
+            # Query books in series, ordered by series index
+            query = session.query(Books).join(books_series_link, Books.id == books_series_link.c.book) \
+                .filter(books_series_link.c.series == series_id) \
+                .order_by(Books.series_index.asc())
+            
+            # Get total count
+            total_count = query.count()
+            
+            # Apply pagination
+            offset = (page - 1) * per_page
+            books = query.offset(offset).limit(per_page).all()
+            
+            # Process books data (abbreviated for space)
+            books_data = []
+            for book in books:
+                authors = [a.name for a in book.authors] if book.authors else ['Unknown Author']
+                series_info = []
+                if book.series:
+                    for s in book.series:
+                        series_info.append({
+                            'name': s.name,
+                            'index': float(book.series_index) if book.series_index else None
+                        })
+                
+                tags = [tag.name for tag in book.tags] if book.tags else []
+                languages = [lang.lang_code for lang in book.languages] if book.languages else []
+                formats = [data.format.upper() for data in book.data] if book.data else []
+                publishers = [pub.name for pub in book.publishers] if book.publishers else []
+                
+                file_sizes = {}
+                for data in book.data:
+                    file_sizes[data.format.upper()] = data.uncompressed_size
+                
+                has_cover = bool(book.has_cover)
+                rating = None
+                if book.ratings:
+                    rating = book.ratings[0].rating / 2.0
+                
+                book_data = {
+                    'id': book.id,
+                    'title': book.title,
+                    'sort': book.sort,
+                    'author_sort': book.author_sort,
+                    'timestamp': book.timestamp.isoformat() if book.timestamp else None,
+                    'pubdate': book.pubdate.isoformat() if book.pubdate else None,
+                    'series_index': float(book.series_index) if book.series_index else None,
+                    'last_modified': book.last_modified.isoformat() if book.last_modified else None,
+                    'authors': authors,
+                    'series': series_info,
+                    'rating': rating,
+                    'tags': tags,
+                    'languages': languages,
+                    'formats': formats,
+                    'path': book.path,
+                    'has_cover': has_cover,
+                    'comments': book.comments[0].text if book.comments else None,
+                    'isbn': book.isbn if book.isbn else None,
+                    'uuid': book.uuid if book.uuid else None,
+                    'publishers': publishers,
+                    'file_sizes': file_sizes
+                }
+                books_data.append(book_data)
+            
+            return {
+                'books': books_data,
+                'series': {
+                    'id': series.id,
+                    'name': series.name,
+                    'sort': series.sort
+                },
+                'total': total_count,
+                'page': page,
+                'per_page': per_page,
+                'pages': (total_count + per_page - 1) // per_page
+            }
+            
+        except Exception as e:
+            logger.error(f"Error querying books in series: {e}")
+            raise
+        finally:
+            self.close_session(session)
+    
+    def get_tags_with_counts(self, page: int = 1, per_page: int = 50, search: str = None) -> Dict[str, Any]:
+        """Get tags list with book counts"""
+        session = self.get_session()
+        try:
+            # Base query for tags with book counts
+            query = session.query(
+                Tags.id,
+                Tags.name,
+                func.count(books_tags_link.c.book).label('book_count')
+            ).join(books_tags_link, Tags.id == books_tags_link.c.tag) \
+             .group_by(Tags.id, Tags.name) \
+             .order_by(Tags.name)
+            
+            # Apply search filter if provided
+            if search:
+                search_term = f"%{search}%"
+                query = query.filter(Tags.name.like(search_term))
+            
+            # Get total count
+            total_count = query.count()
+            
+            # Apply pagination
+            offset = (page - 1) * per_page
+            tags = query.offset(offset).limit(per_page).all()
+            
+            # Format results
+            tags_data = []
+            for tag in tags:
+                tags_data.append({
+                    'id': tag.id,
+                    'name': tag.name,
+                    'book_count': tag.book_count
+                })
+            
+            return {
+                'tags': tags_data,
+                'total': total_count,
+                'page': page,
+                'per_page': per_page,
+                'pages': (total_count + per_page - 1) // per_page
+            }
+            
+        except Exception as e:
+            logger.error(f"Error querying tags with counts: {e}")
+            raise
+        finally:
+            self.close_session(session)
+    
+    def get_books_by_tag(self, tag_id: int, page: int = 1, per_page: int = 18) -> Dict[str, Any]:
+        """Get books with specific tag"""
+        session = self.get_session()
+        try:
+            # Get tag info
+            tag = session.query(Tags).filter(Tags.id == tag_id).first()
+            if not tag:
+                return {
+                    'books': [],
+                    'tag': None,
+                    'total': 0,
+                    'page': page,
+                    'per_page': per_page,
+                    'pages': 0
+                }
+            
+            # Query books with tag
+            query = session.query(Books).join(books_tags_link, Books.id == books_tags_link.c.book) \
+                .filter(books_tags_link.c.tag == tag_id) \
+                .order_by(Books.timestamp.desc())
+            
+            # Get total count
+            total_count = query.count()
+            
+            # Apply pagination
+            offset = (page - 1) * per_page
+            books = query.offset(offset).limit(per_page).all()
+            
+            # Process books data (abbreviated)
+            books_data = []
+            for book in books:
+                authors = [a.name for a in book.authors] if book.authors else ['Unknown Author']
+                series_info = []
+                if book.series:
+                    for series in book.series:
+                        series_info.append({
+                            'name': series.name,
+                            'index': float(book.series_index) if book.series_index else None
+                        })
+                
+                tags = [t.name for t in book.tags] if book.tags else []
+                languages = [lang.lang_code for lang in book.languages] if book.languages else []
+                formats = [data.format.upper() for data in book.data] if book.data else []
+                publishers = [pub.name for pub in book.publishers] if book.publishers else []
+                
+                file_sizes = {}
+                for data in book.data:
+                    file_sizes[data.format.upper()] = data.uncompressed_size
+                
+                has_cover = bool(book.has_cover)
+                rating = None
+                if book.ratings:
+                    rating = book.ratings[0].rating / 2.0
+                
+                book_data = {
+                    'id': book.id,
+                    'title': book.title,
+                    'sort': book.sort,
+                    'author_sort': book.author_sort,
+                    'timestamp': book.timestamp.isoformat() if book.timestamp else None,
+                    'pubdate': book.pubdate.isoformat() if book.pubdate else None,
+                    'series_index': float(book.series_index) if book.series_index else None,
+                    'last_modified': book.last_modified.isoformat() if book.last_modified else None,
+                    'authors': authors,
+                    'series': series_info,
+                    'rating': rating,
+                    'tags': tags,
+                    'languages': languages,
+                    'formats': formats,
+                    'path': book.path,
+                    'has_cover': has_cover,
+                    'comments': book.comments[0].text if book.comments else None,
+                    'isbn': book.isbn if book.isbn else None,
+                    'uuid': book.uuid if book.uuid else None,
+                    'publishers': publishers,
+                    'file_sizes': file_sizes
+                }
+                books_data.append(book_data)
+            
+            return {
+                'books': books_data,
+                'tag': {
+                    'id': tag.id,
+                    'name': tag.name
+                },
+                'total': total_count,
+                'page': page,
+                'per_page': per_page,
+                'pages': (total_count + per_page - 1) // per_page
+            }
+            
+        except Exception as e:
+            logger.error(f"Error querying books by tag: {e}")
+            raise
+        finally:
+            self.close_session(session)
+    
     def get_authors(self) -> List[Dict[str, Any]]:
         """Get all authors"""
         session = self.get_session()
