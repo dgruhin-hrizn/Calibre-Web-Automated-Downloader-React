@@ -207,12 +207,7 @@ poetry.toml
 pyrightconfig.json
 
 ### VisualStudioCode ###
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-!.vscode/*.code-snippets
+.vscode/
 
 # Local History for Visual Studio Code
 .history/
@@ -257,3 +252,11 @@ cwa_settings.json
 
 # Local rebuild script for development
 rebuild.sh
+
+# Browser cookies file
+cookies.txt
+
+# CWA database files
+cwa.db
+*.db
+app.db*
