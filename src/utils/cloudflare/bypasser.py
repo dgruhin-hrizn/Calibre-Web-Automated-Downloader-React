@@ -3,8 +3,8 @@ import os
 import socket
 from urllib.parse import urlparse
 import threading
-import env
-from env import LOG_DIR, DEBUG
+from ...infrastructure import env
+from ...infrastructure.env import LOG_DIR, DEBUG
 import signal
 from datetime import datetime
 import subprocess
@@ -18,10 +18,10 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 
-import network
-from logger import setup_logger
-from env import MAX_RETRY, DEFAULT_SLEEP
-from config import PROXIES, CUSTOM_DNS, DOH_SERVER, VIRTUAL_SCREEN_SIZE, RECORDING_DIR
+from ...infrastructure import network
+from ...infrastructure.logger import setup_logger
+from ...infrastructure.env import MAX_RETRY, DEFAULT_SLEEP
+from ...infrastructure.config import PROXIES, CUSTOM_DNS, DOH_SERVER, VIRTUAL_SCREEN_SIZE, RECORDING_DIR
 
 logger = setup_logger(__name__)
 network.init()

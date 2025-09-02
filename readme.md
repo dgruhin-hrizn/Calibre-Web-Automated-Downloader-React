@@ -80,6 +80,111 @@ A modern, full-featured digital library management system with automated book do
 
 3. Access the web interface at `http://localhost:8084`
 
+## 🧪 Local Development & Testing
+
+### 🍎 Important: macOS SQLite Database Issues
+
+**For local development and testing, you MUST use the included CWA-Official container setup.** This is especially critical on macOS due to SQLite database locking issues when databases are stored on SMB/network shares or cloud storage (like Dropbox).
+
+### Why the CWA-Official Container is Required
+
+Inkdrop uses a **single-source-of-truth architecture** for database files:
+- **Authentication**: Uses the same `app.db` as your CWA-Official instance
+- **Configuration**: Shares the same `cwa.db` for settings and state
+- **Library Access**: Directly reads from your Calibre `metadata.db`
+
+This architecture eliminates database duplication and ensures consistency between services.
+
+### Local Development Setup
+
+Use the hybrid development environment that includes both containers:
+
+```bash
+# Clone the repository
+git clone https://github.com/your-repo/inkdrop.git
+cd inkdrop
+
+# Start the hybrid development environment
+./start-hybrid.sh
+```
+
+This script will:
+1. 🚀 Start the official CWA container (backend services)
+2. 🔧 Start the Inkdrop Flask API container
+3. 🌐 Start the React frontend with Vite dev server (hot reload)
+
+### Directory Structure
+
+The hybrid setup uses this directory structure:
+
+```
+project-root/
+├── src/                          # 🐍 Organized Python source code
+│   ├── api/                      #    Flask web API layer
+│   ├── core/                     #    Business logic & models
+│   ├── infrastructure/           #    Config, logging, networking
+│   ├── integrations/             #    External service integrations
+│   │   ├── cwa/                  #      CWA-Official integration
+│   │   └── calibre/              #      Calibre database integration
+│   └── utils/                    #    Utilities and helpers
+├── frontend/                     # ⚛️ React frontend application
+├── cwa-data/                     # 📂 SHARED data directories
+│   ├── config/                   #    🔑 Authentication & config
+│   │   ├── app.db               #      User authentication (SHARED)
+│   │   └── cwa.db               #      CWA configuration (SHARED)
+│   └── library/                  #    📚 Calibre library
+│       └── metadata.db          #      Book metadata (SHARED)
+├── data/                         # 📊 Inkdrop app-specific data
+│   └── book-languages.json      #    Language configurations
+├── ingest/                       # 📥 Book download directory (SHARED)
+└── logs/                         # 📝 Application logs
+```
+
+### Key Points
+
+- **🔑 Single Authentication Source**: Both containers use the same `app.db` for user authentication
+- **📊 Shared Configuration**: Both containers share the same `cwa.db` for settings
+- **📚 Shared Library**: Both containers read from the same Calibre `metadata.db`
+- **📥 Shared Ingest**: Downloaded books go to a shared directory for processing
+- **🚫 No Duplication**: No redundant database files anywhere
+
+### Development Access Points
+
+Once running:
+- **📚 CWA Web Interface**: http://localhost:8083
+- **🔧 Inkdrop API**: http://localhost:8084
+- **🌐 React Frontend**: http://localhost:5173 (with hot reload)
+
+### Default CWA Credentials
+
+```
+Username: admin
+Password: admin123
+```
+
+### 🍎 macOS Docker Auto-Ingest Issues
+
+**Important for macOS users**: Docker's file system events (inotify) don't work reliably between macOS host and Linux containers. This means CWA-Official won't automatically detect new books placed in the ingest directory.
+
+**Workaround for testing book ingestion:**
+1. Download a book using Inkdrop (it will be placed in the `ingest/` directory)
+2. Open the CWA-Official web interface: http://localhost:8083
+3. Log in with the default credentials (`admin` / `admin123`)
+4. Navigate to **Admin** → **Configuration** → **Basic Configuration**
+5. Click **"Refresh Library"** to manually trigger book processing
+
+This is a Docker on macOS limitation and doesn't affect production deployments on Linux systems.
+
+### Stopping Development Environment
+
+```bash
+# Stop backend containers
+docker-compose -f docker-compose.hybrid.yml down
+
+# Stop frontend (if running separately)
+# Find the Vite process and kill it, or use Ctrl+C in the terminal
+```
+
 ## 🛡️ FlareSolverr Setup (Recommended)
 
 For optimal Cloudflare bypass performance and reliability, we highly recommend using FlareSolverr as an external service:

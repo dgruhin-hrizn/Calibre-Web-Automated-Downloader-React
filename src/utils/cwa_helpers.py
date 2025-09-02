@@ -3,7 +3,7 @@
 import os
 import logging
 from typing import Optional
-from env import CALIBRE_LIBRARY_PATH
+from ..infrastructure.env import CALIBRE_LIBRARY_PATH
 
 logger = logging.getLogger(__name__)
 

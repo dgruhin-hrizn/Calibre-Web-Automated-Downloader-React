@@ -1,9 +1,9 @@
-from logger import setup_logger
+from ...infrastructure.logger import setup_logger
 from typing import Optional
 import requests
 
 try:
-    from env import EXT_BYPASSER_PATH, EXT_BYPASSER_TIMEOUT, EXT_BYPASSER_URL
+    from ...infrastructure.env import EXT_BYPASSER_PATH, EXT_BYPASSER_TIMEOUT, EXT_BYPASSER_URL
 except ImportError:
     raise RuntimeError("Failed to import environment variables. Are you using an `extbp` image?")
 

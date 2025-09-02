@@ -3,8 +3,8 @@
 import os
 from pathlib import Path
 import json
-import env
-from logger import setup_logger
+from . import env
+from .logger import setup_logger
 
 logger = setup_logger(__name__)
 

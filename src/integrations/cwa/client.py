@@ -7,7 +7,7 @@ import logging
 from typing import Optional, Dict, List, Any
 from urllib.parse import urljoin
 import os
-from env import CWA_BASE_URL, CWA_USERNAME, CWA_PASSWORD
+from ...infrastructure.env import CWA_BASE_URL, CWA_USERNAME, CWA_PASSWORD
 
 logger = logging.getLogger(__name__)
 

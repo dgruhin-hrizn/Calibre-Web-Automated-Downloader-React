@@ -12,11 +12,11 @@ import re
 from concurrent.futures import ThreadPoolExecutor, Future
 from threading import Event
 
-from logger import setup_logger
-from config import CUSTOM_SCRIPT
-from env import INGEST_DIR, TMP_DIR, MAIN_LOOP_SLEEP_TIME, USE_BOOK_TITLE, MAX_CONCURRENT_DOWNLOADS, DOWNLOAD_PROGRESS_UPDATE_INTERVAL
-from models import book_queue, BookInfo, QueueStatus, SearchFilters
-import book_manager
+from ..infrastructure.logger import setup_logger
+from ..infrastructure.config import CUSTOM_SCRIPT
+from ..infrastructure.env import INGEST_DIR, TMP_DIR, MAIN_LOOP_SLEEP_TIME, USE_BOOK_TITLE, MAX_CONCURRENT_DOWNLOADS, DOWNLOAD_PROGRESS_UPDATE_INTERVAL
+from .models import book_queue, BookInfo, QueueStatus, SearchFilters
+from . import book_manager
 
 logger = setup_logger(__name__)
 

@@ -1,6 +1,6 @@
 """Network operations manager for the book downloader application."""
 
-import network
+from ..infrastructure import network
 network.init()
 import requests
 import time
@@ -10,18 +10,18 @@ from urllib.parse import urlparse
 from tqdm import tqdm
 from typing import Callable
 from threading import Event
-from logger import setup_logger
-from config import PROXIES
-from env import MAX_RETRY, DEFAULT_SLEEP, USE_CF_BYPASS, USING_EXTERNAL_BYPASSER
+from ..infrastructure.logger import setup_logger
+from ..infrastructure.config import PROXIES
+from ..infrastructure.env import MAX_RETRY, DEFAULT_SLEEP, USE_CF_BYPASS, USING_EXTERNAL_BYPASSER
 
 # Setup logger before using it
 logger = setup_logger(__name__)
 
 if USE_CF_BYPASS:
     if USING_EXTERNAL_BYPASSER:
-        from cloudflare_bypasser_external import get_bypassed_page
+        from ..utils.cloudflare.external import get_bypassed_page
     else:
-        from cloudflare_bypasser import get_bypassed_page
+        from ..utils.cloudflare.bypasser import get_bypassed_page
         logger.info("Using SeleniumBase bypasser")
 
 

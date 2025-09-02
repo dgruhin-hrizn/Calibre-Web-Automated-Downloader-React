@@ -10,7 +10,7 @@ from typing import List, Dict, Any, Optional
 import logging
 
 # Import the proper CWA Calibre models
-from calibre_models import (
+from .models import (
     Books, Authors, Series, Tags, Languages, Data, Comments, Ratings, Identifiers,
     books_authors_link, books_tags_link, books_series_link, books_ratings_link,
     books_languages_link, books_publishers_link

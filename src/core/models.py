@@ -8,7 +8,7 @@ from threading import Lock, Event
 from pathlib import Path
 import queue
 import time
-from env import INGEST_DIR, STATUS_TIMEOUT
+from ..infrastructure.env import INGEST_DIR, STATUS_TIMEOUT
 
 class QueueStatus(str, Enum):
     """Enum for possible book queue statuses."""

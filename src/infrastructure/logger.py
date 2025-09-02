@@ -4,7 +4,7 @@ import logging
 import sys
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
-from env import LOG_FILE, ENABLE_LOGGING, LOG_LEVEL
+from .env import LOG_FILE, ENABLE_LOGGING, LOG_LEVEL
 from typing import Any
 
 class CustomLogger(logging.Logger):
@@ -13,22 +13,26 @@ class CustomLogger(logging.Logger):
     def error_trace(self, msg: Any, *args: Any, **kwargs: Any) -> None:
         """Log an error message with full stack trace."""
         self.log_resource_usage()
-        self.error(msg, *args, exc_info=True, **kwargs)
+        kwargs['exc_info'] = True
+        self.error(msg, *args, **kwargs)
 
     def warning_trace(self, msg: Any, *args: Any, **kwargs: Any) -> None:
         """Log a warning message with full stack trace."""
         self.log_resource_usage()
-        self.warning(msg, *args, exc_info=True, **kwargs)
+        kwargs['exc_info'] = True
+        self.warning(msg, *args, **kwargs)
     
     def info_trace(self, msg: Any, *args: Any, **kwargs: Any) -> None:
         """Log an info message with full stack trace."""
         self.log_resource_usage()
-        self.info(msg, *args, exc_info=True, **kwargs)
+        kwargs['exc_info'] = True
+        self.info(msg, *args, **kwargs)
     
     def debug_trace(self, msg: Any, *args: Any, **kwargs: Any) -> None:
         """Log a debug message with full stack trace."""
         self.log_resource_usage()
-        self.debug(msg, *args, exc_info=True, **kwargs)
+        kwargs['exc_info'] = True
+        self.debug(msg, *args, **kwargs)
     
     def log_resource_usage(self):
         import psutil

@@ -7,11 +7,11 @@ from typing import List, Optional, Dict, Union, Callable
 from threading import Event
 from bs4 import BeautifulSoup, Tag, NavigableString, ResultSet
 
-import downloader
-from logger import setup_logger
-from config import SUPPORTED_FORMATS, BOOK_LANGUAGE, AA_BASE_URL
-from env import AA_DONATOR_KEY, USE_CF_BYPASS, PRIORITIZE_WELIB
-from models import BookInfo, SearchFilters
+from . import downloader
+from ..infrastructure.logger import setup_logger
+from ..infrastructure.config import SUPPORTED_FORMATS, BOOK_LANGUAGE, AA_BASE_URL
+from ..infrastructure.env import AA_DONATOR_KEY, USE_CF_BYPASS, PRIORITIZE_WELIB
+from .models import BookInfo, SearchFilters
 logger = setup_logger(__name__)
 
 

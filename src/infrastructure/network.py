@@ -10,9 +10,9 @@ import urllib.parse
 import ssl
 import ipaddress
 
-from logger import setup_logger
-from config import PROXIES, AA_BASE_URL, CUSTOM_DNS, AA_AVAILABLE_URLS, DOH_SERVER
-import config
+from .logger import setup_logger
+from .config import PROXIES, AA_BASE_URL, CUSTOM_DNS, AA_AVAILABLE_URLS, DOH_SERVER
+from . import config
 
 logger = setup_logger(__name__)
 
