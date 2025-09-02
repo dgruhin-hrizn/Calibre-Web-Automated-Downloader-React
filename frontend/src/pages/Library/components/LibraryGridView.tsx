@@ -10,6 +10,7 @@ interface LibraryGridViewProps {
   shouldLoadImage: (bookId: number) => boolean
   markImageLoaded: (bookId: number) => void
   deletingBooks?: Set<number>
+  registerBookRef?: (bookId: number, element: HTMLElement | null) => void
 }
 
 export function LibraryGridView({
@@ -19,7 +20,8 @@ export function LibraryGridView({
   onSendToKindle,
   shouldLoadImage,
   markImageLoaded,
-  deletingBooks = new Set()
+  deletingBooks = new Set(),
+  registerBookRef
 }: LibraryGridViewProps) {
   return (
     <div className="flex flex-wrap gap-4 justify-start transition-all duration-500 ease-out">
@@ -27,7 +29,9 @@ export function LibraryGridView({
         const isDeleting = deletingBooks.has(book.id)
         return (
           <div 
-            key={book.id} 
+            key={book.id}
+            data-book-id={book.id}
+            ref={(el) => registerBookRef?.(book.id, el)}
             className={`w-[calc(50%-8px)] sm:w-[225px] sm:min-w-[225px] sm:max-w-[225px] transition-all duration-700 ease-out ${
               isDeleting 
                 ? 'opacity-0 scale-75 translate-y-4 delay-[500ms]' 
@@ -38,7 +42,8 @@ export function LibraryGridView({
               willChange: 'transform, opacity, box-shadow',
               backfaceVisibility: 'hidden', // Prevent flickering
               perspective: '1000px', // Enable 3D transforms
-              transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)' // Smooth repositioning
+              transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)', // Smooth repositioning
+              scrollMarginTop: '155px' // Account for toolbar height when scrolling
             }}
           >
             <div 

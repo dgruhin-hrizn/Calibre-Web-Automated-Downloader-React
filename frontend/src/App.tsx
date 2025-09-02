@@ -83,15 +83,14 @@ function App() {
                     {/* Scrollable Main Content Area */}
                     <main className="flex-1 overflow-auto">
                       <div className="w-full px-6 py-8">
-                                        <Routes>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/search" element={<Search />} />
-                  <Route path="/library" element={<Library />} />
-                  <Route path="/hot" element={<HotBooks />} />
-                  <Route path="/downloads" element={<Downloads />} />
-                  <Route path="/settings" element={<Settings />} />
-        
-                </Routes>
+                        <Routes>
+                          <Route path="/" element={<Dashboard />} />
+                          <Route path="/search" element={<Search />} />
+                          <Route path="/library" element={<Library />} />
+                          <Route path="/hot" element={<HotBooks />} />
+                          <Route path="/downloads" element={<Downloads />} />
+                          <Route path="/settings" element={<Settings />} />
+                        </Routes>
                       </div>
                     </main>
                   </div>

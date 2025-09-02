@@ -12,13 +12,15 @@ interface LibraryListViewProps {
   onBookClick: (book: LibraryBook) => void
   onSendToKindle: (book: LibraryBook) => void
   deletingBooks?: Set<number>
+  registerBookRef?: (bookId: number, element: HTMLElement | null) => void
 }
 
 export function LibraryListView({
   books,
   onBookClick,
   onSendToKindle,
-  deletingBooks = new Set()
+  deletingBooks = new Set(),
+  registerBookRef
 }: LibraryListViewProps) {
   return (
     <Card>
@@ -56,13 +58,16 @@ export function LibraryListView({
                 return (
                   <tr 
                     key={book.id}
+                    data-book-id={book.id}
+                    ref={(el) => registerBookRef?.(book.id, el)}
                     className={`border-b border-border transition-all duration-300 hover:bg-muted/30 ${
                       isDeleting 
                         ? 'opacity-50 bg-red-50 dark:bg-red-900/10' 
                         : 'opacity-100'
                     }`}
                     style={{
-                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                      scrollMarginTop: '200px' // Account for toolbar height when scrolling
                     }}
                   >
                     {/* Cover */}
