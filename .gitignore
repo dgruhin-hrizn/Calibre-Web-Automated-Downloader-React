@@ -252,5 +252,8 @@ backup/
 # Local development environment file
 dev.env
 
+# CWA settings with credentials
+cwa_settings.json
+
 # Local rebuild script for development
 rebuild.sh

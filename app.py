@@ -1124,7 +1124,7 @@ def api_admin_user_info():
 
 
 @app.route('/api/admin/duplicates')
-@admin_required
+@login_required
 def api_admin_duplicates():
     """Find duplicate books in the library"""
     try:
@@ -1140,7 +1140,7 @@ def api_admin_duplicates():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/admin/books/<int:book_id>', methods=['DELETE'])
-@admin_required
+@login_required
 def api_admin_delete_book(book_id):
     """Delete a book from the library"""
     try:
@@ -1148,11 +1148,11 @@ def api_admin_delete_book(book_id):
         if not db_manager:
             return jsonify({'error': 'Metadata database not available'}), 503
             
-        success = db_manager.delete_book(book_id)
+        success, message = db_manager.delete_book(book_id)
         if success:
-            return jsonify({'success': True, 'message': f'Book {book_id} deleted successfully'})
+            return jsonify({'success': True, 'message': message or f'Book {book_id} deleted successfully'})
         else:
-            return jsonify({'error': 'Failed to delete book'}), 500
+            return jsonify({'error': message or 'Failed to delete book'}), 500
             
     except Exception as e:
         logger.error(f"Error deleting book {book_id}: {e}")

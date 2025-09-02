@@ -158,6 +158,10 @@ export function Library() {
       <DuplicateManagerModal
         isOpen={showDuplicateModal}
         onClose={() => setShowDuplicateModal(false)}
+        onBooksDeleted={() => {
+          // Refresh library data when books are deleted from duplicate manager
+          loadBooks(currentPage, searchQuery, sortParam)
+        }}
       />
       
       {/* Toast Notifications */}

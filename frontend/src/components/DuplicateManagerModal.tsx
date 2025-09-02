@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Trash2, AlertTriangle } from 'lucide-react';
+import * as Collapsible from '@radix-ui/react-collapsible';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Checkbox } from './ui/checkbox';
@@ -24,23 +25,56 @@ interface DuplicateBook {
 }
 
 interface DuplicateGroup {
-  reason: string;
+  title?: string;
+  isbn?: string;
+  author?: string;
+  count: number;
   books: DuplicateBook[];
+}
+
+interface DuplicatesResponse {
+  duplicates: {
+    by_title: DuplicateGroup[];
+    by_isbn: DuplicateGroup[];
+    by_title_author: DuplicateGroup[];
+    by_file_hash: DuplicateGroup[];
+  };
+  summary: {
+    total_duplicate_groups: number;
+    total_duplicate_books: number;
+    by_category: {
+      title: number;
+      isbn: number;
+      title_author: number;
+    };
+  };
 }
 
 interface DuplicateManagerModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onBooksDeleted?: () => void;
 }
 
 export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
   isOpen,
-  onClose
+  onClose,
+  onBooksDeleted
 }) => {
-  const [duplicates, setDuplicates] = useState<DuplicateGroup[]>([]);
+  const [duplicatesData, setDuplicatesData] = useState<DuplicatesResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [selectedBooks, setSelectedBooks] = useState<Set<number>>(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [fadingGroups, setFadingGroups] = useState<Set<string>>(new Set());
+  const [deletingBooks, setDeletingBooks] = useState<Set<number>>(new Set());
+  
+  // Reset all transient state
+  const resetTransientState = () => {
+    setFadingGroups(new Set());
+    setDeletingBooks(new Set());
+    setSelectedBooks(new Set());
+    setDeleting(false);
+  };
 
   const fetchDuplicates = async () => {
     setLoading(true);
@@ -54,7 +88,8 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
       }
       
       const data = await response.json();
-      setDuplicates(data.duplicates || []);
+      console.log('Duplicates API response:', data);
+      setDuplicatesData(data);
     } catch (error) {
       console.error('Failed to fetch duplicates:', error);
     } finally {
@@ -68,6 +103,72 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
       setSelectedBooks(new Set());
     }
   }, [isOpen]);
+
+  // Flatten all duplicates for easier processing with deduplication
+  const getAllDuplicateGroups = () => {
+    if (!duplicatesData || !duplicatesData.duplicates || !duplicatesData.duplicates.duplicates) return [];
+    
+    const duplicates = duplicatesData.duplicates.duplicates;
+    const groups = [];
+    const seenBookSets = new Set();
+    
+    // Helper function to create a unique key for a set of books
+    const getBookSetKey = (books: any[]) => {
+      return books.map(book => book.id).sort().join(',');
+    };
+    
+    // Helper function to add group if not already seen
+    const addGroupIfUnique = (group: any, reason: string, type: string) => {
+      const bookSetKey = getBookSetKey(group.books);
+      if (!seenBookSets.has(bookSetKey)) {
+        seenBookSets.add(bookSetKey);
+        groups.push({
+          reason,
+          books: group.books,
+          type
+        });
+      }
+    };
+    
+    // Add title+author duplicates first (most specific)
+    if (duplicates.by_title_author) {
+      duplicates.by_title_author.forEach(group => {
+        addGroupIfUnique(
+          group,
+          `Same title and author: "${group.title}" by ${group.author}`,
+          'title_author'
+        );
+      });
+    }
+    
+    // Add ISBN duplicates (also specific)
+    if (duplicates.by_isbn) {
+      duplicates.by_isbn.forEach(group => {
+        addGroupIfUnique(
+          group,
+          `Same ISBN: ${group.isbn}`,
+          'isbn'
+        );
+      });
+    }
+    
+    // Add title duplicates last (least specific)
+    if (duplicates.by_title) {
+      duplicates.by_title.forEach(group => {
+        addGroupIfUnique(
+          group,
+          `Same title: "${group.title}"`,
+          'title'
+        );
+      });
+    }
+    
+    return groups;
+  };
+
+  const allGroups = getAllDuplicateGroups();
+  
+
 
   const handleSelectBook = (bookId: number, checked: boolean) => {
     const newSelected = new Set(selectedBooks);
@@ -92,11 +193,9 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
   };
 
   const handleDeleteSingle = async (bookId: number) => {
-    if (!confirm('Are you sure you want to delete this book? This action cannot be undone.')) {
-      return;
-    }
-
-    setDeleting(true);
+    // Mark book as being deleted for visual feedback
+    setDeletingBooks(prev => new Set([...prev, bookId]));
+    
     try {
       const response = await fetch(`/api/admin/books/${bookId}`, {
         method: 'DELETE',
@@ -107,55 +206,201 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      // Refresh duplicates list
-      await fetchDuplicates();
+      // Add delay for smooth animation
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      // Check which groups will be affected before refresh
+      const currentGroups = getAllDuplicateGroups();
+      const affectedGroups = currentGroups.filter(group => 
+        group.books.some(book => book.id === bookId)
+      );
+
+      // Mark groups that might disappear for fade out
+      const groupsToFade = affectedGroups
+        .filter(group => group.books.length <= 2) // Groups with 2 or fewer books will disappear
+        .map(group => `${group.type}-${group.books.map(b => b.id).sort().join('-')}`);
+      
+      if (groupsToFade.length > 0) {
+        setFadingGroups(new Set(groupsToFade));
+        await new Promise(resolve => setTimeout(resolve, 500)); // Wait for fade animation
+      }
+
+      // Update duplicates data locally instead of refetching
+      if (duplicatesData) {
+        const updatedData = { ...duplicatesData };
+        const duplicates = updatedData.duplicates.duplicates;
+        
+        // Remove book from all duplicate categories
+        ['by_title', 'by_isbn', 'by_title_author'].forEach(category => {
+          if (duplicates[category]) {
+            duplicates[category] = duplicates[category]
+              .map(group => ({
+                ...group,
+                books: group.books.filter(book => book.id !== bookId),
+                count: group.books.filter(book => book.id !== bookId).length
+              }))
+              .filter(group => group.books.length > 1); // Remove groups with only 1 book
+          }
+        });
+        
+        // Update summary counts
+        const totalBooks = Object.values(duplicates).flat()
+          .reduce((sum, group) => sum + (group.books?.length || 0), 0);
+        const totalGroups = Object.values(duplicates)
+          .reduce((sum, category) => sum + (category?.length || 0), 0);
+        
+        updatedData.duplicates.summary.total_duplicate_books = totalBooks;
+        updatedData.duplicates.summary.total_duplicate_groups = totalGroups;
+        
+        setDuplicatesData(updatedData);
+      }
       
       // Remove from selected if it was selected
       const newSelected = new Set(selectedBooks);
       newSelected.delete(bookId);
       setSelectedBooks(newSelected);
       
+      // Notify parent component that books were deleted (after animations complete)
+      if (onBooksDeleted) {
+        setTimeout(() => {
+          onBooksDeleted();
+        }, 400); // Wait for slide-out animation to complete
+      }
+      
     } catch (error) {
-      console.error('Failed to delete book:', error);
-      alert('Failed to delete book. Please try again.');
+      console.error(`Failed to delete book ${bookId}:`, error);
+      alert(`Failed to delete book ${bookId}. Please try again.`);
     } finally {
-      setDeleting(false);
+      setDeletingBooks(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(bookId);
+        return newSet;
+      });
+      // Clear fading groups after animation completes
+      setTimeout(() => {
+        setFadingGroups(new Set());
+      }, 100);
     }
   };
 
   const handleDeleteSelected = async () => {
     if (selectedBooks.size === 0) return;
     
-    if (!confirm(`Are you sure you want to delete ${selectedBooks.size} selected books? This action cannot be undone.`)) {
-      return;
-    }
-
     setDeleting(true);
+    const bookIds = Array.from(selectedBooks);
+    const successfullyDeletedIds: number[] = [];
+    const failedIds: number[] = [];
+    
     try {
-      const response = await fetch('/api/admin/books/bulk-delete', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          book_ids: Array.from(selectedBooks)
-        })
-      });
+      // Mark all books as being deleted for visual feedback
+      setDeletingBooks(new Set(bookIds));
+      
+      // Delete books sequentially with small delays
+      for (const bookId of bookIds) {
+        try {
+          const response = await fetch(`/api/admin/books/${bookId}`, {
+            method: 'DELETE',
+            credentials: 'include'
+          });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+          if (response.ok) {
+            successfullyDeletedIds.push(bookId);
+            console.log(`Successfully deleted book ${bookId}`);
+          } else {
+            failedIds.push(bookId);
+            console.error(`Failed to delete book ${bookId}: ${response.status}`);
+          }
+          
+          // Small delay between deletions for smoother UX
+          await new Promise(resolve => setTimeout(resolve, 100));
+        } catch (error) {
+          failedIds.push(bookId);
+          console.error(`Failed to delete book ${bookId}:`, error);
+        }
       }
 
-      // Refresh duplicates list and clear selection
-      await fetchDuplicates();
+      // Check which groups will disappear and fade them out (only for successfully deleted books)
+      const currentGroups = getAllDuplicateGroups();
+      const affectedGroups = currentGroups.filter(group => 
+        group.books.some(book => successfullyDeletedIds.includes(book.id))
+      );
+
+      const groupsToFade = affectedGroups
+        .filter(group => {
+          const remainingBooks = group.books.filter(book => !successfullyDeletedIds.includes(book.id));
+          return remainingBooks.length < 2; // Groups with less than 2 remaining books will disappear
+        })
+        .map(group => `${group.type}-${group.books.map(b => b.id).sort().join('-')}`);
+      
+      if (groupsToFade.length > 0) {
+        setFadingGroups(new Set(groupsToFade));
+        await new Promise(resolve => setTimeout(resolve, 600)); // Wait for fade animation
+      }
+
+      // Show results
+      if (successfullyDeletedIds.length > 0) {
+        console.log(`Successfully deleted ${successfullyDeletedIds.length} books: ${successfullyDeletedIds.join(', ')}`);
+      }
+      if (failedIds.length > 0) {
+        console.error(`Failed to delete ${failedIds.length} books: ${failedIds.join(', ')}`);
+        alert(`Failed to delete ${failedIds.length} out of ${bookIds.length} books. Check console for details.`);
+      }
+
+      // Update duplicates data locally instead of refetching
+      if (duplicatesData && successfullyDeletedIds.length > 0) {
+        const updatedData = { ...duplicatesData };
+        const duplicates = updatedData.duplicates.duplicates;
+        
+        // Remove books from all duplicate categories
+        ['by_title', 'by_isbn', 'by_title_author'].forEach(category => {
+          if (duplicates[category]) {
+            duplicates[category] = duplicates[category]
+              .map(group => ({
+                ...group,
+                books: group.books.filter(book => !successfullyDeletedIds.includes(book.id)),
+                count: group.books.filter(book => !successfullyDeletedIds.includes(book.id)).length
+              }))
+              .filter(group => group.books.length > 1); // Remove groups with only 1 book
+          }
+        });
+        
+        // Update summary counts
+        const totalBooks = Object.values(duplicates).flat()
+          .reduce((sum, group) => sum + (group.books?.length || 0), 0);
+        const totalGroups = Object.values(duplicates)
+          .reduce((sum, category) => sum + (category?.length || 0), 0);
+        
+        updatedData.duplicates.summary.total_duplicate_books = totalBooks;
+        updatedData.duplicates.summary.total_duplicate_groups = totalGroups;
+        
+        setDuplicatesData(updatedData);
+        
+        // Force a small delay to ensure state consistency
+        setTimeout(() => {
+          console.log('State updated after bulk delete');
+        }, 50);
+      }
+      
+      // Clear selection
       setSelectedBooks(new Set());
+      
+      // Notify parent component that books were deleted (only if some were successful)
+      if (onBooksDeleted && successfullyDeletedIds.length > 0) {
+        setTimeout(() => {
+          onBooksDeleted();
+        }, 700); // Wait for all animations to complete
+      }
       
     } catch (error) {
       console.error('Failed to delete books:', error);
       alert('Failed to delete selected books. Please try again.');
     } finally {
       setDeleting(false);
+      setDeletingBooks(new Set());
+      // Clear fading groups after animation completes
+      setTimeout(() => {
+        setFadingGroups(new Set());
+      }, 100);
     }
   };
 
@@ -182,7 +427,7 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
               <span className="ml-2">Scanning for duplicates...</span>
             </div>
-          ) : duplicates.length === 0 ? (
+          ) : allGroups.length === 0 ? (
             <div className="text-center py-12">
               <AlertTriangle className="h-12 w-12 text-green-500 mx-auto mb-4" />
               <h3 className="text-lg font-medium mb-2">No Duplicates Found</h3>
@@ -196,7 +441,7 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
               <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
                 <div className="flex items-center gap-4">
                   <span className="text-sm text-gray-600 dark:text-gray-400">
-                    Found {duplicates.reduce((acc, group) => acc + group.books.length, 0)} duplicate books in {duplicates.length} groups
+                    Found {allGroups.reduce((acc, group) => acc + group.books.length, 0)} duplicate books in {allGroups.length} groups
                   </span>
                   {selectedBooks.size > 0 && (
                     <Badge variant="secondary">
@@ -218,8 +463,18 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
               </div>
 
               {/* Duplicate Groups */}
-              {duplicates.map((group, groupIndex) => (
-                <Card key={groupIndex}>
+              {allGroups.map((group, groupIndex) => {
+                const groupKey = `${group.type}-${group.books.map(b => b.id).sort().join('-')}`;
+                const isFading = fadingGroups.has(groupKey);
+                
+                return (
+                <Collapsible.Root
+                  key={groupKey} // Use stable key based on content, not index
+                  open={!isFading}
+                  className="overflow-hidden"
+                >
+                  <Collapsible.Content className="data-[state=closed]:animate-out data-[state=closed]:translate-x-full data-[state=closed]:opacity-0 data-[state=open]:animate-in data-[state=open]:translate-x-0 data-[state=open]:opacity-100 transition-all duration-300 ease-out">
+                    <Card className="mb-6">
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <div>
@@ -242,45 +497,111 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {group.books.map((book) => (
-                        <div key={book.id} className="relative">
-                          <div className="absolute top-2 left-2 z-10 flex items-center gap-2">
-                            <Checkbox
-                              checked={selectedBooks.has(book.id)}
-                              onCheckedChange={(checked) => handleSelectBook(book.id, checked as boolean)}
-                            />
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                      {group.books.map((book) => {
+                        const isBeingDeleted = deletingBooks.has(book.id);
+                        
+                        return (
+                        <div 
+                          key={book.id} 
+                          className={`relative bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300 ${
+                            isBeingDeleted 
+                              ? 'opacity-50 scale-95 ring-2 ring-red-500 ring-opacity-50' 
+                              : 'hover:shadow-md opacity-100 scale-100'
+                          }`}
+                        >
+                          {/* Checkbox */}
+                          <div className="absolute top-2 left-2 z-10">
+                            <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-md p-1 shadow-sm">
+                              <Checkbox
+                                checked={selectedBooks.has(book.id)}
+                                onCheckedChange={(checked) => 
+                                  handleSelectBook(book.id, checked as boolean)
+                                }
+                              />
+                            </div>
                           </div>
+                          
+                          {/* Delete Button */}
                           <div className="absolute top-2 right-2 z-10">
                             <Button
                               variant="destructive"
                               size="sm"
                               onClick={() => handleDeleteSingle(book.id)}
                               disabled={deleting}
+                              className="h-8 w-8 p-0"
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
-                          <UnifiedBookCard
-                            book={book}
-                            onDownload={() => {}}
-                            onSendToKindle={() => {}}
-                            showDownloadButton={false}
-                            showKindleButton={false}
-                          />
+                          
+                          {/* Cover */}
+                          <div className="aspect-[2/3] bg-gray-100 dark:bg-gray-700 relative">
+                            <img 
+                              src={`/api/metadata/books/${book.id}/cover`}
+                              alt={book.title}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                              onLoad={() => {
+                                console.log(`Cover loaded for book ${book.id}: ${book.title}`);
+                              }}
+                              onError={(e) => {
+                                console.log(`Cover failed for book ${book.id}: ${book.title}, has_cover: ${book.has_cover}`);
+                                const target = e.target as HTMLImageElement;
+                                target.style.display = 'none';
+                                const fallback = document.createElement('div');
+                                fallback.className = 'w-full h-full flex items-center justify-center bg-gray-200 dark:bg-gray-600';
+                                fallback.innerHTML = '<svg class="w-12 h-12 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd"></path></svg>';
+                                target.parentElement?.appendChild(fallback);
+                              }}
+                            />
+                          </div>
+                          
+                          {/* Book Details */}
+                          <div className="p-3">
+                            <h4 className="font-medium text-sm text-gray-900 dark:text-white line-clamp-2 mb-1">
+                              {book.title}
+                            </h4>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-1 mb-2">
+                              {book.authors.join(', ')}
+                            </p>
+                            {book.formats && book.formats.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {book.formats.slice(0, 2).map((format) => (
+                                  <span key={format} className="inline-block px-2 py-1 text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded">
+                                    {format}
+                                  </span>
+                                ))}
+                                {book.formats.length > 2 && (
+                                  <span className="text-xs text-gray-500 self-center">+{book.formats.length - 2}</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </CardContent>
-                </Card>
-              ))}
+                    </Card>
+                  </Collapsible.Content>
+                </Collapsible.Root>
+                );
+              })}
             </div>
           )}
         </div>
 
         {/* Footer */}
         <div className="flex items-center justify-between p-6 border-t bg-gray-50 dark:bg-gray-800">
-          <Button variant="outline" onClick={() => fetchDuplicates()} disabled={loading}>
+          <Button 
+            variant="outline" 
+            onClick={() => {
+              resetTransientState();
+              fetchDuplicates();
+            }} 
+            disabled={loading}
+          >
             Refresh
           </Button>
           <Button variant="outline" onClick={onClose}>

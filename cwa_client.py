@@ -68,6 +68,10 @@ class CWAClient:
             logger.error(f"CWA API request failed: {method} {url} - {e}")
             return None
     
+    def get(self, endpoint: str, **kwargs) -> Optional[requests.Response]:
+        """Generic GET request to CWA"""
+        return self._make_request('GET', endpoint, **kwargs)
+    
     def get_books(self, page: int = 1, per_page: int = 25, sort: str = 'new') -> Optional[Dict]:
         """Get books from CWA library"""
         params = {

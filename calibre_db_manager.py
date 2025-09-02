@@ -10,7 +10,11 @@ from typing import List, Dict, Any, Optional
 import logging
 
 # Import the proper CWA Calibre models
-from calibre_models import Books, Authors, Series, Tags, Languages, Data, Comments, Ratings
+from calibre_models import (
+    Books, Authors, Series, Tags, Languages, Data, Comments, Ratings, Identifiers,
+    books_authors_link, books_tags_link, books_series_link, books_ratings_link,
+    books_languages_link, books_publishers_link
+)
 
 logger = logging.getLogger(__name__)
 
@@ -376,29 +380,76 @@ class CalibreDBManager:
         finally:
             self.close_session(session)
     
-    def delete_book(self, book_id: int) -> bool:
-        """Delete a book and all its related data"""
+    def delete_book(self, book_id: int) -> tuple[bool, str]:
+        """Delete a book and all its related data from both database and filesystem"""
         session = self.get_session()
         try:
             book = session.query(Books).filter(Books.id == book_id).first()
             if not book:
-                return False
+                return False, f"Book {book_id} not found"
             
-            # Delete related data
+            book_title = book.title
+            book_path = book.path
+            
+            # First, try to delete files from filesystem
+            filesystem_error = None
+            if book_path:
+                try:
+                    full_book_path = self.db_path.parent / book_path
+                    if full_book_path.exists() and full_book_path.is_dir():
+                        import shutil
+                        shutil.rmtree(full_book_path)
+                        logger.info(f"Deleted book files at: {full_book_path}")
+                        
+                        # Also try to remove empty author directory
+                        author_path = full_book_path.parent
+                        if author_path.exists() and author_path.is_dir():
+                            try:
+                                if not any(author_path.iterdir()):  # Check if directory is empty
+                                    author_path.rmdir()
+                                    logger.info(f"Removed empty author directory: {author_path}")
+                            except OSError:
+                                pass  # Directory not empty or other issue, ignore
+                    else:
+                        filesystem_error = f"Book files not found at path: {book_path}"
+                        logger.warning(filesystem_error)
+                except Exception as e:
+                    filesystem_error = f"Failed to delete book files: {str(e)}"
+                    logger.error(filesystem_error)
+            
+            # Delete from database regardless of filesystem result
+            # Delete all related data first (in proper order to avoid foreign key constraints)
+            
+            # Delete from tables with direct foreign keys to books
+            session.query(Identifiers).filter(Identifiers.book == book_id).delete()
             session.query(Data).filter(Data.book == book_id).delete()
             session.query(Comments).filter(Comments.book == book_id).delete()
             
-            # Remove book from association tables (SQLAlchemy handles this automatically with relationships)
+            # Delete from many-to-many association tables
+            # SQLAlchemy should handle these automatically, but let's be explicit for safety
+            session.execute(books_authors_link.delete().where(books_authors_link.c.book == book_id))
+            session.execute(books_tags_link.delete().where(books_tags_link.c.book == book_id))
+            session.execute(books_series_link.delete().where(books_series_link.c.book == book_id))
+            session.execute(books_ratings_link.delete().where(books_ratings_link.c.book == book_id))
+            session.execute(books_languages_link.delete().where(books_languages_link.c.book == book_id))
+            session.execute(books_publishers_link.delete().where(books_publishers_link.c.book == book_id))
+            
+            # Finally delete the book itself
             session.delete(book)
             session.commit()
             
-            logger.info(f"Deleted book {book_id}: {book.title}")
-            return True
+            success_message = f"Book '{book_title}' (ID: {book_id}) deleted from database"
+            if filesystem_error:
+                success_message += f", but filesystem deletion failed: {filesystem_error}"
+            
+            logger.info(success_message)
+            return True, success_message
             
         except Exception as e:
             session.rollback()
-            logger.error(f"Error deleting book {book_id}: {e}")
-            raise
+            error_message = f"Error deleting book {book_id}: {e}"
+            logger.error(error_message)
+            return False, error_message
         finally:
             self.close_session(session)
     
@@ -415,9 +466,18 @@ class CalibreDBManager:
                     if book:
                         title = book.title
                         
-                        # Delete related data
+                        # Delete all related data first (in proper order)
+                        session.query(Identifiers).filter(Identifiers.book == book_id).delete()
                         session.query(Data).filter(Data.book == book_id).delete()
                         session.query(Comments).filter(Comments.book == book_id).delete()
+                        
+                        # Delete from association tables
+                        session.execute(books_authors_link.delete().where(books_authors_link.c.book == book_id))
+                        session.execute(books_tags_link.delete().where(books_tags_link.c.book == book_id))
+                        session.execute(books_series_link.delete().where(books_series_link.c.book == book_id))
+                        session.execute(books_ratings_link.delete().where(books_ratings_link.c.book == book_id))
+                        session.execute(books_languages_link.delete().where(books_languages_link.c.book == book_id))
+                        session.execute(books_publishers_link.delete().where(books_publishers_link.c.book == book_id))
                         
                         # Delete the book
                         session.delete(book)
