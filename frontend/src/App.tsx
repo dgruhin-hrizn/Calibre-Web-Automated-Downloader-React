@@ -14,7 +14,7 @@ import { Downloads } from './pages/Downloads'
 import { Settings } from './pages/Settings'
 import Library from './pages/Library'
 import HotBooks from './pages/HotBooks'
-import Series from './pages/Series'
+import SeriesOptimized from './pages/SeriesOptimized'
 
 
 import { ToastProvider } from './components/ui/ToastProvider'
@@ -88,7 +88,7 @@ function App() {
                           <Route path="/" element={<Dashboard />} />
                           <Route path="/search" element={<Search />} />
                           <Route path="/library" element={<Library />} />
-                          <Route path="/series" element={<Series />} />
+                          <Route path="/series" element={<SeriesOptimized />} />
                           <Route path="/hot" element={<HotBooks />} />
                           <Route path="/downloads" element={<Downloads />} />
                           <Route path="/settings" element={<Settings />} />
