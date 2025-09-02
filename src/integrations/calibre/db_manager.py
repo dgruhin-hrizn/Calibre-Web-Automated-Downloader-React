@@ -3,7 +3,7 @@ Direct Calibre metadata.db access using CWA ORM models
 """
 import os
 from pathlib import Path
-from sqlalchemy import create_engine, func
+from sqlalchemy import create_engine, func, text
 from sqlalchemy.orm import sessionmaker, scoped_session
 from sqlalchemy.pool import StaticPool
 from typing import List, Dict, Any, Optional
@@ -104,6 +104,10 @@ class CalibreDBManager:
         
         # Create session factory
         self.Session = scoped_session(sessionmaker(bind=self.engine))
+        
+        # Try to find app.db for download counts (used for hot books)
+        self.app_db_path = None
+        self._find_app_db()
     
     def get_session(self):
         """Get a database session"""
@@ -112,6 +116,65 @@ class CalibreDBManager:
     def close_session(self, session):
         """Close a database session"""
         session.close()
+    
+    def _find_app_db(self):
+        """Try to find app.db for download tracking"""
+        try:
+            # Check environment variable first
+            if 'CWA_DB_PATH' in os.environ:
+                app_db_path = Path(os.environ['CWA_DB_PATH'])
+                if app_db_path.exists():
+                    self.app_db_path = app_db_path
+                    logger.info(f"Found app.db via CWA_DB_PATH: {app_db_path}")
+                    return
+            
+            # Look in the same directory as metadata.db
+            potential_app_db = self.db_path.parent / "app.db"
+            if potential_app_db.exists():
+                self.app_db_path = potential_app_db
+                logger.info(f"Found app.db in same directory: {potential_app_db}")
+                return
+                
+            # Look in parent directories
+            for parent in self.db_path.parents:
+                potential_app_db = parent / "app.db"
+                if potential_app_db.exists():
+                    self.app_db_path = potential_app_db
+                    logger.info(f"Found app.db in parent directory: {potential_app_db}")
+                    return
+                    
+            logger.warning("app.db not found - hot books will use timestamp fallback")
+            
+        except Exception as e:
+            logger.warning(f"Error finding app.db: {e}")
+    
+    def _get_download_counts(self) -> Dict[int, int]:
+        """Get download counts from app.db if available"""
+        if not self.app_db_path:
+            return {}
+            
+        try:
+            # Create a separate engine for app.db
+            app_engine = create_engine(
+                f'sqlite:///{self.app_db_path}',
+                poolclass=StaticPool,
+                connect_args={'check_same_thread': False}
+            )
+            
+            # Query download counts similar to CWA-reference implementation
+            with app_engine.connect() as conn:
+                result = conn.execute(text("""
+                    SELECT book_id, COUNT(*) as download_count 
+                    FROM downloads 
+                    GROUP BY book_id 
+                    ORDER BY download_count DESC
+                """))
+                
+                return {row[0]: row[1] for row in result}
+                
+        except Exception as e:
+            logger.warning(f"Error getting download counts from app.db: {e}")
+            return {}
     
     def get_books(self, page: int = 1, per_page: int = 18, search: str = None, 
                   sort: str = 'new') -> Dict[str, Any]:
@@ -312,6 +375,120 @@ class CalibreDBManager:
             
         except Exception as e:
             logger.error(f"Error getting book details: {e}")
+            raise
+        finally:
+            self.close_session(session)
+    
+    def get_hot_books(self, page: int = 1, per_page: int = 18) -> Dict[str, Any]:
+        """Get hot books based on download counts from app.db"""
+        session = self.get_session()
+        try:
+            # Get download counts from app.db
+            download_counts = self._get_download_counts()
+            
+            if not download_counts:
+                # Fallback to most recently added books if no download data
+                logger.info("No download data available, falling back to newest books")
+                return self.get_books(page=page, per_page=per_page, sort='new')
+            
+            # Get book IDs sorted by download count
+            sorted_book_ids = sorted(download_counts.keys(), 
+                                   key=lambda bid: download_counts[bid], 
+                                   reverse=True)
+            
+            # Apply pagination to book IDs
+            start_idx = (page - 1) * per_page
+            end_idx = start_idx + per_page
+            page_book_ids = sorted_book_ids[start_idx:end_idx]
+            
+            if not page_book_ids:
+                return {
+                    'books': [],
+                    'total': len(sorted_book_ids),
+                    'page': page,
+                    'per_page': per_page,
+                    'pages': (len(sorted_book_ids) + per_page - 1) // per_page
+                }
+            
+            # Query books for this page, preserving download count order
+            books_query = session.query(Books).filter(Books.id.in_(page_book_ids))
+            books = books_query.all()
+            
+            # Create a mapping for quick lookup
+            books_by_id = {book.id: book for book in books}
+            
+            # Build ordered results maintaining download count order
+            books_data = []
+            for book_id in page_book_ids:
+                if book_id not in books_by_id:
+                    continue  # Skip if book not found in metadata.db
+                    
+                book = books_by_id[book_id]
+                
+                # Get related data (same as get_books method)
+                authors = [author.name for author in book.authors] if book.authors else ['Unknown Author']
+                series_info = []
+                if book.series:
+                    for series in book.series:
+                        series_info.append({
+                            'name': series.name,
+                            'index': float(book.series_index) if book.series_index else None
+                        })
+                
+                tags = [tag.name for tag in book.tags] if book.tags else []
+                languages = [lang.lang_code for lang in book.languages] if book.languages else []
+                formats = [data.format.upper() for data in book.data] if book.data else []
+                publishers = [pub.name for pub in book.publishers] if book.publishers else []
+                
+                # Calculate file sizes
+                file_sizes = {}
+                for data in book.data:
+                    file_sizes[data.format.upper()] = data.uncompressed_size
+                
+                # Check if book has cover
+                has_cover = bool(book.has_cover)
+                
+                # Get rating
+                rating = None
+                if book.ratings:
+                    rating = book.ratings[0].rating / 2.0  # Convert to 5-star scale
+                
+                book_data = {
+                    'id': book.id,
+                    'title': book.title,
+                    'sort': book.sort,
+                    'author_sort': book.author_sort,
+                    'timestamp': book.timestamp.isoformat() if book.timestamp else None,
+                    'pubdate': book.pubdate.isoformat() if book.pubdate else None,
+                    'series_index': float(book.series_index) if book.series_index else None,
+                    'last_modified': book.last_modified.isoformat() if book.last_modified else None,
+                    'authors': authors,
+                    'series': series_info,
+                    'rating': rating,
+                    'tags': tags,
+                    'languages': languages,
+                    'formats': formats,
+                    'path': book.path,
+                    'has_cover': has_cover,
+                    'comments': book.comments[0].text if book.comments else None,
+                    'isbn': book.isbn if book.isbn else None,
+                    'uuid': book.uuid if book.uuid else None,
+                    'publishers': publishers,
+                    'file_sizes': file_sizes,
+                    'download_count': download_counts.get(book.id, 0)  # Add download count
+                }
+                books_data.append(book_data)
+            
+            return {
+                'books': books_data,
+                'total': len(sorted_book_ids),
+                'page': page,
+                'per_page': per_page,
+                'pages': (len(sorted_book_ids) + per_page - 1) // per_page
+            }
+            
+        except Exception as e:
+            logger.error(f"Error querying hot books: {e}")
             raise
         finally:
             self.close_session(session)

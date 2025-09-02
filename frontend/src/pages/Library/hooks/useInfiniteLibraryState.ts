@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useInfiniteLibraryBooks, useLibraryStats, useCWAHealth, useLibraryCache } from './useLibraryQueries'
 import { useInfiniteScroll, useScrollMemory, useBookInView, useScrollToBook } from './useInfiniteScroll'
@@ -99,7 +99,7 @@ export function useInfiniteLibraryState({
       return
     }
     
-    const scrollTop = window.scrollY
+    // const scrollTop = window.scrollY
 
     
     // If we have a book in view, calculate page based on that (ignore scroll position)
@@ -115,7 +115,7 @@ export function useInfiniteLibraryState({
       
       const booksPerPage = 18
       const calculatedPage = Math.floor(bookIndex / booksPerPage) + 1
-      const positionInPage = bookIndex % booksPerPage
+      // const positionInPage = bookIndex % booksPerPage
       
 
       
@@ -257,7 +257,7 @@ export function useInfiniteLibraryState({
   }, [bookInView, updateCurrentPage])
 
   // Ref for scroll timeout
-  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  // const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // Load initial pages if URL specifies a page > 1
   useEffect(() => {

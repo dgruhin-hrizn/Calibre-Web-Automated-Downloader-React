@@ -57,8 +57,8 @@ export const useDownloadStore = create<DownloadStore>()(
           const currentDownload = state.downloads[id]
           const newDownload = {
             id,
-            status: 'idle' as const,
-            progress: 0,
+            status: (status.status || currentDownload?.status || 'idle') as const,
+            progress: status.progress ?? currentDownload?.progress ?? 0,
             ...currentDownload,
             ...status,
             timestamp: status.status === 'completed' || status.status === 'error' 
@@ -124,7 +124,7 @@ export const useDownloadStore = create<DownloadStore>()(
       clearNotifications: () => {
         set((state) => {
           // Get all current completed/error items from backend to dismiss them
-          const currentCompletedIds = new Set<string>()
+          // const currentCompletedIds = new Set<string>()
           // We'll populate this in the component where we have access to backend data
           
           return {

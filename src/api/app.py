@@ -21,6 +21,7 @@ from ..integrations.cwa.client import CWAClient
 from ..integrations.cwa.settings import cwa_settings
 from ..integrations.cwa.proxy import CWAProxy, create_cwa_proxy_routes, create_opds_routes
 from ..integrations.calibre.db_manager import CalibreDBManager
+from ..utils.rate_limiter import get_rate_limiter_stats
 
 from ..core.models import SearchFilters
 
@@ -62,16 +63,7 @@ werkzeug_logger = logging.getLogger('werkzeug')
 werkzeug_logger.handlers = logger.handlers
 werkzeug_logger.setLevel(logger.level)
 
-# Set up session configuration
-# The secret key will reset every time we restart, which will
-# require users to authenticate again
-app.config.update(
-    SECRET_KEY = os.urandom(64),
-    SESSION_COOKIE_HTTPONLY = True,
-    SESSION_COOKIE_SECURE = False,  # Set to True in production with HTTPS
-    SESSION_COOKIE_SAMESITE = 'Lax',
-    PERMANENT_SESSION_LIFETIME = 86400  # 24 hours
-)
+# Session configuration is handled above (lines 35-40) - no duplicate needed
 
 # Initialize CWA client with settings
 def get_cwa_client():
@@ -1071,6 +1063,33 @@ def api_metadata_stats():
         logger.error(f"Error fetching metadata stats: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/metadata/hot-books')
+def api_metadata_hot_books():
+    """Get hot books based on download counts from app.db"""
+    try:
+        db_manager = get_calibre_db_manager()
+        if not db_manager:
+            return jsonify({'error': 'Metadata database not available'}), 503
+        
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 18)), 100)
+        
+        # Get hot books (most downloaded) from the database
+        result = db_manager.get_hot_books(page=page, per_page=per_page)
+        
+        return jsonify({
+            'books': result['books'],
+            'total': result['total'],
+            'page': result['page'],
+            'per_page': result['per_page'],
+            'pages': result['pages']
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching hot books: {e}")
+        return jsonify({'error': str(e)}), 500
+
 # ============================================================================
 # Admin API Endpoints (Direct Database Management)
 # ============================================================================
@@ -1093,6 +1112,23 @@ def api_admin_status():
     except Exception as e:
         logger.error(f"Error checking admin status: {e}")
         return jsonify({'is_admin': False})
+
+@app.route('/api/admin/rate-limiter/status')
+@login_required
+def api_rate_limiter_status():
+    """Get rate limiter statistics (admin only)"""
+    try:
+        # Get rate limiter stats
+        stats = get_rate_limiter_stats()
+        
+        return jsonify({
+            'rate_limiter': stats,
+            'message': 'Rate limiter statistics retrieved successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting rate limiter status: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/admin/user-info')
 def api_admin_user_info():

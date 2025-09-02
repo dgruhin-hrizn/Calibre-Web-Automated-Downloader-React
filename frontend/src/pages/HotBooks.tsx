@@ -17,15 +17,15 @@ export function HotBooks() {
   const [error, setError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
 
-  // Load hot books from OPDS
+  // Load hot books from metadata API
   const loadHotBooks = async () => {
     try {
       setLoading(true)
       setError(null)
 
-      console.log('🔥 Fetching hot books via OPDS...')
+      console.log('🔥 Fetching hot books via metadata API...')
       
-      const response = await fetch('/api/opds/hot', {
+      const response = await fetch('/api/metadata/hot-books?page=1&per_page=50', {
         credentials: 'include'
       })
 
@@ -33,113 +33,38 @@ export function HotBooks() {
         throw new Error(`Failed to fetch hot books: ${response.status} ${response.statusText}`)
       }
 
-      const xmlText = await response.text()
-      console.log('📄 OPDS XML response received, parsing...')
+      const data = await response.json()
+      console.log('📄 JSON response received:', data)
       
-      // Parse OPDS XML to extract book information
-      const parser = new DOMParser()
-      const xmlDoc = parser.parseFromString(xmlText, 'text/xml')
-      
-      // Check for XML parsing errors
-      const parserError = xmlDoc.querySelector('parsererror')
-      if (parserError) {
-        throw new Error('Failed to parse OPDS XML response')
+      if (!data.books || !Array.isArray(data.books)) {
+        throw new Error('Invalid response format')
       }
 
-      // Extract book entries from OPDS feed
-      const entries = xmlDoc.querySelectorAll('entry')
-      console.log(`📚 Found ${entries.length} hot books in OPDS feed`)
+      console.log(`📚 Found ${data.books.length} hot books in metadata response`)
 
-      const hotBooks: HotBook[] = Array.from(entries).map((entry, index) => {
-        // Extract basic book information from OPDS entry
-        const titleElement = entry.querySelector('title')
-        const authorElement = entry.querySelector('author name')
-        const summaryElement = entry.querySelector('summary')
-        const idElement = entry.querySelector('id')
-        
-        // Extract links for covers and downloads
-        const coverLink = entry.querySelector('link[type*="image"]')
-        const downloadLinks = entry.querySelectorAll('link[type*="application"]')
-        
-        // Get cover URL from OPDS or construct it from original ID
-        let coverUrl: string | null = null
-        if (coverLink) {
-          const href = coverLink.getAttribute('href')
-          if (href) {
-            // Use OPDS cover URL - convert to our API proxy endpoint
-            if (href.startsWith('/opds/cover/')) {
-              coverUrl = `/api${href}` // Convert /opds/cover/1613 to /api/opds/cover/1613
-            } else {
-              coverUrl = href.startsWith('http') ? href : `${window.location.origin}${href}`
-            }
-          }
-        }
-        
-        // Extract book ID from the id element or cover link
-        let bookId = index + 1 // Fallback ID
-        
-        // First try to get ID from the cover link (most reliable)
-        if (coverLink) {
-          const href = coverLink.getAttribute('href') || ''
-          const coverIdMatch = href.match(/\/opds\/cover\/(\d+)/)
-          if (coverIdMatch) {
-            bookId = parseInt(coverIdMatch[1])
-          }
-        }
-        
-        // Fallback: try to extract from id element (for numeric IDs)
-        if (bookId === index + 1 && idElement) {
-          const idText = idElement.textContent || ''
-          const idMatch = idText.match(/(\d+)/)
-          if (idMatch) {
-            bookId = parseInt(idMatch[1])
-          }
+      const hotBooks: HotBook[] = data.books.map((book: any, index: number) => {
+        // Create unified book object from metadata API response
+        const hotBook: HotBook = {
+          id: book.id.toString(), // Use book ID as string
+          title: book.title || 'Unknown Title',
+          authors: book.authors || ['Unknown Author'],
+          has_cover: book.has_cover || false,
+          formats: book.formats || ['EPUB'],
+          comments: book.comments || undefined,
+          tags: book.tags || ['Hot', 'Popular'],
+          download_count: book.download_count || 0,
+          originalId: book.id,
+          // Use metadata API cover endpoint
+          preview: book.has_cover ? `/api/metadata/books/${book.id}/cover` : undefined,
+          // Additional metadata from the API
+          series: book.series || [],
+          rating: book.rating || undefined,
+          pubdate: book.pubdate || undefined,
+          isbn: book.isbn || undefined,
+          publishers: book.publishers || [],
         }
 
-        // Create a unique ID for React keys by combining title, author, and index
-        const title = titleElement?.textContent || 'Unknown Title'
-        const author = authorElement?.textContent || 'Unknown Author'
-        const uniqueId = `hot-${index}-${title.replace(/[^a-zA-Z0-9]/g, '').substring(0, 10)}-${author.replace(/[^a-zA-Z0-9]/g, '').substring(0, 10)}`
-
-        // Extract available formats
-        const formats: string[] = []
-        downloadLinks.forEach(link => {
-          const href = link.getAttribute('href') || ''
-          const formatMatch = href.match(/\.(\w+)$/)
-          if (formatMatch) {
-            formats.push(formatMatch[1].toUpperCase())
-          }
-        })
-
-        // Create unified book object
-        const book: HotBook = {
-          id: uniqueId, // Use unique ID instead of potentially duplicate bookId
-          title: title,
-          authors: author ? [author] : ['Unknown Author'],
-          has_cover: !!coverLink,
-          formats: formats.length > 0 ? formats : ['EPUB'], // Default format
-          comments: summaryElement?.textContent,
-          tags: ['Hot', 'Popular'], // Add hot book tags
-          download_count: undefined, // OPDS doesn't provide download count directly
-          // Store the original numeric ID for API calls
-          originalId: bookId,
-          // Use OPDS cover URL or construct from original ID
-          preview: coverUrl || (bookId ? `/api/cwa/library/books/${bookId}/cover/md` : undefined),
-        }
-
-        // Debug logging for problematic books
-        if (title.includes('Tarnished')) {
-          console.log(`📚 Debug - Tarnished book:`, {
-            title,
-            uniqueId,
-            originalId: bookId,
-            coverUrl,
-            preview: book.preview,
-            coverLink: coverLink?.getAttribute('href')
-          })
-        }
-
-        return book
+        return hotBook
       })
 
       setBooks(hotBooks)
@@ -154,7 +79,7 @@ export function HotBooks() {
   }
 
   // Send book to Kindle
-  const sendToKindle = async (book: HotBook) => {
+  const sendToKindle = async (book: HotBook): Promise<{ success: boolean; message: string }> => {
     try {
       // Use the original numeric ID for API calls
       const apiBookId = book.originalId || book.id
@@ -175,12 +100,13 @@ export function HotBooks() {
       const lowerFormats = actualFormats.map((f: string) => f.toLowerCase())
       
       if (!lowerFormats.includes('epub')) {
+        const errorMessage = `"${book.title}" does not have an EPUB format available for Kindle delivery.`
         showToast({
           type: 'error',
           title: 'Cannot Send to Kindle',
-          message: `"${book.title}" does not have an EPUB format available for Kindle delivery.`
+          message: errorMessage
         })
-        return
+        return { success: false, message: errorMessage }
       }
       
       // Send to Kindle using EPUB format with no conversion
@@ -192,11 +118,13 @@ export function HotBooks() {
       if (response.ok) {
         const result = await response.json()
         if (Array.isArray(result) && result.length > 0 && result[0].type === 'success') {
+          const successMessage = `"${book.title}" has been queued for delivery to your Kindle.`
           showToast({
             type: 'success',
             title: 'Book Sent to Kindle!',
-            message: `"${book.title}" has been queued for delivery to your Kindle.`
+            message: successMessage
           })
+          return { success: true, message: successMessage }
         } else {
           throw new Error(result[0]?.message || 'Unknown error occurred')
         }
@@ -206,11 +134,13 @@ export function HotBooks() {
       
     } catch (error) {
       console.error('Error sending book to Kindle:', error)
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred'
       showToast({
         type: 'error',
         title: 'Send to Kindle Failed',
-        message: error instanceof Error ? error.message : 'An unexpected error occurred'
+        message: errorMessage
       })
+      return { success: false, message: errorMessage }
     }
   }
 

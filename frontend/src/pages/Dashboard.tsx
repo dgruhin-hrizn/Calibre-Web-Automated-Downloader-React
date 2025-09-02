@@ -30,7 +30,7 @@ export function Dashboard() {
   }
 
   // Get recent downloads from all categories with enhanced data
-  const recentDownloads = []
+  const recentDownloads: Array<any> = []
   if (statusData) {
     // Add downloading items with progress
     Object.values(statusData.downloading || {}).forEach(item => 

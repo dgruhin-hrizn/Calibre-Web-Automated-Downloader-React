@@ -138,7 +138,7 @@ export function useBookInView(books: any[], enabled: boolean = true) {
         // Find the entry with the highest intersection ratio that's most visible
         let maxRatio = 0
         let topBookId: number | null = null
-        let topBookElement: Element | null = null
+        // let topBookElement: Element | null = null
 
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
@@ -148,7 +148,7 @@ export function useBookInView(books: any[], enabled: boolean = true) {
             if (bookId && ratio > maxRatio) {
               maxRatio = ratio
               topBookId = bookId
-              topBookElement = entry.target
+              // topBookElement = entry.target
             }
           }
         })

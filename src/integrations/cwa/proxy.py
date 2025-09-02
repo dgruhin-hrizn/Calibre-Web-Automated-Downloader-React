@@ -14,6 +14,7 @@ from urllib.parse import urljoin
 from datetime import datetime, timedelta
 import threading
 from typing import Dict, Optional
+from ...utils.rate_limiter import rate_limit
 
 logger = logging.getLogger(__name__)
 
@@ -416,6 +417,7 @@ def create_opds_routes(app, cwa_proxy):
             return jsonify({"error": "Internal OPDS proxy error", "details": str(e)}), 500
 
     @app.route('/api/opds/search')
+    @rate_limit(max_requests=20, window_seconds=60, endpoint_name='opds_search')
     def opds_search():
         """OPDS search with query parameter"""
         query = request.args.get('query', '')
@@ -438,21 +440,25 @@ def create_opds_routes(app, cwa_proxy):
         return proxy_opds('stats')
 
     @app.route('/api/opds/new')
+    @rate_limit(max_requests=15, window_seconds=60, endpoint_name='opds_new')
     def opds_new():
         """Get recently added books via OPDS"""
         return proxy_opds('new')
 
     @app.route('/api/opds/discover')
+    @rate_limit(max_requests=15, window_seconds=60, endpoint_name='opds_discover')
     def opds_discover():
         """Get random books via OPDS"""
         return proxy_opds('discover')
 
     @app.route('/api/opds/hot')
+    @rate_limit(max_requests=10, window_seconds=60, endpoint_name='opds_hot')
     def opds_hot():
         """Get most downloaded books via OPDS"""
         return proxy_opds('hot')
 
     @app.route('/api/opds/rated')
+    @rate_limit(max_requests=15, window_seconds=60, endpoint_name='opds_rated')
     def opds_rated():
         """Get best rated books via OPDS"""
         return proxy_opds('rated')
