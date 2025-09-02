@@ -32,7 +32,11 @@ export function BookDetailsModal({ bookId, onClose }: BookDetailsModalProps) {
   const [isLoadingAuthorBooks, setIsLoadingAuthorBooks] = useState(false)
   const navigate = useNavigate()
 
-  // Fetch Google Books data after basic book info is loaded
+  // Animation states
+  const [isVisible, setIsVisible] = useState(false)
+  const [isClosing, setIsClosing] = useState(false)
+
+  // Animation and fetch Google Books data after basic book info is loaded
   useEffect(() => {
     const fetchGoogleBooksData = async () => {
       if (!book || !book.title) {
@@ -47,6 +51,8 @@ export function BookDetailsModal({ bookId, onClose }: BookDetailsModalProps) {
       })
 
       setIsLoadingGoogleBooks(true)
+      setIsVisible(true)
+      setIsClosing(false)
       
       try {
         const response = await fetch('/api/google-books/search', {
@@ -158,8 +164,18 @@ export function BookDetailsModal({ bookId, onClose }: BookDetailsModalProps) {
     }
   }
 
+  // Handle modal close with animation
+  const handleClose = () => {
+    setIsClosing(true)
+    setTimeout(() => {
+      onClose()
+      setIsVisible(false)
+      setIsClosing(false)
+    }, 200)
+  }
+
   const handleSearchByTitle = (title: string) => {
-    onClose()
+    handleClose()
     navigate(`/search?q=${encodeURIComponent(title)}&fresh=true`)
   }
 
@@ -197,15 +213,27 @@ export function BookDetailsModal({ bookId, onClose }: BookDetailsModalProps) {
   const downloadStatus = downloads[bookId]
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
-      <div className="bg-card border border-border rounded-lg shadow-lg max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+    <div 
+      className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black transition-opacity duration-200 ${
+        isVisible && !isClosing ? 'bg-opacity-50' : 'bg-opacity-0'
+      }`}
+      onClick={handleClose}
+    >
+      <div 
+        className={`bg-card border border-border rounded-lg shadow-lg max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col transition-all duration-200 ${
+          isVisible && !isClosing 
+            ? 'opacity-100 scale-100 translate-y-0' 
+            : 'opacity-0 scale-95 translate-y-4'
+        }`}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-border flex-shrink-0">
           <h2 className="text-xl font-semibold text-foreground">Book Details</h2>
           <Button
             variant="ghost"
             size="sm"
-            onClick={onClose}
+            onClick={handleClose}
             className="p-2"
           >
             <X className="w-4 h-4" />

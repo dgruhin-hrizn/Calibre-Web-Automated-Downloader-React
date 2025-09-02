@@ -137,20 +137,57 @@ class CalibreDBManager:
             
             # Apply sorting
             if sort == 'new':
+                # Sort by date added, newest first
                 query = query.order_by(Books.timestamp.desc())
             elif sort == 'old':
+                # Sort by date added, oldest first
                 query = query.order_by(Books.timestamp.asc())
             elif sort == 'abc':
+                # Sort title A-Z
                 query = query.order_by(Books.sort.asc())
             elif sort == 'zyx':
+                # Sort title Z-A
                 query = query.order_by(Books.sort.desc())
-            elif sort == 'author':
-                # Add joins needed for author sorting if not already added
+            elif sort in ['authaz', 'author']:
+                # Sort authors A-Z (keeping 'author' for backward compatibility)
                 if not search:
                     query = query.outerjoin(books_authors_link, Books.id == books_authors_link.c.book)
                     query = query.outerjoin(Authors)
                 query = query.order_by(Authors.sort.asc())
+            elif sort == 'authza':
+                # Sort authors Z-A
+                if not search:
+                    query = query.outerjoin(books_authors_link, Books.id == books_authors_link.c.book)
+                    query = query.outerjoin(Authors)
+                query = query.order_by(Authors.sort.desc())
+            elif sort == 'pubnew':
+                # Sort by publication date, newest first
+                query = query.order_by(Books.pubdate.desc().nulls_last())
+            elif sort == 'pubold':
+                # Sort by publication date, oldest first
+                query = query.order_by(Books.pubdate.asc().nulls_last())
+            elif sort == 'seriesasc':
+                # Sort by series index ascending
+                if not search:
+                    query = query.outerjoin(books_series_link, Books.id == books_series_link.c.book)
+                    query = query.outerjoin(Series)
+                query = query.order_by(books_series_link.c.series_index.asc().nulls_last())
+            elif sort == 'seriesdesc':
+                # Sort by series index descending
+                if not search:
+                    query = query.outerjoin(books_series_link, Books.id == books_series_link.c.book)
+                    query = query.outerjoin(Series)
+                query = query.order_by(books_series_link.c.series_index.desc().nulls_first())
+            elif sort == 'hotasc':
+                # Sort by download count ascending (if available)
+                # Note: Calibre doesn't track download counts by default, fallback to timestamp
+                query = query.order_by(Books.timestamp.asc())
+            elif sort == 'hotdesc':
+                # Sort by download count descending (if available)
+                # Note: Calibre doesn't track download counts by default, fallback to timestamp
+                query = query.order_by(Books.timestamp.desc())
             else:
+                # Default to newest first
                 query = query.order_by(Books.timestamp.desc())
             
             # Get total count before pagination

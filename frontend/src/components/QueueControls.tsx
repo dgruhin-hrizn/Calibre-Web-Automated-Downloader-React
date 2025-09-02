@@ -50,6 +50,7 @@ export function QueueControls({
   isQueuePaused = false
 }: QueueControlsProps) {
   const [showConfirmDialog, setShowConfirmDialog] = useState<string | null>(null)
+  const [dialogVisible, setDialogVisible] = useState(false)
 
   const totalItems = activeCount + queuedCount + completedCount + failedCount
 
@@ -63,14 +64,23 @@ export function QueueControls({
         break
       case 'cancelAll':
         setShowConfirmDialog('cancelAll')
+        setDialogVisible(true)
         break
       case 'clearCompleted':
         setShowConfirmDialog('clearCompleted')
+        setDialogVisible(true)
         break
       case 'retryFailed':
         onRetryAllFailed?.()
         break
     }
+  }
+
+  const handleDialogClose = () => {
+    setDialogVisible(false)
+    setTimeout(() => {
+      setShowConfirmDialog(null)
+    }, 200)
   }
 
   const confirmAction = () => {
@@ -82,7 +92,7 @@ export function QueueControls({
         onClearCompleted?.()
         break
     }
-    setShowConfirmDialog(null)
+    handleDialogClose()
   }
 
   return (
@@ -307,10 +317,20 @@ export function QueueControls({
       </div>
 
       {/* Confirmation Dialog */}
-      <Dialog.Root open={!!showConfirmDialog} onOpenChange={() => setShowConfirmDialog(null)}>
+      <Dialog.Root open={!!showConfirmDialog} onOpenChange={handleDialogClose}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 bg-black/50 z-50" />
-          <Dialog.Content className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-background border border-border rounded-lg shadow-lg p-6 w-96 z-50">
+          <Dialog.Overlay 
+            className={`fixed inset-0 bg-black z-50 transition-opacity duration-200 ${
+              dialogVisible ? 'bg-opacity-50' : 'bg-opacity-0'
+            }`} 
+          />
+          <Dialog.Content 
+            className={`fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-background border border-border rounded-lg shadow-lg p-6 w-96 z-50 transition-all duration-200 ${
+              dialogVisible 
+                ? 'opacity-100 scale-100 translate-y-0' 
+                : 'opacity-0 scale-95 translate-y-4'
+            }`}
+          >
             <Dialog.Title className="text-lg font-semibold mb-2">
               {showConfirmDialog === 'cancelAll' && 'Cancel All Downloads'}
               {showConfirmDialog === 'clearCompleted' && 'Clear Completed Downloads'}
@@ -326,7 +346,7 @@ export function QueueControls({
             <div className="flex justify-end gap-2">
               <Button
                 variant="outline"
-                onClick={() => setShowConfirmDialog(null)}
+                onClick={handleDialogClose}
               >
                 Cancel
               </Button>

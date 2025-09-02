@@ -37,4 +37,16 @@ export type LibraryStats = {
 }
 
 export type ViewMode = 'grid' | 'list'
-export type SortParam = 'new' | 'old' | 'az' | 'za'
+export type SortParam = 
+  | 'new'        // Sort by date added, newest first
+  | 'old'        // Sort by date added, oldest first  
+  | 'abc'        // Sort title A-Z
+  | 'zyx'        // Sort title Z-A
+  | 'authaz'     // Sort authors A-Z
+  | 'authza'     // Sort authors Z-A
+  | 'pubnew'     // Sort by publication date, newest first
+  | 'pubold'     // Sort by publication date, oldest first
+  | 'seriesasc'  // Sort by series index ascending
+  | 'seriesdesc' // Sort by series index descending
+  | 'hotasc'     // Sort by download count ascending
+  | 'hotdesc'    // Sort by download count descending

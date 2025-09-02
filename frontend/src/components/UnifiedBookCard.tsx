@@ -5,6 +5,7 @@ import { Card, CardContent } from './ui/card'
 import { Badge } from './ui/badge'
 import { CachedImage } from './ui/CachedImage'
 import { CircularProgress } from './ui/CircularProgress'
+import { AuthorFormatter } from '../utils/authorFormatter'
 
 // Common book interface that works for both search and library books
 export interface UnifiedBook {
@@ -55,6 +56,18 @@ export interface UnifiedBookCardProps {
   showKindleButton?: boolean
 }
 
+// Utility function to check if a date is today
+const isToday = (dateString?: string): boolean => {
+  if (!dateString) return false
+  
+  const date = new Date(dateString)
+  const today = new Date()
+  
+  return date.getDate() === today.getDate() &&
+         date.getMonth() === today.getMonth() &&
+         date.getFullYear() === today.getFullYear()
+}
+
 export function UnifiedBookCard({
   book,
   cardType = 'library',
@@ -66,7 +79,6 @@ export function UnifiedBookCard({
   onImageLoaded,
   onDetails,
   onSendToKindle,
-  showDownloadButton = true,
   showKindleButton = true,
 }: UnifiedBookCardProps) {
   
@@ -132,13 +144,18 @@ export function UnifiedBookCard({
     }
   }, [book.id, onImageLoaded])
   
-  // Get author display string
+  // Get author display string with proper formatting
   const getAuthorDisplay = () => {
+    let authorString = ''
+    
     if (cardType === 'search') {
-      return book.author || 'Unknown Author'
+      authorString = book.author || 'Unknown Author'
     } else {
-      return book.authors?.join(', ') || 'Unknown Author'
+      authorString = book.authors?.join(', ') || 'Unknown Author'
     }
+    
+    // Apply author formatting fixes (handles pipe characters, "Last, First" format, etc.)
+    return authorString === 'Unknown Author' ? authorString : AuthorFormatter.formatForDisplay(authorString)
   }
   
   // Render search book action buttons
@@ -315,63 +332,92 @@ export function UnifiedBookCard({
     }
   }
   
+  // Check if this book was added today
+  const isNewBook = cardType === 'library' && isToday(book.timestamp)
+
   // Render cover image
   const renderCover = (aspectClass: string, iconSize: string) => {
-    if (!coverUrl) {
+    const coverContent = () => {
+      if (!coverUrl) {
+        return (
+          <div className={`${aspectClass} bg-muted overflow-hidden flex items-center justify-center relative`}>
+            <Book className={`${iconSize} text-muted-foreground`} />
+            {isNewBook && (
+              <div className="absolute top-2 right-2 bg-teal-700 text-white text-[8px] font-bold px-1.5 py-0.5 rounded shadow-md">
+                NEW
+              </div>
+            )}
+          </div>
+        )
+      }
+      
+      if (cardType === 'search') {
+        return (
+          <div className={`${aspectClass} relative`}>
+            <img
+              src={coverUrl}
+              alt={book.title}
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement
+                target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjI2NyIgdmlld0JveD0iMCAwIDIwMCAyNjciIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMjY3IiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0xMDAgMTMzLjVMMTAwIDEzMy41WiIgc3Ryb2tlPSIjOUNBM0FGIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4K'
+              }}
+            />
+          </div>
+        )
+      } else {
+        // Library book with cached image loading
+        return (
+          <div className={`${aspectClass} bg-muted overflow-hidden relative`}>
+            {canLoadImage ? (
+              <>
+                {!imageLoaded && !imageError && (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <div className="animate-pulse bg-muted-foreground/20 w-full h-full" />
+                  </div>
+                )}
+                <CachedImage 
+                  src={coverUrl} 
+                  alt={book.title}
+                  className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                  onLoad={handleImageLoad}
+                  onError={handleImageError}
+                  style={{ display: imageError ? 'none' : 'block' }}
+                />
+                {imageError && (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Book className={`${iconSize} text-muted-foreground`} />
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <Book className={`${iconSize} text-muted-foreground`} />
+              </div>
+            )}
+            {isNewBook && (
+              <div className="absolute top-2 right-2 bg-teal-700 text-white text-[8px] font-bold px-1.5 py-0.5 rounded shadow-md">
+                NEW
+              </div>
+            )}
+          </div>
+        )
+      }
+    }
+
+    // Make cover clickable if onDetails is available
+    if (onDetails) {
       return (
-        <div className={`${aspectClass} bg-muted overflow-hidden flex items-center justify-center`}>
-          <Book className={`${iconSize} text-muted-foreground`} />
+        <div 
+          className="cursor-pointer hover:opacity-90 transition-opacity"
+          onClick={() => onDetails(book)}
+        >
+          {coverContent()}
         </div>
       )
     }
-    
-    if (cardType === 'search') {
-      return (
-        <div className={aspectClass}>
-          <img
-            src={coverUrl}
-            alt={book.title}
-            className="w-full h-full object-cover"
-            onError={(e) => {
-              const target = e.target as HTMLImageElement
-              target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjI2NyIgdmlld0JveD0iMCAwIDIwMCAyNjciIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMjY3IiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0xMDAgMTMzLjVMMTAwIDEzMy41WiIgc3Ryb2tlPSIjOUNBM0FGIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4K'
-            }}
-          />
-        </div>
-      )
-    } else {
-      // Library book with cached image loading
-      return (
-        <div className={`${aspectClass} bg-muted overflow-hidden`}>
-          {canLoadImage ? (
-            <>
-              {!imageLoaded && !imageError && (
-                <div className="w-full h-full flex items-center justify-center">
-                  <div className="animate-pulse bg-muted-foreground/20 w-full h-full" />
-                </div>
-              )}
-              <CachedImage 
-                src={coverUrl} 
-                alt={book.title}
-                className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
-                onLoad={handleImageLoad}
-                onError={handleImageError}
-                style={{ display: imageError ? 'none' : 'block' }}
-              />
-              {imageError && (
-                <div className="w-full h-full flex items-center justify-center">
-                  <Book className={`${iconSize} text-muted-foreground`} />
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <Book className={`${iconSize} text-muted-foreground`} />
-            </div>
-          )}
-        </div>
-      )
-    }
+
+    return coverContent()
   }
   
   // Render for library list view
@@ -449,18 +495,26 @@ export function UnifiedBookCard({
           )}
           
           {/* Library-specific info */}
-          {cardType === 'library' && book.rating && (
-            <div className="flex items-center gap-1 mb-2">
-              {Array.from({ length: 5 }, (_, i) => (
-                <Star
-                  key={i}
-                  className={`h-3 w-3 ${
-                    i < Math.floor(book.rating! / 2) 
-                      ? 'text-yellow-400 fill-current' 
-                      : 'text-muted-foreground'
-                  }`}
-                />
-              ))}
+          {cardType === 'library' && (
+            <div className="flex items-center gap-0.5 mb-2">
+              {[1, 2, 3, 4, 5].map((starIndex) => {
+                const rating = book.rating ? book.rating / 2 : 0 // Convert from 0-10 to 0-5 scale
+                const isFilled = rating >= starIndex
+                const isHalfFilled = rating >= starIndex - 0.5 && rating < starIndex
+                
+                return (
+                  <Star
+                    key={starIndex}
+                    className={`w-3 h-3 ${
+                      isFilled
+                        ? 'fill-yellow-400 text-yellow-400'
+                        : isHalfFilled
+                        ? 'fill-yellow-200 text-yellow-400'
+                        : 'fill-gray-200 text-gray-200 dark:fill-gray-700 dark:text-gray-700'
+                    }`}
+                  />
+                )
+              })}
             </div>
           )}
           

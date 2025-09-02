@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { Button } from '../../components/ui/Button'
 import { Card, CardContent } from '../../components/ui/card'
 import { DuplicateManagerModal } from '../../components/DuplicateManagerModal'
@@ -6,10 +6,9 @@ import { useToast } from '../../hooks/useToast'
 
 import {
   LibraryStats,
-  LibraryControls,
-  LibraryGrid,
-  LibraryHeader
+  LibraryGrid
 } from './components'
+import { LibraryToolbar } from './components/LibraryToolbar'
 import { EnhancedBookDetailsModal } from './components/EnhancedBookDetailsModal'
 
 import {
@@ -24,7 +23,7 @@ import type { LibraryBook, ViewMode, SortParam } from './types'
 export function Library() {
   const { showToast, ToastContainer } = useToast()
   const { isAdmin } = useAdminStatus()
-  const { books, stats, loading, error, currentPage, totalPages, loadBooks } = useLibraryData()
+  const { books, stats, loading, error, currentPage, totalPages, loadBooks, removeBookLocally } = useLibraryData()
   const { downloadBook, sendToKindle } = useBookActions()
   const { shouldLoadImage, markImageLoaded } = useImageLoading(books)
 
@@ -34,6 +33,7 @@ export function Library() {
   const [sortParam, setSortParam] = useState<SortParam>('new')
   const [selectedBook, setSelectedBook] = useState<LibraryBook | null>(null)
   const [showDuplicateModal, setShowDuplicateModal] = useState(false)
+  const [deletingBooks, setDeletingBooks] = useState<Set<number>>(new Set())
 
   // Handlers
   const handleSearchChange = (query: string) => {
@@ -57,9 +57,9 @@ export function Library() {
   const handleDownload = async (book: LibraryBook) => {
     try {
       await downloadBook(book)
-      showToast('Download started successfully', 'success')
+      showToast({ type: 'success', title: 'Download started successfully' })
     } catch (error) {
-      showToast('Download failed', 'error')
+      showToast({ type: 'error', title: 'Download failed' })
     }
   }
 
@@ -67,59 +67,84 @@ export function Library() {
     try {
       const result = await sendToKindle(book)
       if (result.success) {
-        showToast(result.message || 'Book sent to Kindle successfully', 'success')
+        showToast({ type: 'success', title: result.message || 'Book sent to Kindle successfully' })
       } else {
-        showToast(result.message || 'Failed to send to Kindle', 'error')
+        showToast({ type: 'error', title: result.message || 'Failed to send to Kindle' })
       }
       return result
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to send to Kindle'
-      showToast(errorMessage, 'error')
+      showToast({ type: 'error', title: errorMessage })
       return { success: false, message: errorMessage }
     }
+  }
+
+  const handleBookDeleted = (deletedBookId: number) => {
+    // Add book to deleting set for animation
+    setDeletingBooks(prev => new Set([...prev, deletedBookId]))
+    
+    // Remove book from local state immediately after flip completes so grid can reposition
+    setTimeout(() => {
+      removeBookLocally(deletedBookId)
+    }, 500) // Remove from grid right after flip completes
+    
+    // Clean up deleting state after full animation
+    setTimeout(() => {
+      setDeletingBooks(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(deletedBookId)
+        return newSet
+      })
+    }, 1700) // Clean up after full animation completes (500ms delay + 700ms fade + buffer)
   }
 
   // Error state
   if (error) {
     return (
-      <div className="space-y-8">
-        <LibraryHeader 
-          isAdmin={isAdmin} 
-          onManageDuplicates={() => setShowDuplicateModal(true)} 
+      <>
+        {/* Fixed Toolbar - Outside any containers */}
+        <LibraryToolbar
+          searchQuery={searchQuery}
+          onSearchChange={handleSearchChange}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          sortParam={sortParam}
+          onSortChange={handleSortChange}
+          totalBooks={stats?.total_books || 0}
+          loading={loading}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+          isAdmin={isAdmin}
+          onManageDuplicates={() => setShowDuplicateModal(true)}
         />
         
-        <Card>
-          <CardContent className="p-6">
-            <div className="text-center text-red-600">
-              <p className="font-medium">Connection Error</p>
-              <p className="text-sm mt-1">{error}</p>
-              <Button 
-                onClick={() => loadBooks()} 
-                className="mt-4"
-                variant="outline"
-              >
-                Try Again
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+        {/* Content */}
+        <div className="min-h-screen">
+          <Card>
+            <CardContent className="p-6">
+              <div className="text-center text-red-600">
+                <p className="font-medium">Connection Error</p>
+                <p className="text-sm mt-1">{error}</p>
+                <Button 
+                  onClick={() => loadBooks()} 
+                  className="mt-4"
+                  variant="outline"
+                >
+                  Try Again
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </>
     )
   }
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <LibraryHeader 
-        isAdmin={isAdmin} 
-        onManageDuplicates={() => setShowDuplicateModal(true)} 
-      />
-
-      {/* Stats Cards */}
-      {stats && <LibraryStats stats={stats} />}
-
-      {/* Controls */}
-      <LibraryControls
+    <>
+      {/* Fixed Toolbar - Outside any containers */}
+      <LibraryToolbar
         searchQuery={searchQuery}
         onSearchChange={handleSearchChange}
         viewMode={viewMode}
@@ -128,22 +153,31 @@ export function Library() {
         onSortChange={handleSortChange}
         totalBooks={stats?.total_books || 0}
         loading={loading}
-      />
-
-      {/* Books Grid */}
-      <LibraryGrid
-        books={books}
-        viewMode={viewMode}
-        loading={loading}
-        onBookClick={handleBookClick}
-        onDownload={handleDownload}
-        onSendToKindle={handleSendToKindle}
-        shouldLoadImage={shouldLoadImage}
-        markImageLoaded={markImageLoaded}
         currentPage={currentPage}
         totalPages={totalPages}
         onPageChange={handlePageChange}
+        isAdmin={isAdmin}
+        onManageDuplicates={() => setShowDuplicateModal(true)}
       />
+
+      {/* Content */}
+      <div className="space-y-6">
+        {/* Stats Cards */}
+        {stats && <LibraryStats stats={stats} />}
+
+        {/* Books Grid */}
+        <LibraryGrid
+          books={books}
+          viewMode={viewMode}
+          loading={loading}
+          onBookClick={handleBookClick}
+          onDownload={handleDownload}
+          onSendToKindle={handleSendToKindle}
+          shouldLoadImage={shouldLoadImage}
+          markImageLoaded={markImageLoaded}
+          deletingBooks={deletingBooks}
+        />
+      </div>
 
       {/* Enhanced Book Details Modal */}
       {selectedBook && (
@@ -152,8 +186,8 @@ export function Library() {
           onClose={() => setSelectedBook(null)}
           onSendToKindle={handleSendToKindle}
           onBookDeleted={() => {
-            // Refresh library data when a book is deleted
-            loadBooks(currentPage, searchQuery, sortParam)
+            handleBookDeleted(selectedBook.id)
+            setSelectedBook(null) // Close modal to show delete animation
           }}
         />
       )}
@@ -170,7 +204,7 @@ export function Library() {
       
       {/* Toast Notifications */}
       <ToastContainer />
-    </div>
+    </>
   )
 }
 

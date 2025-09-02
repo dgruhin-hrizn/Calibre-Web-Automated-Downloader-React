@@ -30,6 +30,10 @@ export function BookDetailsModal({ book: basicBook, onClose }: BookDetailsModalP
   const [isLoadingAuthorBooks, setIsLoadingAuthorBooks] = useState(false)
   const navigate = useNavigate()
 
+  // Animation states
+  const [isVisible, setIsVisible] = useState(false)
+  const [isClosing, setIsClosing] = useState(false)
+
   // Helper function to convert text to title case
   const toTitleCase = (str: string) => {
     if (!str) return str
@@ -43,7 +47,7 @@ export function BookDetailsModal({ book: basicBook, onClose }: BookDetailsModalP
   // Use enhanced book data if available, otherwise fall back to basic book data
   const book = enhancedBook || basicBook
 
-  // Reset enhanced data when book changes to prevent showing stale data
+  // Animation and reset enhanced data when book changes
   useEffect(() => {
     if (basicBook) {
       console.log('BookDetailsModal: Book changed, resetting enhanced data')
@@ -51,8 +55,20 @@ export function BookDetailsModal({ book: basicBook, onClose }: BookDetailsModalP
       setGoogleBooksData(null)
       setDetailedGoogleBooksData(null)
       setAuthorBooks([])
+      setIsVisible(true)
+      setIsClosing(false)
     }
   }, [basicBook?.id])
+
+  // Handle modal close with animation
+  const handleClose = () => {
+    setIsClosing(true)
+    setTimeout(() => {
+      onClose()
+      setIsVisible(false)
+      setIsClosing(false)
+    }, 200)
+  }
 
   // Fetch enhanced book data (just Google Books) using the book data we already have
   useEffect(() => {
@@ -238,7 +254,7 @@ export function BookDetailsModal({ book: basicBook, onClose }: BookDetailsModalP
     if (downloadStatus?.status === 'completed' || isPending || hasRealProgress) return
     
     // Close the modal immediately when download is clicked
-    onClose()
+    handleClose()
     
     setIsDownloading(true)
     try {
@@ -261,8 +277,22 @@ export function BookDetailsModal({ book: basicBook, onClose }: BookDetailsModalP
   const downloadStatus = downloads[basicBook.id]
 
   return (
-    <div className="fixed top-0 left-0 right-0 bottom-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50" style={{ margin: 0 }}>
-      <div className="bg-card border border-border rounded-lg shadow-lg max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col" style={{ margin: 0 }}>
+    <div 
+      className={`fixed top-0 left-0 right-0 bottom-0 z-50 flex items-center justify-center p-4 bg-black transition-opacity duration-200 ${
+        isVisible && !isClosing ? 'bg-opacity-50' : 'bg-opacity-0'
+      }`} 
+      style={{ margin: 0 }}
+      onClick={handleClose}
+    >
+      <div 
+        className={`bg-card border border-border rounded-lg shadow-lg max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col transition-all duration-200 ${
+          isVisible && !isClosing 
+            ? 'opacity-100 scale-100 translate-y-0' 
+            : 'opacity-0 scale-95 translate-y-4'
+        }`} 
+        style={{ margin: 0 }}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border flex-shrink-0">
           <div className="flex-1 mr-4">
@@ -278,7 +308,7 @@ export function BookDetailsModal({ book: basicBook, onClose }: BookDetailsModalP
           <Button
             variant="ghost"
             size="sm"
-            onClick={onClose}
+            onClick={handleClose}
             className="p-2 flex-shrink-0"
           >
             <X className="w-4 h-4" />

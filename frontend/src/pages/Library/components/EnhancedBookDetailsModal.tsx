@@ -4,7 +4,20 @@ import { Button } from '../../../components/ui/Button'
 import { Card, CardContent } from '../../../components/ui/card'
 import { formatDate } from '../../../lib/utils'
 import { useAdminStatus } from '../hooks/useAdminStatus'
+import { AuthorFormatter } from '../../../utils/authorFormatter'
 import type { LibraryBook } from '../types'
+
+// Utility function to check if a date is today
+const isToday = (dateString?: string): boolean => {
+  if (!dateString) return false
+  
+  const date = new Date(dateString)
+  const today = new Date()
+  
+  return date.getDate() === today.getDate() &&
+         date.getMonth() === today.getMonth() &&
+         date.getFullYear() === today.getFullYear()
+}
 
 interface EnhancedBookDetailsModalProps {
   book: LibraryBook
@@ -15,10 +28,14 @@ interface EnhancedBookDetailsModalProps {
 
 export function EnhancedBookDetailsModal({ book, onClose, onSendToKindle, onBookDeleted }: EnhancedBookDetailsModalProps) {
   const coverUrl = book.has_cover ? `/api/metadata/books/${book.id}/cover` : null
+  const isNewBook = isToday(book.timestamp)
   const [kindleState, setKindleState] = useState<'idle' | 'sending' | 'success' | 'failed'>('idle')
   const [imageError, setImageError] = useState(false)
   const [deleteState, setDeleteState] = useState<'idle' | 'deleting' | 'success' | 'failed'>('idle')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [isVisible, setIsVisible] = useState(false)
+  const [isClosing, setIsClosing] = useState(false)
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false)
   
   // Admin status check
   const { isAdmin } = useAdminStatus()
@@ -26,6 +43,26 @@ export function EnhancedBookDetailsModal({ book, onClose, onSendToKindle, onBook
   // Google Books integration with granular loading states
   const [googleBooksData, setGoogleBooksData] = useState<any>(null)
   const [isLoadingGoogleBooks, setIsLoadingGoogleBooks] = useState(false)
+
+  // Animation effects
+  useEffect(() => {
+    // Trigger entrance animation
+    setIsVisible(true)
+  }, [])
+
+  // Delete confirmation animation effect
+  useEffect(() => {
+    if (showDeleteConfirm) {
+      setDeleteConfirmVisible(true)
+    }
+  }, [showDeleteConfirm])
+
+  const handleClose = () => {
+    setIsClosing(true)
+    setTimeout(() => {
+      onClose()
+    }, 200) // Match animation duration
+  }
 
   const handleSendToKindle = async () => {
     if (kindleState !== 'idle') return
@@ -50,9 +87,22 @@ export function EnhancedBookDetailsModal({ book, onClose, onSendToKindle, onBook
     setShowDeleteConfirm(true)
   }
 
+  const handleDeleteCancel = () => {
+    setDeleteConfirmVisible(false)
+    setTimeout(() => {
+      setShowDeleteConfirm(false)
+    }, 200)
+  }
+
   const handleDeleteConfirm = async () => {
     setShowDeleteConfirm(false)
     setDeleteState('deleting')
+    
+    // Close modal immediately to show animation
+    handleClose()
+    if (onBookDeleted) {
+      onBookDeleted()
+    }
     
     try {
       const response = await fetch(`/api/admin/books/${book.id}`, {
@@ -62,27 +112,20 @@ export function EnhancedBookDetailsModal({ book, onClose, onSendToKindle, onBook
       
       if (response.ok) {
         setDeleteState('success')
-        // Close modal and notify parent
-        setTimeout(() => {
-          onClose()
-          if (onBookDeleted) {
-            onBookDeleted()
-          }
-        }, 1000)
       } else {
         setDeleteState('failed')
-        setTimeout(() => setDeleteState('idle'), 3000)
+        // Note: Modal is already closed, so user won't see this state
+        // Could potentially show a toast notification here if needed
       }
     } catch (error) {
       console.error('Failed to delete book:', error)
       setDeleteState('failed')
-      setTimeout(() => setDeleteState('idle'), 3000)
+      // Note: Modal is already closed, so user won't see this state
+      // Could potentially show a toast notification here if needed
     }
   }
 
-  const handleDeleteCancel = () => {
-    setShowDeleteConfirm(false)
-  }
+
 
   // Fetch Google Books data for enhanced information
   useEffect(() => {
@@ -201,8 +244,22 @@ export function EnhancedBookDetailsModal({ book, onClose, onSendToKindle, onBook
   )
   
   return (
-    <div className="fixed top-0 left-0 right-0 bottom-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50" style={{ margin: 0 }}>
-      <div className="bg-card border border-border rounded-lg shadow-lg max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col" style={{ margin: 0 }}>
+    <div 
+      className={`fixed top-0 left-0 right-0 bottom-0 z-50 flex items-center justify-center p-4 bg-black transition-opacity duration-200 ${
+        isVisible && !isClosing ? 'bg-opacity-50' : 'bg-opacity-0'
+      }`} 
+      style={{ margin: 0 }}
+      onClick={showDeleteConfirm ? undefined : handleClose}
+    >
+      <div 
+        className={`bg-card border border-border rounded-lg shadow-lg max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col transition-all duration-200 ${
+          isVisible && !isClosing 
+            ? 'opacity-100 scale-100 translate-y-0' 
+            : 'opacity-0 scale-95 translate-y-4'
+        }`} 
+        style={{ margin: 0 }}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border flex-shrink-0">
           <div className="flex-1 mr-4">
@@ -211,14 +268,14 @@ export function EnhancedBookDetailsModal({ book, onClose, onSendToKindle, onBook
             </h2>
             {data.authors && data.authors.length > 0 && (
               <p className="text-sm text-muted-foreground mt-1">
-                by {data.authors.join(', ')}
+                by {AuthorFormatter.formatForDisplay(data.authors.join(', '))}
               </p>
             )}
           </div>
           <Button
             variant="ghost"
             size="sm"
-            onClick={onClose}
+            onClick={handleClose}
             className="p-2 flex-shrink-0"
           >
             <X className="w-4 h-4" />
@@ -231,7 +288,7 @@ export function EnhancedBookDetailsModal({ book, onClose, onSendToKindle, onBook
             {/* Main Book Layout */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               {/* Cover */}
-              <div className="w-full h-64 md:h-80 bg-muted rounded overflow-hidden flex-shrink-0">
+              <div className="w-full h-64 md:h-80 bg-muted rounded overflow-hidden flex-shrink-0 relative">
                 {coverUrl && !imageError ? (
                   <img 
                     src={coverUrl} 
@@ -243,6 +300,11 @@ export function EnhancedBookDetailsModal({ book, onClose, onSendToKindle, onBook
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-muted">
                     <Book className="h-16 w-16 text-muted-foreground" />
+                  </div>
+                )}
+                {isNewBook && (
+                  <div className="absolute top-3 right-3 bg-teal-700 text-white text-xs font-bold px-2 py-1 rounded shadow-lg">
+                    NEW
                   </div>
                 )}
               </div>
@@ -590,8 +652,19 @@ export function EnhancedBookDetailsModal({ book, onClose, onSendToKindle, onBook
       {/* Delete Confirmation Dialog */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/50" onClick={handleDeleteCancel} />
-          <Card className="relative w-full max-w-md mx-4 z-10">
+          <div 
+            className={`absolute inset-0 bg-black transition-opacity duration-200 ${
+              deleteConfirmVisible ? 'bg-opacity-50' : 'bg-opacity-0'
+            }`} 
+            onClick={handleDeleteCancel} 
+          />
+          <Card 
+            className={`relative w-full max-w-md mx-4 z-10 transition-all duration-200 ${
+              deleteConfirmVisible 
+                ? 'opacity-100 scale-100 translate-y-0' 
+                : 'opacity-0 scale-95 translate-y-4'
+            }`}
+          >
             <CardContent className="p-6">
               <div className="flex items-center gap-3 mb-4">
                 <div className="flex-shrink-0 w-10 h-10 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center">
@@ -605,7 +678,7 @@ export function EnhancedBookDetailsModal({ book, onClose, onSendToKindle, onBook
               
               <p className="text-sm text-muted-foreground mb-6">
                 Are you sure you want to delete <strong>"{book.title}"</strong>
-                {book.authors && <span> by {book.authors}</span>}? 
+                {book.authors && <span> by {AuthorFormatter.formatForDisplay(book.authors.join(', '))}</span>}? 
                 This will permanently remove the book from your library.
               </p>
               

@@ -1,6 +1,78 @@
 // Comprehensive author formatting utilities for consistent display across the app
+// Matches the backend sanitize_author_name() logic from calibre_db_manager.py
 
 export const AuthorFormatter = {
+  // Sanitize author name with all backend fixes
+  // Handles: pipe characters, "Last, First" format, multiple authors, whitespace
+  sanitizeAuthorName: (authorName: string): string => {
+    if (!authorName) return ""
+    
+    let cleaned = authorName.trim()
+    
+    // First handle pipe character cases - assume it's separating Last|First
+    if (cleaned.includes('|')) {
+      const parts = cleaned.split('|', 2) // Split on first pipe only
+      if (parts.length === 2) {
+        const last = parts[0].trim()
+        const first = parts[1].trim()
+        if (last && first) {
+          // Convert "Last|First" to "First Last"
+          cleaned = `${first} ${last}`
+        } else {
+          // Fallback: just remove pipes
+          cleaned = authorName.replace(/\|/g, ' ').trim()
+        }
+      } else {
+        // Multiple pipes or other cases - just remove all pipes
+        cleaned = authorName.replace(/\|/g, ' ').trim()
+      }
+    }
+    
+    // Handle "Last, First" format (but be careful not to break multiple authors)
+    if (cleaned.includes(',')) {
+      const parts = cleaned.split(',').map(part => part.trim())
+      
+      // Check if this is a single "Last, First" format vs multiple authors
+      if (parts.length === 2 && parts[0] && parts[1]) {
+        // Check if this looks like "Last, First" format
+        // Last name should be a single word, first name can be multiple words
+        if (!parts[0].includes(' ') && parts[1].split(' ').length <= 3) {
+          // Convert "Last, First" to "First Last"
+          cleaned = `${parts[1]} ${parts[0]}`
+        } else {
+          // Keep as-is (might be multiple authors or complex name)
+          cleaned = parts.join(', ')
+        }
+      } else if (parts.length > 2) {
+        // Multiple authors - process each pair
+        const processedParts: string[] = []
+        let i = 0
+        while (i < parts.length) {
+          if (i + 1 < parts.length) {
+            // Check if current and next part form a "Last, First" pair
+            if (!parts[i].includes(' ') && parts[i + 1].split(' ').length <= 3) {
+              // This looks like "Last, First" - convert it
+              processedParts.push(`${parts[i + 1]} ${parts[i]}`)
+              i += 2 // Skip the next part
+              continue
+            }
+          }
+          
+          // Not a "Last, First" pair, keep as-is
+          processedParts.push(parts[i])
+          i++
+        }
+        
+        cleaned = processedParts.join(', ')
+      }
+    }
+    
+    // Clean up extra whitespace
+    cleaned = cleaned.split(/\s+/).join(' ').trim()
+    
+    return cleaned
+  },
+
   // Detect if a name part is in "Last, First" format
   isLastFirstFormat: (namePart: string): boolean => {
     const trimmed = namePart.trim()
@@ -21,33 +93,9 @@ export const AuthorFormatter = {
     return `${parts[1]} ${parts[0]}`
   },
 
-  // Format any author string for display (converts all "Last, First" to "First Last")
+  // Format any author string for display (uses sanitizeAuthorName for consistency)
   formatForDisplay: (author: string): string => {
-    if (!author) return author
-    
-    // Split by comma to handle multiple authors
-    const parts = author.split(',').map(p => p.trim())
-    const formattedParts: string[] = []
-    
-    let i = 0
-    while (i < parts.length) {
-      if (i + 1 < parts.length) {
-        // Check if this is a "Last, First" pair
-        const combined = `${parts[i]}, ${parts[i + 1]}`
-        if (AuthorFormatter.isLastFirstFormat(combined)) {
-          // Convert "Last, First" to "First Last"
-          formattedParts.push(AuthorFormatter.convertLastFirst(combined))
-          i += 2 // Skip next part as it was part of this name
-          continue
-        }
-      }
-      
-      // Not a "Last, First" format, keep as-is
-      formattedParts.push(parts[i])
-      i++
-    }
-    
-    return formattedParts.join(', ')
+    return AuthorFormatter.sanitizeAuthorName(author)
   },
 
   // Format for search (use first author only, converted to "First Last")
@@ -66,7 +114,10 @@ export const AuthorFormatter = {
 
 // Test examples:
 // AuthorFormatter.formatForDisplay("Brown, Dan") → "Dan Brown"
+// AuthorFormatter.formatForDisplay("Hannah| Kristin") → "Kristin Hannah"
+// AuthorFormatter.formatForDisplay("King|Stephen") → "Stephen King"  
 // AuthorFormatter.formatForDisplay("Dan Brown") → "Dan Brown" 
 // AuthorFormatter.formatForDisplay("Brown, Dan, King, Stephen") → "Dan Brown, Stephen King"
+// AuthorFormatter.formatForDisplay("  Smith , John  ") → "John Smith"
 // AuthorFormatter.formatForDisplay("Dan Brown, Stephen King") → "Dan Brown, Stephen King"
 // AuthorFormatter.formatForSearch("Brown, Dan, King, Stephen") → "Dan Brown"

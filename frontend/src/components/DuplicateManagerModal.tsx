@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Checkbox } from './ui/checkbox';
 import { Badge } from './ui/badge';
 import { UnifiedBookCard } from './UnifiedBookCard';
+import { AuthorFormatter } from '../utils/authorFormatter';
 
 interface DuplicateBook {
   id: number;
@@ -67,6 +68,10 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
   const [fadingGroups, setFadingGroups] = useState<Set<string>>(new Set());
   const [deletingBooks, setDeletingBooks] = useState<Set<number>>(new Set());
   
+  // Animation states
+  const [isVisible, setIsVisible] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+  
   // Reset all transient state
   const resetTransientState = () => {
     setFadingGroups(new Set());
@@ -100,8 +105,20 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
     if (isOpen) {
       fetchDuplicates();
       setSelectedBooks(new Set());
+      setIsVisible(true);
+      setIsClosing(false);
     }
   }, [isOpen]);
+
+  // Handle modal close with animation
+  const handleClose = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      onClose();
+      setIsVisible(false);
+      setIsClosing(false);
+    }, 200);
+  };
 
   // Flatten all duplicates for easier processing with deduplication
   const getAllDuplicateGroups = () => {
@@ -397,15 +414,28 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-card rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] flex flex-col">
+    <div 
+      className={`fixed top-0 left-0 right-0 bottom-0 bg-black backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-opacity duration-200 ${
+        isVisible && !isClosing ? 'bg-opacity-50' : 'bg-opacity-0'
+      }`}
+      style={{ margin: 0 }}
+      onClick={handleClose}
+    >
+      <div 
+        className={`bg-card rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] flex flex-col transition-all duration-200 ${
+          isVisible && !isClosing 
+            ? 'opacity-100 scale-100 translate-y-0' 
+            : 'opacity-0 scale-95 translate-y-4'
+        }`}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b">
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-orange-500" />
             <h2 className="text-xl font-semibold text-foreground">Duplicate Manager</h2>
           </div>
-          <Button variant="ghost" size="sm" onClick={onClose}>
+          <Button variant="ghost" size="sm" onClick={handleClose}>
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -553,7 +583,7 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
                               {book.title}
                             </h4>
                             <p className="text-xs text-muted-foreground line-clamp-1 mb-2">
-                              {book.authors.join(', ')}
+                              {AuthorFormatter.formatForDisplay(book.authors.join(', '))}
                             </p>
                             {book.formats && book.formats.length > 0 && (
                               <div className="flex flex-wrap gap-1">
@@ -594,7 +624,7 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
           >
             Refresh
           </Button>
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={handleClose}>
             Close
           </Button>
         </div>

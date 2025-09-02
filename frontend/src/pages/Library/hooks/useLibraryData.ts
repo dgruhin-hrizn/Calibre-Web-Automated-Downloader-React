@@ -126,6 +126,11 @@ export function useLibraryData() {
     initialize()
   }, [loadBooks])
 
+  // Remove book from local state without re-fetching
+  const removeBookLocally = useCallback((bookId: number) => {
+    setBooks(prev => prev.filter(book => book.id !== bookId))
+  }, [])
+
   return {
     books,
     stats,
@@ -134,6 +139,7 @@ export function useLibraryData() {
     currentPage,
     totalPages,
     loadBooks,
-    setCurrentPage
+    setCurrentPage,
+    removeBookLocally
   }
 }
