@@ -343,6 +343,9 @@ def api_login() -> Union[Response, Tuple[Response, int]]:
         JSON with login status and user info
     """
     try:
+        # Clear any existing session first (handles invalid sessions from rebuilds)
+        session.clear()
+        
         data = request.get_json()
         if not data or not data.get('username') or not data.get('password'):
             return jsonify({"error": "Username and password required"}), 400
@@ -1474,30 +1477,59 @@ def api_cwa_library_download_book(book_id, format):
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/cwa/library/books/<int:book_id>/send-to-kindle', methods=['POST'])
-@login_required
+@login_required  
 def api_cwa_library_send_to_kindle(book_id):
-    """Send book from CWA library to Kindle"""
+    """Send book from CWA library to Kindle - redirect to CWA proxy route"""
     try:
-        client = get_cwa_client()
-        if not client:
-            return jsonify({'error': 'CWA not configured'}), 400
-        
+        if not cwa_proxy:
+            return jsonify({'error': 'CWA proxy not available'}), 503
+            
         data = request.get_json() or {}
-        format_type = data.get('format', 'EPUB')
+        format_type = data.get('format', 'EPUB').upper()
+        convert = 0  # No conversion needed for EPUB
         
-        # Proxy the send-to-kindle request to CWA
-        # Note: This endpoint might not exist in CWA - we may need to implement it differently
-        response = client.post(f'/send/{book_id}/{format_type}', data)
+        # Make internal request to the CWA proxy route
+        from flask import url_for
+        import requests
         
-        if response.get('success'):
-            return jsonify({'success': True, 'message': 'Book sent to Kindle successfully'})
+        # Build the internal URL for the CWA proxy send endpoint
+        internal_url = f"http://localhost:{FLASK_PORT}/api/cwa/library/books/{book_id}/send/{format_type}/{convert}"
+        
+        # Forward the request with the same session cookies
+        response = requests.post(
+            internal_url,
+            cookies=request.cookies,
+            headers={'Content-Type': 'application/json'},
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            result_data = response.json()
+            # Convert CWA response format to our expected format
+            if isinstance(result_data, list) and len(result_data) > 0:
+                first_result = result_data[0]
+                if first_result.get('type') == 'success':
+                    return jsonify({
+                        'success': True, 
+                        'message': first_result.get('message', 'Book sent to Kindle successfully')
+                    })
+                else:
+                    return jsonify({
+                        'error': first_result.get('message', 'Failed to send book to Kindle')
+                    }), 400
+            else:
+                return jsonify({'error': 'Unexpected response format from CWA'}), 500
         else:
-            return jsonify({'error': 'Failed to send book to Kindle'}), 500
+            # Forward the error response
+            try:
+                error_data = response.json()
+                return jsonify(error_data), response.status_code
+            except:
+                return jsonify({'error': f'CWA request failed: {response.status_code}'}), response.status_code
             
     except Exception as e:
         logger.error(f"Error sending book to Kindle: {e}")
-        # For now, just return success since send-to-kindle might not be implemented in CWA
-        return jsonify({'success': True, 'message': 'Send to Kindle feature not yet implemented'})
+        return jsonify({'error': f'Failed to send book to Kindle: {str(e)}'}), 500
 
 logger.log_resource_usage()
 

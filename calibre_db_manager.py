@@ -99,8 +99,9 @@ class CalibreDBManager:
                 # Get languages for this book
                 languages = [lang.lang_code for lang in book.languages]
                 
-                # Get available formats
+                # Get available formats with sizes
                 formats = [data.format.upper() for data in book.data]
+                file_sizes = {data.format.upper(): data.uncompressed_size for data in book.data}
                 
                 # Get rating (from ratings relationship)
                 rating = None
@@ -109,6 +110,9 @@ class CalibreDBManager:
                 
                 # Check if book has cover
                 has_cover = os.path.exists(os.path.join(self.db_path.parent, book.path, 'cover.jpg'))
+                
+                # Get publishers for this book
+                publishers = [publisher.name for publisher in book.publishers]
                 
                 book_data = {
                     'id': book.id,
@@ -119,12 +123,17 @@ class CalibreDBManager:
                     'rating': rating,
                     'pubdate': book.pubdate.isoformat() if book.pubdate else None,
                     'timestamp': book.timestamp.isoformat() if book.timestamp else None,
+                    'last_modified': book.last_modified.isoformat() if book.last_modified else None,
                     'tags': tags,
                     'languages': languages,
                     'formats': formats,
                     'path': book.path,
                     'has_cover': has_cover,
-                    'comments': book.comments[0].text if book.comments else None
+                    'comments': book.comments[0].text if book.comments else None,
+                    'isbn': book.isbn if book.isbn else None,
+                    'uuid': book.uuid if book.uuid else None,
+                    'publishers': publishers,
+                    'file_sizes': file_sizes
                 }
                 books_data.append(book_data)
             

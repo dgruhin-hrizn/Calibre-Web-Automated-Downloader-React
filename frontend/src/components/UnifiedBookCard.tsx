@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { Download, Book, Eye, Star, Send } from 'lucide-react'
+import { Download, Book, Eye, Star, Send, Check, X, Loader2 } from 'lucide-react'
 import { Button } from './ui/Button'
 import { Card, CardContent } from './ui/card'
 import { Badge } from './ui/badge'
@@ -48,7 +48,7 @@ export interface UnifiedBookCardProps {
   shouldLoadImage?: (bookId: string | number) => boolean
   onImageLoaded?: (bookId: string | number) => void
   onDetails?: (book: UnifiedBook) => void
-  onSendToKindle?: (book: UnifiedBook) => void
+  onSendToKindle?: (book: UnifiedBook) => void | Promise<{ success: boolean; message: string }>
   
   // Button visibility controls
   showDownloadButton?: boolean
@@ -69,6 +69,35 @@ export function UnifiedBookCard({
   showDownloadButton = true,
   showKindleButton = true,
 }: UnifiedBookCardProps) {
+  
+  // State for send-to-kindle button
+  const [kindleState, setKindleState] = useState<'idle' | 'sending' | 'success' | 'failed'>('idle')
+  
+  // Handle send to kindle with UI feedback
+  const handleSendToKindle = useCallback(async (book: UnifiedBook) => {
+    if (!onSendToKindle || kindleState !== 'idle') return
+    
+    setKindleState('sending')
+    
+    try {
+      const result = await onSendToKindle(book)
+      
+      // Check if onSendToKindle returns a result object with success/failure
+      if (typeof result === 'object' && result !== null && 'success' in result) {
+        setKindleState(result.success ? 'success' : 'failed')
+      } else {
+        // Assume success if no result object is returned
+        setKindleState('success')
+      }
+      
+      // Reset button state after 3 seconds
+      setTimeout(() => setKindleState('idle'), 3000)
+    } catch (error) {
+      setKindleState('failed')
+      // Reset button state after 3 seconds
+      setTimeout(() => setKindleState('idle'), 3000)
+    }
+  }, [onSendToKindle, kindleState])
   const [imageLoaded, setImageLoaded] = useState(false)
   const [imageError, setImageError] = useState(false)
   
@@ -197,6 +226,68 @@ export function UnifiedBookCard({
     )
   }
   
+  // Render kindle button with state
+  const renderKindleButton = (className?: string) => {
+    if (!showKindleButton || !onSendToKindle || !book.formats || book.formats.length === 0) {
+      return null
+    }
+
+    const getButtonProps = () => {
+      switch (kindleState) {
+        case 'sending':
+          return {
+            variant: 'outline' as const,
+            disabled: true,
+            className: `${className} cursor-not-allowed`,
+            children: (
+              <>
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span className="ml-1 text-xs">Sending...</span>
+              </>
+            )
+          }
+        case 'success':
+          return {
+            variant: 'outline' as const,
+            disabled: true,
+            className: `${className} bg-green-50 border-green-200 text-green-700 cursor-default`,
+            children: (
+              <>
+                <Check className="h-3 w-3" />
+                <span className="ml-1 text-xs">Sent</span>
+              </>
+            )
+          }
+        case 'failed':
+          return {
+            variant: 'outline' as const,
+            disabled: true,
+            className: `${className} bg-red-50 border-red-200 text-red-700 cursor-default`,
+            children: (
+              <>
+                <X className="h-3 w-3" />
+                <span className="ml-1 text-xs">Failed</span>
+              </>
+            )
+          }
+        default:
+          return {
+            variant: 'outline' as const,
+            disabled: false,
+            className,
+            onClick: () => handleSendToKindle(book),
+            children: <Send className="h-3 w-3" />
+          }
+      }
+    }
+
+    const buttonProps = getButtonProps()
+    
+    return (
+      <Button size="sm" {...buttonProps} />
+    )
+  }
+
   // Render library book action buttons
   const renderLibraryActions = () => {
     if (viewMode === 'list') {
@@ -207,24 +298,7 @@ export function UnifiedBookCard({
               <Eye className="h-3 w-3" />
             </Button>
           )}
-          {showDownloadButton && onDownload && book.formats && book.formats.length > 0 && (
-            <Button 
-              size="sm" 
-              variant="outline"
-              onClick={() => onDownload(book)}
-            >
-              <Download className="h-3 w-3" />
-            </Button>
-          )}
-          {showKindleButton && onSendToKindle && book.formats && book.formats.length > 0 && (
-            <Button 
-              size="sm" 
-              variant="outline"
-              onClick={() => onSendToKindle(book)}
-            >
-              <Send className="h-3 w-3" />
-            </Button>
-          )}
+          {renderKindleButton()}
         </div>
       )
     } else {
@@ -235,26 +309,7 @@ export function UnifiedBookCard({
               <Eye className="h-3 w-3" />
             </Button>
           )}
-          {showDownloadButton && onDownload && book.formats && book.formats.length > 0 && (
-            <Button 
-              size="sm" 
-              variant="outline"
-              onClick={() => onDownload(book)}
-              className="flex-1"
-            >
-              <Download className="h-3 w-3" />
-            </Button>
-          )}
-          {showKindleButton && onSendToKindle && book.formats && book.formats.length > 0 && (
-            <Button 
-              size="sm" 
-              variant="outline"
-              onClick={() => onSendToKindle(book)}
-              className="flex-1"
-            >
-              <Send className="h-3 w-3" />
-            </Button>
-          )}
+          {renderKindleButton('flex-1')}
         </div>
       )
     }

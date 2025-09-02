@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Book stack background -->
+  <rect x="4" y="8" width="24" height="20" rx="2" fill="#3B82F6" opacity="0.9"/>
+  <rect x="6" y="6" width="20" height="18" rx="2" fill="#1D4ED8" opacity="0.8"/>
+  <rect x="8" y="4" width="16" height="16" rx="2" fill="#1E40AF"/>
+  
+  <!-- Book spine details -->
+  <line x1="10" y1="6" x2="10" y2="18" stroke="#DBEAFE" stroke-width="0.5" opacity="0.7"/>
+  <line x1="12" y1="6" x2="12" y2="18" stroke="#DBEAFE" stroke-width="0.5" opacity="0.5"/>
+  
+  <!-- Download arrow -->
+  <path d="M20 10 L20 16 M17 13 L20 16 L23 13" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

@@ -7,12 +7,17 @@ export type LibraryBook = {
   rating?: number
   pubdate?: string
   timestamp?: string
+  last_modified?: string
   tags: string[]
   languages: string[]
   formats: string[]
+  file_sizes: Record<string, number>
   path: string
   has_cover: boolean
   comments?: string
+  isbn?: string
+  uuid?: string
+  publishers: string[]
 }
 
 export type CWALibraryResponse = {

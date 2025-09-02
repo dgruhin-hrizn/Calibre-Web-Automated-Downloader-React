@@ -151,7 +151,7 @@ export function LoginPage({ onLogin, isLoading = false, error }: LoginPageProps)
         {/* Footer */}
         <div className="text-center mt-6">
           <p className="text-xs text-muted-foreground">
-            Calibre-Web Automated Book Downloader
+            Calibre Web Automated Downloader
           </p>
         </div>
       </div>

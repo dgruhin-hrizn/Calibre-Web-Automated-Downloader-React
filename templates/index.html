@@ -3,13 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Calibre Web Book Downloader - Modern UI">
+    <meta name="description" content="Automated book downloading and library management with Calibre Web integration">
     <meta name="theme-color" content="#333333">
-    <title>Book Downloader • Modern</title>
+    <title>Calibre Web Automated Downloader</title>
 
     <!-- Base styles and theme variables -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
-    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='media/favicon.ico') }}">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='media/favicon.svg') }}">
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='media/favicon.ico') }}" sizes="any">
 
     <!-- Tailwind (no-build) for rapid iteration) -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -20,7 +21,7 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
             <div class="flex items-center gap-3">
                 <img src="{{ url_for('static', filename='media/logo.png') }}" alt="Logo" class="h-8 w-8">
-                <h1 class="text-lg font-semibold">Book Search & Download</h1>
+                <h1 class="text-lg font-semibold">Calibre Web Automated Downloader</h1>
             </div>
             <div class="flex items-center gap-2">
                 {% if debug %}
@@ -194,7 +195,7 @@
     <footer class="mt-10 border-t pt-6 pb-10" style="border-color: var(--border-muted); background: var(--footer-bg);">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
             <div>
-                <p class="text-sm opacity-80">Calibre Web Book Downloader</p>
+                <p class="text-sm opacity-80">Calibre Web Automated Downloader</p>
                 <p class="text-xs opacity-60 mt-1">
                     Build: {{ build_version }}  • Release: {{ release_version }}  • Env: {{ app_env }}
                 </p>

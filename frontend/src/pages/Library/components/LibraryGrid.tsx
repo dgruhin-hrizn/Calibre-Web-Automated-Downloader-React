@@ -57,7 +57,7 @@ export function LibraryGrid({
           : "space-y-4"
       }>
         {books.map((book) => (
-          <div key={book.id} onClick={() => onBookClick(book)} className="cursor-pointer">
+          <div key={book.id}>
             <UnifiedBookCard
               book={{
                 id: book.id,
@@ -79,6 +79,7 @@ export function LibraryGrid({
                 shouldLoadImage: shouldLoadImage(book.id),
                 onImageLoad: () => markImageLoaded(book.id)
               }}
+              onDetails={() => onBookClick(book)}
               onDownload={() => onDownload(book)}
               onSendToKindle={() => onSendToKindle(book)}
               showDownloadButton={true}

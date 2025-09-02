@@ -45,13 +45,12 @@ export function useBookActions() {
   }, [getBookFormats])
 
   // Send book to Kindle
-  const sendToKindle = useCallback(async (book: LibraryBook, _format?: string) => {
+  const sendToKindle = useCallback(async (book: LibraryBook, _format?: string): Promise<{ success: boolean; message: string }> => {
     try {
       const availableFormats = getBookFormats(book)
       
       if (availableFormats.length === 0) {
-        console.error('No formats available for Kindle')
-        return
+        return { success: false, message: 'No formats available for Kindle' }
       }
       
       const kindleFormatPriority = ['MOBI', 'AZW3', 'EPUB', 'PDF']
@@ -71,12 +70,19 @@ export function useBookActions() {
       })
       
       if (response.ok) {
-        console.log('Book sent to Kindle successfully')
+        const result = await response.json()
+        if (result.success) {
+          return { success: true, message: result.message || 'Book sent to Kindle successfully' }
+        } else {
+          return { success: false, message: result.error || 'Failed to send book to Kindle' }
+        }
       } else {
-        console.error('Failed to send book to Kindle')
+        const errorData = await response.json().catch(() => ({}))
+        return { success: false, message: errorData.error || `Failed to send book (${response.status})` }
       }
     } catch (error) {
       console.error('Error sending book to Kindle:', error)
+      return { success: false, message: error instanceof Error ? error.message : 'Network error occurred' }
     }
   }, [getBookFormats])
 

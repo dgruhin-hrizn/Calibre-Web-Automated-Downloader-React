@@ -1,5 +1,5 @@
-import React from 'react'
-import { Download, Book, Send, Star } from 'lucide-react'
+import React, { useState } from 'react'
+import { Download, Book, Send, Star, Check, X, Loader2 } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card'
 import { Badge } from '../../../components/ui/badge'
@@ -10,11 +10,31 @@ interface BookDetailsModalProps {
   book: LibraryBook
   onClose: () => void
   onDownload: (book: LibraryBook, format?: string) => void
-  onSendToKindle: (book: LibraryBook) => void
+  onSendToKindle: (book: LibraryBook) => Promise<{ success: boolean; message: string }>
 }
 
 export function BookDetailsModal({ book, onClose, onDownload, onSendToKindle }: BookDetailsModalProps) {
-  const coverUrl = book.has_cover ? `/api/cwa/library/books/${book.id}/cover` : null
+  const coverUrl = book.has_cover ? `/api/metadata/books/${book.id}/cover` : null
+  const [kindleState, setKindleState] = useState<'idle' | 'sending' | 'success' | 'failed'>('idle')
+  const [imageError, setImageError] = useState(false)
+
+  const handleSendToKindle = async () => {
+    if (kindleState !== 'idle') return
+    
+    setKindleState('sending')
+    
+    try {
+      const result = await onSendToKindle(book)
+      setKindleState(result.success ? 'success' : 'failed')
+      
+      // Reset button state after 3 seconds
+      setTimeout(() => setKindleState('idle'), 3000)
+    } catch (error) {
+      setKindleState('failed')
+      // Reset button state after 3 seconds
+      setTimeout(() => setKindleState('idle'), 3000)
+    }
+  }
   
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -32,14 +52,16 @@ export function BookDetailsModal({ book, onClose, onDownload, onSendToKindle }: 
           <div className="flex gap-6">
             {/* Cover */}
             <div className="w-32 h-48 bg-muted rounded overflow-hidden flex-shrink-0">
-              {coverUrl ? (
+              {coverUrl && !imageError ? (
                 <img 
                   src={coverUrl} 
                   alt={book.title}
                   className="w-full h-full object-cover"
+                  onError={() => setImageError(true)}
+                  onLoad={() => setImageError(false)}
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center">
+                <div className="w-full h-full flex items-center justify-center bg-gray-100">
                   <Book className="h-12 w-12 text-muted-foreground" />
                 </div>
               )}
@@ -119,11 +141,38 @@ export function BookDetailsModal({ book, onClose, onDownload, onSendToKindle }: 
                   
                   <div>
                     <Button
-                      onClick={() => onSendToKindle(book)}
-                      className="w-full sm:w-auto"
+                      onClick={handleSendToKindle}
+                      disabled={kindleState !== 'idle'}
+                      className={`w-full sm:w-auto ${
+                        kindleState === 'success' ? 'bg-green-600 hover:bg-green-700 text-white' :
+                        kindleState === 'failed' ? 'bg-red-600 hover:bg-red-700 text-white' :
+                        ''
+                      }`}
                     >
-                      <Send className="h-4 w-4 mr-2" />
-                      Send to Kindle
+                      {kindleState === 'sending' && (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Sending...
+                        </>
+                      )}
+                      {kindleState === 'success' && (
+                        <>
+                          <Check className="h-4 w-4 mr-2" />
+                          Sent to Kindle
+                        </>
+                      )}
+                      {kindleState === 'failed' && (
+                        <>
+                          <X className="h-4 w-4 mr-2" />
+                          Send Failed
+                        </>
+                      )}
+                      {kindleState === 'idle' && (
+                        <>
+                          <Send className="h-4 w-4 mr-2" />
+                          Send to Kindle
+                        </>
+                      )}
                     </Button>
                     <p className="text-xs text-muted-foreground mt-1">
                       Automatically converts to best Kindle format and emails to your device

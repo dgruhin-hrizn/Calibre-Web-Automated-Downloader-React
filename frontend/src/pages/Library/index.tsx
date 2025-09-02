@@ -5,12 +5,12 @@ import { DuplicateManagerModal } from '../../components/DuplicateManagerModal'
 import { useToast } from '../../hooks/useToast'
 
 import {
-  BookDetailsModal,
   LibraryStats,
   LibraryControls,
   LibraryGrid,
   LibraryHeader
 } from './components'
+import { EnhancedBookDetailsModal } from './components/EnhancedBookDetailsModal'
 
 import {
   useLibraryData,
@@ -65,10 +65,17 @@ export function Library() {
 
   const handleSendToKindle = async (book: LibraryBook) => {
     try {
-      await sendToKindle(book)
-      showToast('Book sent to Kindle successfully', 'success')
+      const result = await sendToKindle(book)
+      if (result.success) {
+        showToast(result.message || 'Book sent to Kindle successfully', 'success')
+      } else {
+        showToast(result.message || 'Failed to send to Kindle', 'error')
+      }
+      return result
     } catch (error) {
-      showToast('Failed to send to Kindle', 'error')
+      const errorMessage = error instanceof Error ? error.message : 'Failed to send to Kindle'
+      showToast(errorMessage, 'error')
+      return { success: false, message: errorMessage }
     }
   }
 
@@ -138,12 +145,11 @@ export function Library() {
         onPageChange={handlePageChange}
       />
 
-      {/* Book Details Modal */}
+      {/* Enhanced Book Details Modal */}
       {selectedBook && (
-        <BookDetailsModal
+        <EnhancedBookDetailsModal
           book={selectedBook}
           onClose={() => setSelectedBook(null)}
-          onDownload={handleDownload}
           onSendToKindle={handleSendToKindle}
         />
       )}
