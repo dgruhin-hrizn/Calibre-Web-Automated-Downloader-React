@@ -137,7 +137,7 @@ export function Dashboard() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Dashboard</h1>
         <p className="text-muted-foreground">
           Overview of your book download activity
         </p>
@@ -148,12 +148,12 @@ export function Dashboard() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6 hover:shadow-md transition-shadow">
           <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <h3 className="tracking-tight text-sm font-medium">Library Size</h3>
+            <h3 className="tracking-tight text-sm font-medium text-foreground">Library Size</h3>
             <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center">
               <BookOpen className="h-4 w-4 text-blue-600 dark:text-blue-400" />
             </div>
           </div>
-          <div className="text-2xl font-bold">{stats.totalBooks}</div>
+          <div className="text-2xl font-bold text-foreground">{stats.totalBooks}</div>
           <p className="text-xs text-muted-foreground flex items-center gap-1">
             <TrendingUp className="h-3 w-3" />
             Books downloaded
@@ -162,12 +162,12 @@ export function Dashboard() {
 
         <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6 hover:shadow-md transition-shadow">
           <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <h3 className="tracking-tight text-sm font-medium">Active Downloads</h3>
+            <h3 className="tracking-tight text-sm font-medium text-foreground">Active Downloads</h3>
             <div className="h-8 w-8 rounded-full bg-orange-100 dark:bg-orange-900/20 flex items-center justify-center">
               <Activity className="h-4 w-4 text-orange-600 dark:text-orange-400" />
             </div>
           </div>
-          <div className="text-2xl font-bold">{stats.activeDownloads}</div>
+          <div className="text-2xl font-bold text-foreground">{stats.activeDownloads}</div>
           <p className="text-xs text-muted-foreground">
             {stats.queuedDownloads} queued
           </p>
@@ -175,12 +175,12 @@ export function Dashboard() {
 
         <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6 hover:shadow-md transition-shadow">
           <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <h3 className="tracking-tight text-sm font-medium">Recent Completed</h3>
+            <h3 className="tracking-tight text-sm font-medium text-foreground">Recent Completed</h3>
             <div className="h-8 w-8 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center">
               <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
             </div>
           </div>
-          <div className="text-2xl font-bold">{stats.completedToday}</div>
+          <div className="text-2xl font-bold text-foreground">{stats.completedToday}</div>
           <p className="text-xs text-muted-foreground flex items-center gap-1">
             <Zap className="h-3 w-3" />
             Ready to read
@@ -189,12 +189,12 @@ export function Dashboard() {
 
         <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6 hover:shadow-md transition-shadow">
           <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <h3 className="tracking-tight text-sm font-medium">Failed Downloads</h3>
+            <h3 className="tracking-tight text-sm font-medium text-foreground">Failed Downloads</h3>
             <div className="h-8 w-8 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center">
               <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
             </div>
           </div>
-          <div className="text-2xl font-bold">{stats.failedDownloads}</div>
+          <div className="text-2xl font-bold text-foreground">{stats.failedDownloads}</div>
           <p className="text-xs text-muted-foreground">
             Need attention
           </p>
@@ -202,12 +202,12 @@ export function Dashboard() {
 
         <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6 hover:shadow-md transition-shadow">
           <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <h3 className="tracking-tight text-sm font-medium">Library Access</h3>
+            <h3 className="tracking-tight text-sm font-medium text-foreground">Library Access</h3>
             <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center">
               <Database className="h-4 w-4 text-blue-600 dark:text-blue-400" />
             </div>
           </div>
-          <div className="text-2xl font-bold">CWA Proxy</div>
+          <div className="text-2xl font-bold text-foreground">CWA Proxy</div>
           <p className="text-xs text-muted-foreground">
             Via remote connection
           </p>
@@ -219,7 +219,7 @@ export function Dashboard() {
         <div className="p-6 border-b border-border">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-lg font-semibold">Recent Activity</h3>
+              <h3 className="text-lg font-semibold text-foreground">Recent Activity</h3>
               <p className="text-sm text-muted-foreground">
                 Your latest download activity
               </p>
@@ -276,7 +276,7 @@ export function Dashboard() {
                             e.stopPropagation()
                             handleSearchAgain(download)
                           }}
-                          className="text-xs h-7 px-2 bg-white/90 hover:bg-white text-black"
+                          className="text-xs h-7 px-2 bg-card/90 hover:bg-card text-card-foreground"
                         >
                           <Search className="w-3 h-3 mr-1" />
                           Search Again
@@ -286,7 +286,7 @@ export function Dashboard() {
                   </div>
                   <div className="flex-1 min-w-0 space-y-2">
                     <div>
-                      <h4 className="font-medium text-sm line-clamp-1">{download.title}</h4>
+                      <h4 className="font-medium text-sm line-clamp-1 text-foreground">{download.title}</h4>
                       <p className="text-sm text-muted-foreground line-clamp-1">
                         by {download.author || 'Unknown Author'}
                       </p>

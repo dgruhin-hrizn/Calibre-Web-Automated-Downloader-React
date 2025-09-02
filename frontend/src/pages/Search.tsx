@@ -161,7 +161,7 @@ export function Search() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Search Books</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Search Books</h1>
         <p className="text-muted-foreground">
           Find and download books from multiple sources
         </p>
@@ -270,7 +270,7 @@ export function Search() {
         if (results && results.length > 0) {
           return (
             <div className="space-y-4">
-              <h2 className="text-xl font-semibold">
+              <h2 className="text-xl font-semibold text-foreground">
                 Search Results ({results.length})
                 {cachedResults && !searchBooks.data && (
                   <span className="text-sm text-muted-foreground ml-2">(cached)</span>
@@ -334,7 +334,7 @@ function BookCard({ book, downloads, pendingDownloads, onDownload, onDetails }: 
     <div className="border border-border rounded-lg bg-card overflow-hidden hover:shadow-lg transition-shadow">
       <div className="flex flex-col h-full">
         {/* Book Cover - Fixed aspect ratio for book covers (2:3 ratio) */}
-        <div className="relative aspect-[2/3] bg-gray-100 dark:bg-gray-800">
+        <div className="relative aspect-[2/3] bg-muted">
           {book.preview ? (
             <img 
               src={book.preview} 
@@ -347,7 +347,7 @@ function BookCard({ book, downloads, pendingDownloads, onDownload, onDetails }: 
                 if (parent) {
                   parent.innerHTML = `
                     <div class="absolute inset-0 flex items-center justify-center">
-                      <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-12 h-12 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
                       </svg>
                     </div>
@@ -358,7 +358,7 @@ function BookCard({ book, downloads, pendingDownloads, onDownload, onDetails }: 
             />
           ) : (
             <div className="absolute inset-0 flex items-center justify-center">
-              <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-12 h-12 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
               </svg>
             </div>
@@ -370,7 +370,7 @@ function BookCard({ book, downloads, pendingDownloads, onDownload, onDetails }: 
         {/* Book Info */}
         <div className="p-3 flex-1 flex flex-col">
           <div className="flex-1 space-y-2">
-            <h3 className="font-medium text-sm leading-tight line-clamp-2" title={book.title}>
+            <h3 className="font-medium text-sm leading-tight line-clamp-2 text-foreground" title={book.title}>
               {book.title}
             </h3>
             <p className="text-xs text-muted-foreground line-clamp-1" title={AuthorFormatter.formatForDisplay(book.author) || 'Unknown Author'}>

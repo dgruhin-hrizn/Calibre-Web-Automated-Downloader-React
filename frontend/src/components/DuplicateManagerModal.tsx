@@ -398,12 +398,12 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] flex flex-col">
+      <div className="bg-card rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b">
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-orange-500" />
-            <h2 className="text-xl font-semibold">Duplicate Manager</h2>
+            <h2 className="text-xl font-semibold text-foreground">Duplicate Manager</h2>
           </div>
           <Button variant="ghost" size="sm" onClick={onClose}>
             <X className="h-4 w-4" />
@@ -415,22 +415,22 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <span className="ml-2">Scanning for duplicates...</span>
+              <span className="ml-2 text-muted-foreground">Scanning for duplicates...</span>
             </div>
           ) : allGroups.length === 0 ? (
             <div className="text-center py-12">
               <AlertTriangle className="h-12 w-12 text-green-500 mx-auto mb-4" />
-              <h3 className="text-lg font-medium mb-2">No Duplicates Found</h3>
-              <p className="text-gray-600 dark:text-gray-400">
+              <h3 className="text-lg font-medium mb-2 text-foreground">No Duplicates Found</h3>
+              <p className="text-muted-foreground">
                 Your library is clean! No duplicate books were detected.
               </p>
             </div>
           ) : (
             <div className="space-y-6">
               {/* Actions Bar */}
-              <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+              <div className="flex items-center justify-between bg-muted p-4 rounded-lg">
                 <div className="flex items-center gap-4">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                  <span className="text-sm text-muted-foreground">
                     Found {allGroups.reduce((acc, group) => acc + group.books.length, 0)} duplicate books in {allGroups.length} groups
                   </span>
                   {selectedBooks.size > 0 && (
@@ -494,7 +494,7 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
                         return (
                         <div 
                           key={book.id} 
-                          className={`relative bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300 ${
+                          className={`relative bg-card rounded-lg border border-border overflow-hidden transition-all duration-300 ${
                             isBeingDeleted 
                               ? 'opacity-50 scale-95 ring-2 ring-red-500 ring-opacity-50' 
                               : 'hover:shadow-md opacity-100 scale-100'
@@ -502,7 +502,7 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
                         >
                           {/* Checkbox */}
                           <div className="absolute top-2 left-2 z-10">
-                            <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-md p-1 shadow-sm">
+                            <div className="bg-card/90 backdrop-blur-sm rounded-md p-1 shadow-sm border border-border/50">
                               <Checkbox
                                 checked={selectedBooks.has(book.id)}
                                 onCheckedChange={(checked) => 
@@ -549,10 +549,10 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
                           
                           {/* Book Details */}
                           <div className="p-3">
-                            <h4 className="font-medium text-sm text-gray-900 dark:text-white line-clamp-2 mb-1">
+                            <h4 className="font-medium text-sm text-foreground line-clamp-2 mb-1">
                               {book.title}
                             </h4>
-                            <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-1 mb-2">
+                            <p className="text-xs text-muted-foreground line-clamp-1 mb-2">
                               {book.authors.join(', ')}
                             </p>
                             {book.formats && book.formats.length > 0 && (

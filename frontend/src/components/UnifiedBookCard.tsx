@@ -457,7 +457,7 @@ export function UnifiedBookCard({
                   className={`h-3 w-3 ${
                     i < Math.floor(book.rating! / 2) 
                       ? 'text-yellow-400 fill-current' 
-                      : 'text-gray-300'
+                      : 'text-muted-foreground'
                   }`}
                 />
               ))}

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
@@ -41,6 +41,19 @@ const queryClient = new QueryClient({
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true) // Start open on desktop
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system')
+  const [systemDark, setSystemDark] = useState(window.matchMedia('(prefers-color-scheme: dark)').matches)
+
+  // Listen for system theme changes
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+    const handleChange = (e: MediaQueryListEvent) => setSystemDark(e.matches)
+    
+    mediaQuery.addEventListener('change', handleChange)
+    return () => mediaQuery.removeEventListener('change', handleChange)
+  }, [])
+
+  // Determine if dark mode should be applied
+  const isDarkMode = theme === 'dark' || (theme === 'system' && systemDark)
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -49,7 +62,7 @@ function App() {
           <ProtectedRoute>
             <DragDropProvider>
               <ToastProvider>
-                <div className={`min-h-screen h-screen bg-background overflow-hidden ${theme === 'dark' ? 'dark' : ''}`}>
+                <div className={`min-h-screen h-screen bg-background overflow-hidden ${isDarkMode ? 'dark' : ''}`}>
                 <div className="flex h-full">
                   {/* Fixed Sidebar */}
                   <div className="flex-shrink-0">

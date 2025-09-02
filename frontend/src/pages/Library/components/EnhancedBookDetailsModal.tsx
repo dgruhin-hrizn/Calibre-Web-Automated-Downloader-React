@@ -1,19 +1,27 @@
 import { useState, useEffect } from 'react'
-import { Book, Send, Star, Check, X, Loader2, Calendar, FileText, Tag, ExternalLink, Globe } from 'lucide-react'
+import { Book, Send, Star, Check, X, Loader2, Calendar, FileText, Tag, ExternalLink, Globe, Trash2, AlertTriangle } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
+import { Card, CardContent } from '../../../components/ui/card'
 import { formatDate } from '../../../lib/utils'
+import { useAdminStatus } from '../hooks/useAdminStatus'
 import type { LibraryBook } from '../types'
 
 interface EnhancedBookDetailsModalProps {
   book: LibraryBook
   onClose: () => void
   onSendToKindle: (book: LibraryBook) => Promise<{ success: boolean; message: string }>
+  onBookDeleted?: () => void
 }
 
-export function EnhancedBookDetailsModal({ book, onClose, onSendToKindle }: EnhancedBookDetailsModalProps) {
+export function EnhancedBookDetailsModal({ book, onClose, onSendToKindle, onBookDeleted }: EnhancedBookDetailsModalProps) {
   const coverUrl = book.has_cover ? `/api/metadata/books/${book.id}/cover` : null
   const [kindleState, setKindleState] = useState<'idle' | 'sending' | 'success' | 'failed'>('idle')
   const [imageError, setImageError] = useState(false)
+  const [deleteState, setDeleteState] = useState<'idle' | 'deleting' | 'success' | 'failed'>('idle')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  
+  // Admin status check
+  const { isAdmin } = useAdminStatus()
   
   // Google Books integration with granular loading states
   const [googleBooksData, setGoogleBooksData] = useState<any>(null)
@@ -35,6 +43,45 @@ export function EnhancedBookDetailsModal({ book, onClose, onSendToKindle }: Enha
       // Reset button state after 3 seconds
       setTimeout(() => setKindleState('idle'), 3000)
     }
+  }
+
+  const handleDeleteClick = () => {
+    if (deleteState !== 'idle' || !isAdmin) return
+    setShowDeleteConfirm(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    setShowDeleteConfirm(false)
+    setDeleteState('deleting')
+    
+    try {
+      const response = await fetch(`/api/admin/books/${book.id}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      })
+      
+      if (response.ok) {
+        setDeleteState('success')
+        // Close modal and notify parent
+        setTimeout(() => {
+          onClose()
+          if (onBookDeleted) {
+            onBookDeleted()
+          }
+        }, 1000)
+      } else {
+        setDeleteState('failed')
+        setTimeout(() => setDeleteState('idle'), 3000)
+      }
+    } catch (error) {
+      console.error('Failed to delete book:', error)
+      setDeleteState('failed')
+      setTimeout(() => setDeleteState('idle'), 3000)
+    }
+  }
+
+  const handleDeleteCancel = () => {
+    setShowDeleteConfirm(false)
   }
 
   // Fetch Google Books data for enhanced information
@@ -194,7 +241,7 @@ export function EnhancedBookDetailsModal({ book, onClose, onSendToKindle }: Enha
                     onLoad={() => setImageError(false)}
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                  <div className="w-full h-full flex items-center justify-center bg-muted">
                     <Book className="h-16 w-16 text-muted-foreground" />
                   </div>
                 )}
@@ -459,7 +506,48 @@ export function EnhancedBookDetailsModal({ book, onClose, onSendToKindle }: Enha
         
         {/* Footer */}
         <div className="flex-shrink-0 border-t border-border p-6">
-          <div className="flex justify-end">
+          <div className="flex justify-between">
+            {/* Admin Delete Button */}
+            {isAdmin && (
+              <Button
+                onClick={handleDeleteClick}
+                disabled={deleteState !== 'idle'}
+                variant="destructive"
+                size="lg"
+                className={`px-6 ${
+                  deleteState === 'success' ? 'bg-green-600 hover:bg-green-700' :
+                  deleteState === 'failed' ? 'bg-red-700 hover:bg-red-800' :
+                  ''
+                }`}
+              >
+                {deleteState === 'deleting' && (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Deleting...
+                  </>
+                )}
+                {deleteState === 'success' && (
+                  <>
+                    <Check className="h-4 w-4 mr-2" />
+                    Deleted
+                  </>
+                )}
+                {deleteState === 'failed' && (
+                  <>
+                    <X className="h-4 w-4 mr-2" />
+                    Delete Failed
+                  </>
+                )}
+                {deleteState === 'idle' && (
+                  <>
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Book
+                  </>
+                )}
+              </Button>
+            )}
+            
+            {/* Send to e-Reader Button */}
             <Button
               onClick={handleSendToKindle}
               disabled={kindleState !== 'idle'}
@@ -498,6 +586,51 @@ export function EnhancedBookDetailsModal({ book, onClose, onSendToKindle }: Enha
           </div>
         </div>
       </div>
+      
+      {/* Delete Confirmation Dialog */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={handleDeleteCancel} />
+          <Card className="relative w-full max-w-md mx-4 z-10">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex-shrink-0 w-10 h-10 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center">
+                  <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-foreground">Delete Book</h3>
+                  <p className="text-sm text-muted-foreground">This action cannot be undone</p>
+                </div>
+              </div>
+              
+              <p className="text-sm text-muted-foreground mb-6">
+                Are you sure you want to delete <strong>"{book.title}"</strong>
+                {book.authors && <span> by {book.authors}</span>}? 
+                This will permanently remove the book from your library.
+              </p>
+              
+              <div className="flex justify-end gap-3">
+                <Button
+                  onClick={handleDeleteCancel}
+                  variant="outline"
+                  size="sm"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleDeleteConfirm}
+                  variant="destructive"
+                  size="sm"
+                  className="px-4"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete Book
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }

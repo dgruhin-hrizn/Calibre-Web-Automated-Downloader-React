@@ -151,6 +151,10 @@ export function Library() {
           book={selectedBook}
           onClose={() => setSelectedBook(null)}
           onSendToKindle={handleSendToKindle}
+          onBookDeleted={() => {
+            // Refresh library data when a book is deleted
+            loadBooks(currentPage, searchQuery, sortParam)
+          }}
         />
       )}
       

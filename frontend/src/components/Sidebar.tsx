@@ -7,7 +7,6 @@ import {
   BookOpen,
   Library,
   TrendingUp,
-  Shield,
   X
 } from 'lucide-react'
 import { cn } from '../lib/utils'
@@ -24,7 +23,6 @@ const navigation = [
   { name: 'Hot Books', href: '/hot', icon: TrendingUp },
   { name: 'Downloads', href: '/downloads', icon: Download },
   { name: 'Settings', href: '/settings', icon: Settings },
-  { name: 'Admin Panel', href: '/admin', icon: Shield, adminOnly: true },
 ]
 
 export function Sidebar({ open, onOpenChange }: SidebarProps) {
@@ -55,13 +53,13 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
           )}>
             <div className="flex items-center space-x-3">
               <BookOpen className="w-8 h-8 text-primary flex-shrink-0" />
-              {open && <span className="text-xl font-bold whitespace-nowrap">Book Downloader</span>}
+              {open && <span className="text-xl font-bold whitespace-nowrap text-foreground">InkDrop</span>}
             </div>
             <button
               onClick={() => onOpenChange(false)}
               className="lg:hidden p-2 rounded-md hover:bg-accent"
             >
-              <X className="w-5 h-5" />
+              <X className="w-5 h-5 text-foreground" />
             </button>
           </div>
 
@@ -93,7 +91,7 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
                   
                   {/* Tooltip for collapsed state */}
                   {!open && (
-                    <div className="absolute left-full ml-2 px-2 py-1 bg-popover border border-border rounded-md text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 hidden lg:block">
+                    <div className="absolute left-full ml-2 px-2 py-1 bg-popover border border-border rounded-md text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 hidden lg:block text-popover-foreground">
                       {item.name}
                     </div>
                   )}
@@ -109,9 +107,7 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
           )}>
             {open ? (
               <div className="text-xs text-muted-foreground">
-                Calibre Web Automated
-                <br />
-                Book Downloader
+                Inkdrop v1.3.2
               </div>
             ) : (
               <div className="flex justify-center">
