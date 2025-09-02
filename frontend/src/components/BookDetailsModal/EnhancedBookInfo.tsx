@@ -319,7 +319,7 @@ export const EnhancedBookInfo: React.FC<EnhancedBookInfoProps> = ({ book, google
                 <div key={key} className="flex justify-between">
                   <span className="text-muted-foreground capitalize">{key.replace(/-/g, ' ')}:</span>
                   <span className="text-foreground text-right">
-                    {Array.isArray(values) ? values.join(', ') : values}
+                    {Array.isArray(values) ? values.join(', ') : String(values)}
                   </span>
                 </div>
               ))}

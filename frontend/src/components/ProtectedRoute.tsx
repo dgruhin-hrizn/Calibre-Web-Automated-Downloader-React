@@ -1,4 +1,4 @@
-import { ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { LoginPage } from './LoginPage'
 import { Loader2 } from 'lucide-react'

@@ -12,7 +12,7 @@ interface CachedImageProps {
 
 export function CachedImage({ src, alt, className, onLoad, onError, style }: CachedImageProps) {
   const [imageSrc, setImageSrc] = useState<string>('')
-  const [isLoading, setIsLoading] = useState(true)
+  const [, setIsLoading] = useState(true)
   const [hasError, setHasError] = useState(false)
 
   useEffect(() => {

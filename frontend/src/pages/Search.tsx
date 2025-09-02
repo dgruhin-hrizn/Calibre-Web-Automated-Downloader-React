@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Search as SearchIcon, Filter, Download, Eye, AlertCircle, Loader2, Check } from 'lucide-react'
+import { Search as SearchIcon, Filter, Download, Eye, AlertCircle, Loader2 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { CircularProgress } from '../components/ui/CircularProgress'
 import { SkeletonGrid } from '../components/ui/SkeletonCard'
@@ -255,8 +255,8 @@ export function Search() {
       {(() => {
         // Get results from cache or current query
         const results = searchBooks.data || cachedResults
-        const isLoading = searchBooks.isPending
-        const isError = searchBooks.isError
+        // const isLoading = searchBooks.isPending
+        // const isError = searchBooks.isError
         
         if (results && results.length === 0) {
           return (
@@ -474,7 +474,7 @@ function BookCard({ book, downloads, pendingDownloads, onDownload, onDetails }: 
                         />
                       </svg>
                     </div>
-                    <span className="text-xs font-medium text-primary ml-2">Adding to queue...</span>
+                    <span className="text-xs font-medium text-primary ml-2">Queuing...</span>
                   </div>
                 )
               }

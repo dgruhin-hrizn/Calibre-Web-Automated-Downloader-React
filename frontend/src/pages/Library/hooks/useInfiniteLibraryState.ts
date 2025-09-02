@@ -19,7 +19,7 @@ export function useInfiniteLibraryState({
   enableBookTracking = true
 }: UseInfiniteLibraryStateOptions = {}) {
   const [searchParams, setSearchParams] = useSearchParams()
-  const { removeBookFromCache, invalidateLibraryStats } = useLibraryCache()
+  const { invalidateLibraryStats } = useLibraryCache()
 
   // Extract state from URL params with defaults
   const searchQuery = searchParams.get('search') || ''
@@ -46,7 +46,7 @@ export function useInfiniteLibraryState({
 
   // Calculate current logical page based on loaded books
   const totalBooks = infiniteQuery.data?.pages[0]?.total || 0
-  const booksPerPage = 18
+  // const booksPerPage = 18
   const loadedPages = infiniteQuery.data?.pages.length || 0
   const totalPages = infiniteQuery.data?.pages[0]?.pages || 1
   const hasNextPage = infiniteQuery.hasNextPage

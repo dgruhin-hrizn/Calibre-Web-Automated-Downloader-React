@@ -1,4 +1,4 @@
-import React from 'react'
+// import React from 'react'
 import { Search, Filter, Grid, List } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import type { ViewMode, SortParam } from '../types'
@@ -21,8 +21,8 @@ export function LibraryControls({
   onViewModeChange,
   sortParam,
   onSortChange,
-  totalBooks,
-  loading
+  // totalBooks,
+  // loading
 }: LibraryControlsProps) {
   return (
     <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">

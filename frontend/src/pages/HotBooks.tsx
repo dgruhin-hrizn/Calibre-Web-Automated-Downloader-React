@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { TrendingUp, Book, Grid, List } from 'lucide-react'
+import { TrendingUp, Grid, List } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { UnifiedBookCard, type UnifiedBook } from '../components/UnifiedBookCard'

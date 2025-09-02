@@ -1,0 +1,19 @@
+<?xml version='1.0' encoding='utf-8'?>
+<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="uuid_id" version="2.0">
+    <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+        <dc:identifier opf:scheme="calibre" id="calibre_id">24703</dc:identifier>
+        <dc:identifier opf:scheme="uuid" id="uuid_id">41558092-eae6-4d00-bf45-8c76fca330c5</dc:identifier>
+        <dc:title>Spark</dc:title>
+        <dc:creator opf:file-as="Chambers, Bill" opf:role="aut">Bill Chambers</dc:creator>
+        <dc:contributor opf:file-as="calibre" opf:role="bkp">calibre (7.23.0) [https://calibre-ebook.com]</dc:contributor>
+        <dc:date>2018-02-08T00:00:00+00:00</dc:date>
+        <dc:description>&lt;p&gt;Learn how to use, deploy, and maintain Apache Spark with this comprehensive guide, written by the creators of the open-source cluster-computing framework. With an emphasis on improvements and new features in Spark 2.0, authors Bill Chambers and Matei Zaharia break down Spark topics into distinct sections, each with unique goals.&lt;/p&gt;&lt;p&gt;You'll explore the basic operations and common functions of Spark's structured APIs, as well as Structured Streaming, a new high-level API for building end-to-end streaming applications. Developers and system administrators will learn the fundamentals of monitoring, tuning, and debugging Spark, and explore machine learning techniques and scenarios for employing MLlib, Spark's scalable machine-learning library.&lt;/p&gt;&lt;li&gt;Get a gentle overview of big data and Spark&lt;/li&gt;&lt;li&gt;Learn about DataFrames, SQL, and Datasets&amp;#8212;Spark's core APIs&amp;#8212;through worked examples&lt;/li&gt;&lt;li&gt;Dive into Spark's low-level APIs, RDDs, and execution of SQL and...</dc:description>
+        <dc:publisher>O'Reilly Media</dc:publisher>
+        <dc:language>eng</dc:language>
+        <meta name="calibre:timestamp" content="2025-01-08T04:59:59.836148+00:00"/>
+        <meta name="calibre:title_sort" content="Spark"/>
+    </metadata>
+    <guide>
+        <reference type="cover" title="Cover" href="cover.jpg"/>
+    </guide>
+</package>

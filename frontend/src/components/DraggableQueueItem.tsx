@@ -44,7 +44,7 @@ export function DraggableQueueItem({
 }: DraggableQueueItemProps) {
   const ref = useRef<HTMLDivElement>(null)
 
-  const [{ handlerId }, drop] = useDrop({
+  const [{ handlerId }, drop] = useDrop<DragItem, void, { handlerId: any }>({
     accept: ItemTypes.QUEUE_ITEM,
     collect(monitor) {
       return {

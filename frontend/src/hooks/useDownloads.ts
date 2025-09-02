@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiRequest, api } from '../lib/utils'
 import { useDownloadStore } from '../stores/downloadStore'
+
+const API_BASE_URL = import.meta.env.PROD ? '' : 'http://localhost:8084'
 import { useEffect } from 'react'
 
 export interface Book {

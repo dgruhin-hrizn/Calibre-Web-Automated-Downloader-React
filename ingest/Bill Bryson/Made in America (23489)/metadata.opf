@@ -1,0 +1,22 @@
+<?xml version='1.0' encoding='utf-8'?>
+<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="uuid_id" version="2.0">
+    <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+        <dc:identifier opf:scheme="calibre" id="calibre_id">23489</dc:identifier>
+        <dc:identifier opf:scheme="uuid" id="uuid_id">f330d283-8bc6-4d92-8aa0-e2be4793facc</dc:identifier>
+        <dc:title>Made in America</dc:title>
+        <dc:creator opf:file-as="Bryson, Bill" opf:role="aut">Bill Bryson</dc:creator>
+        <dc:contributor opf:file-as="calibre" opf:role="bkp">calibre (7.23.0) [https://calibre-ebook.com]</dc:contributor>
+        <dc:date>2015-12-31T23:00:00+00:00</dc:date>
+        <dc:description>&lt;div&gt;
+&lt;p&gt;‘Funny, wise, learned and compulsive’ - GQBill Bryson turns away from travelling the highways and byways of middle America, so hilariously depicted in his bestselling The Lost Continent, The Life and Times of the Thunderbolt Kid andNotes from a Big Country, for a fast, exhilarating ride along the Route 66 of American language and popular culture. In Made in America, Bryson tells the story of how American arose out of the English language, and along the way, de-mythologizes his native land - explaining how a dusty desert hamlet with neither woods nor holly became Hollywood, how the Wild West wasn’t won, why Americans say ‘lootenant’ and ‘Toosday’, how they were eating junk food long before the word itself was cooked up - as well as exposing the true origins of the words G-string, blockbuster, poker and snafu.‘ A tremendously sassy work, full of zip, pizzazz and all those other great American qualities’Will Self, Independent on Sunday&lt;/p&gt;&lt;/div&gt;</dc:description>
+        <dc:publisher>Transworld</dc:publisher>
+        <dc:identifier opf:scheme="ISBN">9781784161866</dc:identifier>
+        <dc:language>eng</dc:language>
+        <meta name="calibre:rating" content="8"/>
+        <meta name="calibre:timestamp" content="2025-01-08T04:55:27.659406+00:00"/>
+        <meta name="calibre:title_sort" content="Made in America"/>
+    </metadata>
+    <guide>
+        <reference type="cover" title="Cover" href="cover.jpg"/>
+    </guide>
+</package>

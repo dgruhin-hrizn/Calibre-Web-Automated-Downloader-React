@@ -77,10 +77,16 @@ export function useCWAStatus() {
 export function useCWABooks(page = 1, perPage = 18, sort = 'new') {
   return useQuery<CWABooksResponse>({
     queryKey: ['cwa', 'books', { page, perPage, sort }],
-    queryFn: () => apiRequest('/api/cwa/books', {
-      method: 'GET',
-      params: { page, per_page: perPage, sort }
-    }),
+    queryFn: () => {
+      const params = new URLSearchParams({ 
+        page: page.toString(), 
+        per_page: perPage.toString(), 
+        sort 
+      });
+      return apiRequest(`/api/cwa/books?${params}`, {
+        method: 'GET'
+      });
+    },
     enabled: page > 0, // Only run if page is valid
     staleTime: 60000, // 1 minute
   });
@@ -91,11 +97,15 @@ export function useCWABooks(page = 1, perPage = 18, sort = 'new') {
  */
 export function useCWASearch() {
   return useMutation<CWASearchResponse, Error, { query: string; page?: number }>({
-    mutationFn: ({ query, page = 1 }) => 
-      apiRequest('/api/cwa/search', {
-        method: 'GET',
-        params: { query, page }
-      }),
+    mutationFn: ({ query, page = 1 }) => {
+      const params = new URLSearchParams({ 
+        query, 
+        page: page.toString() 
+      });
+      return apiRequest(`/api/cwa/search?${params}`, {
+        method: 'GET'
+      });
+    },
   });
 }
 
@@ -128,11 +138,12 @@ export function useCWABookFormats(bookId: number | null) {
  */
 export function useCWAReaderUrl() {
   return useMutation<{ reader_url: string; book_id: number; format: string }, Error, { bookId: number; format?: string }>({
-    mutationFn: ({ bookId, format = 'epub' }) =>
-      apiRequest(`/api/cwa/book/${bookId}/reader`, {
-        method: 'GET',
-        params: { format }
-      }),
+    mutationFn: ({ bookId, format = 'epub' }) => {
+      const params = new URLSearchParams({ format });
+      return apiRequest(`/api/cwa/book/${bookId}/reader?${params}`, {
+        method: 'GET'
+      });
+    },
   });
 }
 

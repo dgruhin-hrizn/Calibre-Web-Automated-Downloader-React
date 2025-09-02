@@ -1,0 +1,20 @@
+<?xml version='1.0' encoding='utf-8'?>
+<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="uuid_id" version="2.0">
+    <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+        <dc:identifier opf:scheme="calibre" id="calibre_id">22713</dc:identifier>
+        <dc:identifier opf:scheme="uuid" id="uuid_id">9323f55b-724a-4e10-9acf-8d2c0f7a3187</dc:identifier>
+        <dc:title>A Pint of Plain</dc:title>
+        <dc:creator opf:file-as="Barich, Bill" opf:role="aut">Bill Barich</dc:creator>
+        <dc:contributor opf:file-as="calibre" opf:role="bkp">calibre (7.23.0) [https://calibre-ebook.com]</dc:contributor>
+        <dc:date>2018-04-14T21:00:00+00:00</dc:date>
+        <dc:description>After meeting an Irishwoman in London and moving to Dublin, Bill Barich―a "blow-in," or stranger, in Irish parlance―found himself looking for a traditional Irish pub to be his local. There are nearly twelve thousand pubs in Ireland, so he appeared to have plenty of choices. He wanted a pub like the one in John Ford's classic movie, &lt;i&gt;The Quiet Man&lt;/i&gt;, offering talk and drink with no distractions, but such pubs are now scare as publicans increasingly rely on flat-screen televisions, rock music, even Texas Hold 'Em to attract a dwindling clientele. For Barich, this signaled that something deeper was at play―an erosion of the essence of Ireland, perhaps without the Irish even being aware. &lt;i&gt;A Pint of Plain&lt;/i&gt; is Barich's witty, deeply observant portrait of an Ireland vanishing before our eyes. While 85 percent of the Irish still stop by a pub at least once a month, strict drunk-driving laws have helped to kill business in rural areas. Even traditional Irish music, whose rich...</dc:description>
+        <dc:publisher>Skyhorse</dc:publisher>
+        <dc:identifier opf:scheme="ISBN">9781510732209</dc:identifier>
+        <dc:language>eng</dc:language>
+        <meta name="calibre:timestamp" content="2025-01-08T04:52:54.366234+00:00"/>
+        <meta name="calibre:title_sort" content="Pint of Plain, A"/>
+    </metadata>
+    <guide>
+        <reference type="cover" title="Cover" href="cover.jpg"/>
+    </guide>
+</package>

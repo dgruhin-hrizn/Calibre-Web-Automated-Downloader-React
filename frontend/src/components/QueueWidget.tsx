@@ -116,11 +116,17 @@ export function QueueWidget() {
                       iconColor = 'text-purple-600 dark:text-purple-400'
                       badgeColor = 'bg-purple-100 dark:bg-purple-900/40'
                       icon = <Cog className={`h-4 w-4 ${iconColor} animate-spin`} />
-                    } else {
+                    } else if (isWaiting) {
                       bgColor = 'bg-blue-50 dark:bg-blue-900/20'
                       iconColor = 'text-blue-600 dark:text-blue-400'
                       badgeColor = 'bg-blue-100 dark:bg-blue-900/40'
                       icon = <Timer className={`h-4 w-4 ${iconColor} animate-pulse`} />
+                    } else {
+                      // Fallback for any other status
+                      bgColor = 'bg-gray-50 dark:bg-gray-900/20'
+                      iconColor = 'text-gray-600 dark:text-gray-400'
+                      badgeColor = 'bg-gray-100 dark:bg-gray-900/40'
+                      icon = <Timer className={`h-4 w-4 ${iconColor}`} />
                     }
                     
                     return (
@@ -162,6 +168,15 @@ export function QueueWidget() {
                               </div>
                               <span className="text-xs text-purple-600 dark:text-purple-400 font-medium">
                                 Processing...
+                              </span>
+                            </>
+                          ) : isWaiting ? (
+                            <>
+                              <div className="flex-1 bg-secondary rounded-full h-1.5">
+                                <div className="bg-blue-500 h-1.5 rounded-full animate-pulse" style={{ width: '100%' }} />
+                              </div>
+                              <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                                Waiting...
                               </span>
                             </>
                           ) : (

@@ -5,7 +5,7 @@ import { Button } from './ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Checkbox } from './ui/checkbox';
 import { Badge } from './ui/badge';
-import { UnifiedBookCard } from './UnifiedBookCard';
+// import { UnifiedBookCard } from './UnifiedBookCard';
 import { AuthorFormatter } from '../utils/authorFormatter';
 
 interface DuplicateBook {
@@ -122,25 +122,25 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
 
   // Flatten all duplicates for easier processing with deduplication
   const getAllDuplicateGroups = () => {
-    if (!duplicatesData || !duplicatesData.duplicates || !duplicatesData.duplicates.duplicates) return [];
+    if (!duplicatesData || !duplicatesData.duplicates) return [];
     
-    const duplicates = duplicatesData.duplicates.duplicates;
-    const groups = [];
+    const duplicates = duplicatesData.duplicates;
+    const groups: Array<DuplicateGroup & { type: string; reason: string }> = [];
     const seenBookSets = new Set();
     
     // Helper function to create a unique key for a set of books
-    const getBookSetKey = (books: any[]) => {
+    const getBookSetKey = (books: DuplicateBook[]) => {
       return books.map(book => book.id).sort().join(',');
     };
     
     // Helper function to add group if not already seen
-    const addGroupIfUnique = (group: any, reason: string, type: string) => {
+    const addGroupIfUnique = (group: DuplicateGroup, reason: string, type: string) => {
       const bookSetKey = getBookSetKey(group.books);
       if (!seenBookSets.has(bookSetKey)) {
         seenBookSets.add(bookSetKey);
         groups.push({
+          ...group,
           reason,
-          books: group.books,
           type
         });
       }
@@ -148,7 +148,7 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
     
     // Add title+author duplicates first (most specific)
     if (duplicates.by_title_author) {
-      duplicates.by_title_author.forEach(group => {
+      duplicates.by_title_author.forEach((group: DuplicateGroup) => {
         addGroupIfUnique(
           group,
           `Same title and author: "${group.title}" by ${group.author}`,
@@ -159,7 +159,7 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
     
     // Add ISBN duplicates (also specific)
     if (duplicates.by_isbn) {
-      duplicates.by_isbn.forEach(group => {
+      duplicates.by_isbn.forEach((group: DuplicateGroup) => {
         addGroupIfUnique(
           group,
           `Same ISBN: ${group.isbn}`,
@@ -235,18 +235,18 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
       // Update duplicates data locally instead of refetching
       if (duplicatesData) {
         const updatedData = { ...duplicatesData };
-        const duplicates = updatedData.duplicates.duplicates;
+        const duplicates = updatedData.duplicates;
         
         // Remove book from all duplicate categories
-        ['by_isbn', 'by_title_author'].forEach(category => {
+        (['by_isbn', 'by_title_author'] as const).forEach((category: keyof typeof duplicates) => {
           if (duplicates[category]) {
             duplicates[category] = duplicates[category]
-              .map(group => ({
+              .map((group: DuplicateGroup) => ({
                 ...group,
-                books: group.books.filter(book => book.id !== bookId),
-                count: group.books.filter(book => book.id !== bookId).length
+                books: group.books.filter((book: DuplicateBook) => book.id !== bookId),
+                count: group.books.filter((book: DuplicateBook) => book.id !== bookId).length
               }))
-              .filter(group => group.books.length > 1); // Remove groups with only 1 book
+              .filter((group: DuplicateGroup) => group.books.length > 1); // Remove groups with only 1 book
           }
         });
         
@@ -256,8 +256,8 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
         const totalGroups = Object.values(duplicates)
           .reduce((sum, category) => sum + (category?.length || 0), 0);
         
-        updatedData.duplicates.summary.total_duplicate_books = totalBooks;
-        updatedData.duplicates.summary.total_duplicate_groups = totalGroups;
+        updatedData.summary.total_duplicate_books = totalBooks;
+        updatedData.summary.total_duplicate_groups = totalGroups;
         
         setDuplicatesData(updatedData);
       }
@@ -356,18 +356,18 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
       // Update duplicates data locally instead of refetching
       if (duplicatesData && successfullyDeletedIds.length > 0) {
         const updatedData = { ...duplicatesData };
-        const duplicates = updatedData.duplicates.duplicates;
+        const duplicates = updatedData.duplicates;
         
         // Remove books from all duplicate categories
-        ['by_isbn', 'by_title_author'].forEach(category => {
+        (['by_isbn', 'by_title_author'] as const).forEach((category: keyof typeof duplicates) => {
           if (duplicates[category]) {
             duplicates[category] = duplicates[category]
-              .map(group => ({
+              .map((group: DuplicateGroup) => ({
                 ...group,
-                books: group.books.filter(book => !successfullyDeletedIds.includes(book.id)),
-                count: group.books.filter(book => !successfullyDeletedIds.includes(book.id)).length
+                books: group.books.filter((book: DuplicateBook) => !successfullyDeletedIds.includes(book.id)),
+                count: group.books.filter((book: DuplicateBook) => !successfullyDeletedIds.includes(book.id)).length
               }))
-              .filter(group => group.books.length > 1); // Remove groups with only 1 book
+              .filter((group: DuplicateGroup) => group.books.length > 1); // Remove groups with only 1 book
           }
         });
         
@@ -377,8 +377,8 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
         const totalGroups = Object.values(duplicates)
           .reduce((sum, category) => sum + (category?.length || 0), 0);
         
-        updatedData.duplicates.summary.total_duplicate_books = totalBooks;
-        updatedData.duplicates.summary.total_duplicate_groups = totalGroups;
+        updatedData.summary.total_duplicate_books = totalBooks;
+        updatedData.summary.total_duplicate_groups = totalGroups;
         
         setDuplicatesData(updatedData);
         

@@ -225,7 +225,7 @@ export function UnifiedBookCard({
               />
             </svg>
           </div>
-          <span className="text-xs font-medium text-primary ml-2">Adding to queue...</span>
+          <span className="text-xs font-medium text-primary ml-2">Queuing...</span>
         </div>
       )
     }

@@ -1,0 +1,20 @@
+<?xml version='1.0' encoding='utf-8'?>
+<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="uuid_id" version="2.0">
+    <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+        <dc:identifier opf:scheme="calibre" id="calibre_id">18084</dc:identifier>
+        <dc:identifier opf:scheme="uuid" id="uuid_id">34750aa5-2ad9-48cd-9bb0-e1abea932cf9</dc:identifier>
+        <dc:title>Among the Thugs</dc:title>
+        <dc:creator opf:file-as="Buford, Bill" opf:role="aut">Bill Buford</dc:creator>
+        <dc:contributor opf:file-as="calibre" opf:role="bkp">calibre (7.23.0) [https://calibre-ebook.com]</dc:contributor>
+        <dc:date>2013-05-15T05:00:00+00:00</dc:date>
+        <dc:description>&lt;p&gt;They have names like Barmy Bernie, Daft Donald, and Steamin' Sammy. They like lager (in huge quantities), the Queen, football clubs (especially Manchester United), and themselves. Their dislike encompasses the rest of the known universe, and England's soccer thugs express it in ways that range from mere vandalism to riots that terrorize entire cities. Now Bill Buford, editor of the prestigious journal Granta, enters this alternate society and records both its savageries and its sinister allure with the social imagination of a George Orwell and the raw personal engagement of a Hunter Thompson.</dc:description>
+        <dc:publisher>Knopf Doubleday Publishing Group</dc:publisher>
+        <dc:identifier opf:scheme="ISBN">978-0-8041-5051-4</dc:identifier>
+        <dc:language>eng</dc:language>
+        <meta name="calibre:timestamp" content="2025-01-08T02:41:28+00:00"/>
+        <meta name="calibre:title_sort" content="Among the Thugs"/>
+    </metadata>
+    <guide>
+        <reference type="cover" title="Cover" href="cover.jpg"/>
+    </guide>
+</package>

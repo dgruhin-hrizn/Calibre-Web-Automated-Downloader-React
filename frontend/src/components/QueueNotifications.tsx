@@ -23,7 +23,7 @@ export function QueueNotifications() {
   const downloads = useDownloadStore((state) => state.downloads)
   const [notifications, setNotifications] = useState<QueueNotification[]>([])
   const [previousState, setPreviousState] = useState<any>(null)
-  const [progressTick, setProgressTick] = useState(0)
+  const [, setProgressTick] = useState(0)
 
   useEffect(() => {
     if (!statusData || !previousState) {
@@ -39,7 +39,7 @@ export function QueueNotifications() {
       if (!previousState.downloading?.[id]) {
         // Try to get cover from downloadStore if not available in statusData
         const storeDownload = downloads[id]
-        const coverUrl = download.coverUrl || storeDownload?.coverUrl
+        const coverUrl = storeDownload?.coverUrl
         
         newNotifications.push({
           id: `download_started_${id}`,
@@ -61,7 +61,7 @@ export function QueueNotifications() {
       if (!previousState.available?.[id] && !previousState.done?.[id]) {
         // Try to get cover from downloadStore if not available in statusData
         const storeDownload = downloads[id]
-        const coverUrl = download.coverUrl || storeDownload?.coverUrl
+        const coverUrl = storeDownload?.coverUrl
         
         newNotifications.push({
           id: `download_completed_${id}`,
@@ -82,7 +82,7 @@ export function QueueNotifications() {
       if (!previousState.available?.[id] && !previousState.done?.[id]) {
         // Try to get cover from downloadStore if not available in statusData
         const storeDownload = downloads[id]
-        const coverUrl = download.coverUrl || storeDownload?.coverUrl
+        const coverUrl = storeDownload?.coverUrl
         
         newNotifications.push({
           id: `download_completed_${id}`,
@@ -104,7 +104,7 @@ export function QueueNotifications() {
       if (!previousState.error?.[id]) {
         // Try to get cover from downloadStore if not available in statusData
         const storeDownload = downloads[id]
-        const coverUrl = download.coverUrl || storeDownload?.coverUrl
+        const coverUrl = storeDownload?.coverUrl
         
         newNotifications.push({
           id: `download_failed_${id}`,
