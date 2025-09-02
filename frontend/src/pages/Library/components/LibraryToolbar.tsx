@@ -1,5 +1,6 @@
-import { Search, Grid, List, AlertTriangle, Clock, Calendar, ArrowUpAZ, ArrowDownZA, User, BookOpen, TrendingUp, TrendingDown, Hash } from 'lucide-react'
+import { Search, Grid, List, AlertTriangle, ChevronDown } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { LibraryPagination } from './LibraryPagination'
 import type { ViewMode, SortParam } from '../types'
 
@@ -24,6 +25,20 @@ interface LibraryToolbarProps {
   onManageDuplicates: () => void
 }
 
+// Sort options configuration
+const sortOptions = [
+  { value: 'new' as SortParam, label: 'Date Added (Newest)' },
+  { value: 'old' as SortParam, label: 'Date Added (Oldest)' },
+  { value: 'abc' as SortParam, label: 'Title (A-Z)' },
+  { value: 'zyx' as SortParam, label: 'Title (Z-A)' },
+  { value: 'authaz' as SortParam, label: 'Author (A-Z)' },
+  { value: 'authza' as SortParam, label: 'Author (Z-A)' },
+  { value: 'pubnew' as SortParam, label: 'Publication (Newest)' },
+  { value: 'pubold' as SortParam, label: 'Publication (Oldest)' },
+  { value: 'hotasc' as SortParam, label: 'Downloads (Low to High)' },
+  { value: 'hotdesc' as SortParam, label: 'Downloads (High to Low)' }
+]
+
 export function LibraryToolbar({
   searchQuery,
   onSearchChange,
@@ -39,13 +54,9 @@ export function LibraryToolbar({
   isAdmin,
   onManageDuplicates
 }: LibraryToolbarProps) {
-  // Helper function to get button classes with white background for inactive buttons
-  const getSortButtonClasses = (isActive: boolean, baseClasses: string) => {
-    return `${baseClasses} ${!isActive ? 'bg-white hover:bg-gray-50' : ''}`
-  }
 
   return (
-    <div className="sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border -mx-6 mb-8">
+    <div className="sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/90 border-b border-border -mx-6 mb-8">
       <div className="px-6 py-4">
         <div className="flex flex-col gap-4">
           {/* Top Row: Title and Admin Controls */}
@@ -88,158 +99,44 @@ export function LibraryToolbar({
                 />
               </div>
 
-              {/* Sort Buttons - Organized in groups */}
-              <div className="flex items-center gap-2">
-                {/* Date Added Group */}
-                <div className="flex items-center border rounded-md">
-                  <Button
-                    variant={sortParam === 'new' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => onSortChange('new')}
+              {/* Sort Dropdown */}
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
                     disabled={loading}
-                    className={getSortButtonClasses(sortParam === 'new', 'rounded-r-none border-r')}
-                    title="Date Added - Newest First"
+                    className="min-w-[180px] justify-between"
                   >
-                    <Clock className="h-4 w-4" />
+                    <span className="truncate">
+                      {sortOptions.find(option => option.value === sortParam)?.label || 'Sort by...'}
+                    </span>
+                    <ChevronDown className="h-4 w-4 ml-2 flex-shrink-0" />
                   </Button>
-                  <Button
-                    variant={sortParam === 'old' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => onSortChange('old')}
-                    disabled={loading}
-                    className={getSortButtonClasses(sortParam === 'old', 'rounded-l-none')}
-                    title="Date Added - Oldest First"
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content 
+                    className="min-w-[220px] bg-background border border-border rounded-md shadow-lg p-1 z-50"
+                    align="start"
+                    sideOffset={4}
                   >
-                    <Calendar className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                {/* Title Sort Group */}
-                <div className="flex items-center border rounded-md">
-                  <Button
-                    variant={sortParam === 'abc' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => onSortChange('abc')}
-                    disabled={loading}
-                    className={getSortButtonClasses(sortParam === 'abc', 'rounded-r-none border-r')}
-                    title="Title A-Z"
-                  >
-                    <ArrowUpAZ className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant={sortParam === 'zyx' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => onSortChange('zyx')}
-                    disabled={loading}
-                    className={getSortButtonClasses(sortParam === 'zyx', 'rounded-l-none')}
-                    title="Title Z-A"
-                  >
-                    <ArrowDownZA className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                {/* Author Sort Group */}
-                <div className="flex items-center border rounded-md">
-                  <Button
-                    variant={sortParam === 'authaz' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => onSortChange('authaz')}
-                    disabled={loading}
-                    className={getSortButtonClasses(sortParam === 'authaz', 'rounded-r-none border-r')}
-                    title="Authors A-Z"
-                  >
-                    <User className="h-4 w-4" />
-                    <ArrowUpAZ className="h-3 w-3 ml-1" />
-                  </Button>
-                  <Button
-                    variant={sortParam === 'authza' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => onSortChange('authza')}
-                    disabled={loading}
-                    className={getSortButtonClasses(sortParam === 'authza', 'rounded-l-none')}
-                    title="Authors Z-A"
-                  >
-                    <User className="h-4 w-4" />
-                    <ArrowDownZA className="h-3 w-3 ml-1" />
-                  </Button>
-                </div>
-
-                {/* Publication Date Group */}
-                <div className="flex items-center border rounded-md">
-                  <Button
-                    variant={sortParam === 'pubnew' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => onSortChange('pubnew')}
-                    disabled={loading}
-                    className={getSortButtonClasses(sortParam === 'pubnew', 'rounded-r-none border-r')}
-                    title="Publication Date - Newest First"
-                  >
-                    <BookOpen className="h-4 w-4" />
-                    <TrendingUp className="h-3 w-3 ml-1" />
-                  </Button>
-                  <Button
-                    variant={sortParam === 'pubold' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => onSortChange('pubold')}
-                    disabled={loading}
-                    className={getSortButtonClasses(sortParam === 'pubold', 'rounded-l-none')}
-                    title="Publication Date - Oldest First"
-                  >
-                    <BookOpen className="h-4 w-4" />
-                    <TrendingDown className="h-3 w-3 ml-1" />
-                  </Button>
-                </div>
-
-                {/* Series Index Group */}
-                <div className="flex items-center border rounded-md">
-                  <Button
-                    variant={sortParam === 'seriesasc' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => onSortChange('seriesasc')}
-                    disabled={loading}
-                    className={getSortButtonClasses(sortParam === 'seriesasc', 'rounded-r-none border-r')}
-                    title="Series Index - Ascending"
-                  >
-                    <Hash className="h-4 w-4" />
-                    <TrendingUp className="h-3 w-3 ml-1" />
-                  </Button>
-                  <Button
-                    variant={sortParam === 'seriesdesc' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => onSortChange('seriesdesc')}
-                    disabled={loading}
-                    className={getSortButtonClasses(sortParam === 'seriesdesc', 'rounded-l-none')}
-                    title="Series Index - Descending"
-                  >
-                    <Hash className="h-4 w-4" />
-                    <TrendingDown className="h-3 w-3 ml-1" />
-                  </Button>
-                </div>
-
-                {/* Download Count Group (Hot Books) */}
-                <div className="flex items-center border rounded-md">
-                  <Button
-                    variant={sortParam === 'hotasc' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => onSortChange('hotasc')}
-                    disabled={loading}
-                    className={getSortButtonClasses(sortParam === 'hotasc', 'rounded-r-none border-r')}
-                    title="Download Count - Ascending"
-                  >
-                    <TrendingUp className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant={sortParam === 'hotdesc' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => onSortChange('hotdesc')}
-                    disabled={loading}
-                    className={getSortButtonClasses(sortParam === 'hotdesc', 'rounded-l-none')}
-                    title="Download Count - Descending"
-                  >
-                    <TrendingDown className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
+                    {sortOptions.map((option) => (
+                      <DropdownMenu.Item
+                        key={option.value}
+                        className={`
+                          flex items-center px-3 py-2 text-sm rounded-sm cursor-pointer outline-none
+                          hover:bg-accent hover:text-accent-foreground
+                          focus:bg-accent focus:text-accent-foreground
+                          ${sortParam === option.value ? 'bg-accent text-accent-foreground' : ''}
+                        `}
+                        onSelect={() => onSortChange(option.value)}
+                      >
+                        {option.label}
+                      </DropdownMenu.Item>
+                    ))}
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
             </div>
 
             {/* Right Side: View Mode and Pagination */}
@@ -251,7 +148,7 @@ export function LibraryToolbar({
                   size="sm"
                   onClick={() => onViewModeChange('grid')}
                   disabled={loading}
-                  className={getSortButtonClasses(viewMode === 'grid', 'rounded-r-none')}
+                  className="rounded-r-none"
                 >
                   <Grid className="h-4 w-4" />
                 </Button>
@@ -260,7 +157,7 @@ export function LibraryToolbar({
                   size="sm"
                   onClick={() => onViewModeChange('list')}
                   disabled={loading}
-                  className={getSortButtonClasses(viewMode === 'list', 'rounded-l-none')}
+                  className="rounded-l-none"
                 >
                   <List className="h-4 w-4" />
                 </Button>

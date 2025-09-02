@@ -32,10 +32,10 @@ export function LibraryGridView({
             key={book.id}
             data-book-id={book.id}
             ref={(el) => registerBookRef?.(book.id, el)}
-            className={`w-[calc(50%-8px)] sm:w-[225px] sm:min-w-[225px] sm:max-w-[225px] transition-all duration-700 ease-out ${
-              isDeleting 
-                ? 'opacity-0 scale-75 translate-y-4 delay-[500ms]' 
-                : 'opacity-100 scale-100 translate-y-0 hover:scale-[1.02] hover:shadow-lg'
+            className={`w-[calc(50%-8px)] sm:w-[225px] sm:min-w-[225px] sm:max-w-[225px] transition-all ease-out ${
+              isDeleting
+                ? 'opacity-0 scale-75 translate-y-4 duration-500'
+                : 'opacity-100 scale-100 translate-y-0 hover:scale-[1.02] hover:shadow-lg duration-700'
             }`}
             style={{
               transform: 'translateZ(0)', // Hardware acceleration
@@ -96,12 +96,18 @@ export function LibraryGridView({
                 }}
               >
                 <div className="flex flex-col items-center justify-center text-center space-y-2">
-                  <div className="w-10 h-10 bg-red-500 rounded-full flex items-center justify-center">
+                  <div className="w-10 h-10 bg-red-500 rounded-full flex items-center justify-center animate-pulse">
                     <Trash2 className="w-5 h-5 text-white" />
                   </div>
                   <div className="space-y-1">
                     <p className="text-sm font-medium text-red-800">Deleting Book</p>
                     <p className="text-xs text-red-600 line-clamp-2 leading-tight">{book.title}</p>
+                  </div>
+                  {/* Simple pulsing dots as progress indicator */}
+                  <div className="flex space-x-1 mt-2">
+                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                    <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                    <div className="w-2 h-2 bg-red-300 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
                   </div>
                 </div>
               </div>

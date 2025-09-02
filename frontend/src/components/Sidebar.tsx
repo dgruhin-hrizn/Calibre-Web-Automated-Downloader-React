@@ -4,7 +4,6 @@ import {
   Search, 
   Download, 
   Settings,
-  BookOpen,
   Library,
   TrendingUp,
   X
@@ -51,9 +50,9 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
             "flex items-center h-16 border-b border-border flex-shrink-0",
             open ? "justify-between px-6" : "justify-center px-0"
           )}>
-            <div className="flex items-center space-x-3">
-              <BookOpen className="w-8 h-8 text-primary flex-shrink-0" />
-              {open && <span className="text-xl font-bold whitespace-nowrap text-foreground">InkDrop</span>}
+            <div className="flex items-center space-x-2">
+              <img src="/droplet.png" alt="Inkdrop Logo" className="w-8 h-8 flex-shrink-0" />
+              {open && <span className="text-xl font-bold whitespace-nowrap text-foreground">Inkdrop</span>}
             </div>
             <button
               onClick={() => onOpenChange(false)}
@@ -111,9 +110,7 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
               </div>
             ) : (
               <div className="flex justify-center">
-                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                  <BookOpen className="w-4 h-4 text-primary" />
-                </div>
+                <img src="/droplet.png" alt="Inkdrop" className="w-6 h-6" />
               </div>
             )}
           </div>

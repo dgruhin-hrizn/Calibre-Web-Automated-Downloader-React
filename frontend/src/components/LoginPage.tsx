@@ -47,25 +47,15 @@ export function LoginPage({ onLogin, isLoading = false, error }: LoginPageProps)
       <div className="w-full max-w-md">
         {/* Logo and Title */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-24 h-24 bg-card rounded-2xl mb-6 shadow-lg border border-border">
-            <img 
-              src="/inkdrop.png" 
-              alt="InkDrop Logo" 
-              className="w-16 h-16 object-contain"
-              onError={(e) => {
-                // Fallback to icon if image fails to load
-                const target = e.target as HTMLImageElement;
-                target.style.display = 'none';
-                target.nextElementSibling?.classList.remove('hidden');
-              }}
-            />
-            <Droplets className="w-12 h-12 text-primary hidden" />
+          <div className="flex items-center justify-center space-x-2 mb-6">
+            <img src="/droplet.png" alt="Inkdrop Logo" className="w-12 h-12 flex-shrink-0" />
+            <span className="text-4xl font-bold text-foreground">Inkdrop</span>
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground mb-2">
-            Welcome to InkDrop
+          <h1 className="text-2xl font-medium tracking-tight text-foreground mb-2">
+            Welcome to your digital library
           </h1>
           <p className="text-muted-foreground">
-            Your digital library companion
+            Your automated book downloader and library manager
           </p>
         </div>
 
@@ -172,7 +162,7 @@ export function LoginPage({ onLogin, isLoading = false, error }: LoginPageProps)
         {/* Footer */}
         <div className="text-center mt-6">
           <p className="text-xs text-muted-foreground">
-            InkDrop - Automated book downloader and library manager
+            Inkdrop - Automated book downloader and library manager
           </p>
         </div>
       </div>

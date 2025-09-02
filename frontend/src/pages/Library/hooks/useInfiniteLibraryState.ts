@@ -37,8 +37,11 @@ export function useInfiniteLibraryState({
   const healthQuery = useCWAHealth()
 
   // Flatten all pages into a single books array
+  // Keep deleting books visible during animation
   const books = useMemo(() => {
-    return infiniteQuery.data?.pages.flatMap(page => page.books) || []
+    const allBooks = infiniteQuery.data?.pages.flatMap(page => page.books) || []
+    // Don't filter out deleting books - let them stay visible for animation
+    return allBooks
   }, [infiniteQuery.data])
 
   // Calculate current logical page based on loaded books
@@ -276,24 +279,32 @@ export function useInfiniteLibraryState({
   }, [])
 
   const handleBookDeleted = useCallback((deletedBookId: number) => {
+    console.log('[handleBookDeleted] Starting delete animation for book:', deletedBookId)
+    
     // Add book to deleting set for animation
-    setDeletingBooks(prev => new Set([...prev, deletedBookId]))
+    setDeletingBooks(prev => {
+      const newSet = new Set([...prev, deletedBookId])
+      console.log('[handleBookDeleted] Updated deletingBooks:', Array.from(newSet))
+      return newSet
+    })
     
-    // Remove book from cache immediately
-    removeBookFromCache(deletedBookId)
-    
-    // Invalidate stats to reflect new count
-    invalidateLibraryStats()
-    
-    // Clean up deleting state after animation
+    // Wait for animation to complete, then refetch and clean up
     setTimeout(() => {
+      console.log('[handleBookDeleted] Animation complete, refetching data for book:', deletedBookId)
+      
+      // Refetch data to get updated list without deleted book
+      infiniteQuery.refetch()
+      invalidateLibraryStats()
+      
+      // Clean up deleting state
       setDeletingBooks(prev => {
         const newSet = new Set(prev)
         newSet.delete(deletedBookId)
+        console.log('[handleBookDeleted] Cleaned up deletingBooks after animation:', Array.from(newSet))
         return newSet
       })
-    }, 1700)
-  }, [removeBookFromCache, invalidateLibraryStats])
+    }, 1000) // Wait for flip + fade animations to complete (500ms + 500ms)
+  }, [infiniteQuery, invalidateLibraryStats])
 
   const closeBookModal = useCallback(() => {
     setSelectedBook(null)

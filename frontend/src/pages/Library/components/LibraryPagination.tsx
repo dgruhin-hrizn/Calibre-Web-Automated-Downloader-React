@@ -1,4 +1,5 @@
 import { Button } from '../../../components/ui/Button'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface LibraryPaginationProps {
   currentPage: number
@@ -22,8 +23,9 @@ export function LibraryPagination({
         size="sm"
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage <= 1}
+        title="Previous page"
       >
-        Previous
+        <ChevronLeft className="h-4 w-4" />
       </Button>
       
       <div className="flex items-center space-x-1">
@@ -47,8 +49,9 @@ export function LibraryPagination({
         size="sm"
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage >= totalPages}
+        title="Next page"
       >
-        Next
+        <ChevronRight className="h-4 w-4" />
       </Button>
     </div>
   )
