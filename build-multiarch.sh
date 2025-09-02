@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Multi-Architecture Docker Build Script for CWA Book Downloader
+# Multi-Architecture Docker Build Script for Inkdrop
 # Usage: ./build-multiarch.sh [version] [--latest] [--push]
 # Example: ./build-multiarch.sh 1.2.0 --latest --push
 
@@ -8,7 +8,7 @@ set -e  # Exit on any error
 
 # Configuration
 GITHUB_USERNAME="dgruhin-hrizn"
-DOCKER_IMAGE_NAME="calibre-web-automated-downloader-react"
+DOCKER_IMAGE_NAME="inkdrop"
 DOCKERFILE="Dockerfile.fullstack"
 PLATFORMS="linux/amd64,linux/arm64"
 
@@ -261,7 +261,7 @@ if docker "${BUILD_ARGS[@]}"; then
         fi
         echo ""
         echo "📋 Unraid Template URL:"
-        echo "  https://raw.githubusercontent.com/${GITHUB_USERNAME}/Calibre-Web-Automated-Downloader-React/main/unraid-template.xml"
+        echo "  https://raw.githubusercontent.com/${GITHUB_USERNAME}/inkdrop/main/unraid-template.xml"
     else
         echo ""
         print_warning "Images built locally only. Use --push to upload to registry."

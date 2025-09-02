@@ -10,8 +10,8 @@ echo "=========================================="
 
 # Configuration
 GITHUB_USERNAME="dgruhin-hrizn"
-DOCKER_IMAGE_NAME="calibre-web-automated-downloader-react"
-REPO_NAME="Calibre-Web-Automated-Downloader-React"
+DOCKER_IMAGE_NAME="inkdrop"
+REPO_NAME="inkdrop"
 
 echo "📋 Configuration:"
 echo "  Docker Image: ghcr.io/${GITHUB_USERNAME}/${DOCKER_IMAGE_NAME}"

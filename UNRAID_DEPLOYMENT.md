@@ -20,19 +20,20 @@ The CWA Book Downloader provides a modern, beautiful React frontend for Calibre-
    - Go to **Docker** tab in Unraid
    - Click **Add Container**
    - In the template dropdown, select **Add Template**
-   - Add this URL: `https://raw.githubusercontent.com/dgruhin-hrizn/Calibre-Web-Automated-Downloader-React/main/unraid-template.xml`
+   - Add this URL: `https://raw.githubusercontent.com/dgruhin-hrizn/inkdrop/main/unraid-template.xml`
 
 2. **Install from Template**:
-   - Search for "CWA Book Downloader"
+   - Search for "Inkdrop"
    - Click the template and configure the required settings
+   - **Recommended**: Enable FlareSolverr integration for optimal performance
    - Click **Apply** to create the container
 
 ### Method 2: Manual Docker Setup
 
 1. **Download Files**:
    ```bash
-   wget https://raw.githubusercontent.com/dgruhin-hrizn/Calibre-Web-Automated-Downloader-React/main/docker-compose.unraid.yml
-   wget https://raw.githubusercontent.com/dgruhin-hrizn/Calibre-Web-Automated-Downloader-React/main/unraid.env.example
+   wget https://raw.githubusercontent.com/dgruhin-hrizn/inkdrop/main/docker-compose.unraid.yml
+   wget https://raw.githubusercontent.com/dgruhin-hrizn/inkdrop/main/unraid.env.example
    ```
 
 2. **Run Deployment Script**:
@@ -50,6 +51,44 @@ The CWA Book Downloader provides a modern, beautiful React frontend for Calibre-
    cd /mnt/user/appdata/cwa-book-downloader
    docker-compose up -d
    ```
+
+## FlareSolverr Setup (Highly Recommended)
+
+For optimal Cloudflare bypass performance, set up FlareSolverr as a separate container:
+
+### 1. Install FlareSolverr Container
+
+1. **Add FlareSolverr Template**:
+   - Go to **Docker** tab in Unraid
+   - Click **Add Container**
+   - Search for "FlareSolverr" or add template manually
+
+2. **Manual FlareSolverr Setup**:
+   ```bash
+   docker run -d \
+     --name=flaresolverr \
+     -p 8191:8191 \
+     -e LOG_LEVEL=info \
+     --restart unless-stopped \
+     ghcr.io/flaresolverr/flaresolverr:latest
+   ```
+
+### 2. Configure Inkdrop to Use FlareSolverr
+
+In your Inkdrop container settings, configure these environment variables:
+
+- **Use External Bypasser**: `true`
+- **FlareSolverr URL**: `http://192.168.1.XXX:8191` (replace with your Unraid IP)
+- **FlareSolverr API Path**: `/v1`
+- **FlareSolverr Timeout**: `60000`
+
+### Benefits of FlareSolverr Integration
+
+- ✅ **Superior reliability** for Cloudflare bypass
+- ✅ **Better performance** and success rates
+- ✅ **Reduced resource usage** on main Inkdrop container
+- ✅ **Shared service** - can be used by multiple applications
+- ✅ **Regular updates** for latest Cloudflare changes
 
 ## Configuration
 
@@ -216,9 +255,9 @@ To update the container:
 
 ## Support
 
-- **Documentation**: [GitHub Repository](https://github.com/dgruhin-hrizn/Calibre-Web-Automated-Downloader-React)
-- **Issues**: [GitHub Issues](https://github.com/dgruhin-hrizn/Calibre-Web-Automated-Downloader-React/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/dgruhin-hrizn/Calibre-Web-Automated-Downloader-React/discussions)
+- **Documentation**: [GitHub Repository](https://github.com/dgruhin-hrizn/inkdrop)
+- **Issues**: [GitHub Issues](https://github.com/dgruhin-hrizn/inkdrop/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/dgruhin-hrizn/inkdrop/discussions)
 
 ## License
 

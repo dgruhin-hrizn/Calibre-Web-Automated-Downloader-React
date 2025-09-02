@@ -1,19 +1,19 @@
 <?xml version="1.0"?>
 <Container version="2">
-  <Name>CWA-Book-Downloader</Name>
-  <Repository>ghcr.io/dgruhin-hrizn/calibre-web-automated-downloader-react:latest</Repository>
-  <Registry>https://ghcr.io/dgruhin-hrizn/calibre-web-automated-downloader-react</Registry>
+  <Name>Inkdrop</Name>
+  <Repository>ghcr.io/dgruhin-hrizn/inkdrop:latest</Repository>
+  <Registry>https://ghcr.io/dgruhin-hrizn/inkdrop</Registry>
   <Network>bridge</Network>
   <MyIP/>
   <Shell>bash</Shell>
   <Privileged>false</Privileged>
-  <Support>https://github.com/dgruhin-hrizn/Calibre-Web-Automated-Downloader-React</Support>
-  <Project>https://github.com/dgruhin-hrizn/Calibre-Web-Automated-Downloader-React</Project>
-  <Overview>Modern React frontend for Calibre-Web-Automated book downloading. Provides a beautiful interface to search, download, and manage books from Anna's Archive and other sources, integrated with your existing Calibre-Web-Automated setup.</Overview>
+  <Support>https://github.com/dgruhin-hrizn/inkdrop</Support>
+  <Project>https://github.com/dgruhin-hrizn/inkdrop</Project>
+  <Overview>Inkdrop - Modern digital library management system with automated book downloading capabilities. Features a React-based frontend with infinite scroll, advanced search, and comprehensive library management. Supports FlareSolverr for reliable Cloudflare bypass, multiple book formats, and seamless integration with Calibre-Web-Automated. Includes real-time download progress, queue management, and responsive design for all devices.</Overview>
   <Category>MediaApp:Books</Category>
   <WebUI>http://[IP]:[PORT:8084]</WebUI>
-  <TemplateURL>https://raw.githubusercontent.com/dgruhin-hrizn/Calibre-Web-Automated-Downloader-React/main/unraid-template.xml</TemplateURL>
-  <Icon>https://raw.githubusercontent.com/dgruhin-hrizn/Calibre-Web-Automated-Downloader-React/main/static/media/logo.png</Icon>
+  <TemplateURL>https://raw.githubusercontent.com/dgruhin-hrizn/inkdrop/main/unraid-template.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/dgruhin-hrizn/inkdrop/main/static/media/logo.png</Icon>
   <ExtraParams/>
   <PostArgs/>
   <CPUset/>
@@ -50,10 +50,18 @@
   <Config Name="Max Concurrent Downloads" Target="MAX_CONCURRENT_DOWNLOADS" Default="3" Mode="" Description="Maximum concurrent downloads" Type="Variable" Display="advanced" Required="false" Mask="false">3</Config>
   <Config Name="Anna's Archive Donator Key" Target="AA_DONATOR_KEY" Default="" Mode="" Description="Anna's Archive donator key (optional - improves download speed)" Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
   
+  <!-- Cloudflare Bypass Settings -->
+  <Config Name="Use Cloudflare Bypass" Target="USE_CF_BYPASS" Default="true" Mode="" Description="Enable Cloudflare bypass (required for FlareSolverr)" Type="Variable" Display="always" Required="false" Mask="false">true</Config>
+  <Config Name="Use External Bypasser" Target="USING_EXTERNAL_BYPASSER" Default="false" Mode="" Description="Use external FlareSolverr service (recommended)" Type="Variable" Display="always" Required="false" Mask="false">false</Config>
+  <Config Name="FlareSolverr URL" Target="EXT_BYPASSER_URL" Default="http://flaresolverr:8191" Mode="" Description="FlareSolverr service URL (e.g., http://192.168.1.100:8191)" Type="Variable" Display="always" Required="false" Mask="false">http://flaresolverr:8191</Config>
+  <Config Name="FlareSolverr API Path" Target="EXT_BYPASSER_PATH" Default="/v1" Mode="" Description="FlareSolverr API path (usually /v1)" Type="Variable" Display="advanced" Required="false" Mask="false">/v1</Config>
+  <Config Name="FlareSolverr Timeout" Target="EXT_BYPASSER_TIMEOUT" Default="60000" Mode="" Description="FlareSolverr timeout in milliseconds" Type="Variable" Display="advanced" Required="false" Mask="false">60000</Config>
+  
   <!-- Network Settings -->
-  <Config Name="Use Cloudflare Bypass" Target="USE_CF_BYPASS" Default="true" Mode="" Description="Enable Cloudflare bypass" Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
   <Config Name="HTTP Proxy" Target="HTTP_PROXY" Default="" Mode="" Description="HTTP proxy URL (optional)" Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
   <Config Name="HTTPS Proxy" Target="HTTPS_PROXY" Default="" Mode="" Description="HTTPS proxy URL (optional)" Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
+  <Config Name="Custom DNS" Target="CUSTOM_DNS" Default="cloudflare" Mode="" Description="Custom DNS provider (cloudflare, google, quad9, opendns)" Type="Variable" Display="advanced" Required="false" Mask="false">cloudflare</Config>
+  <Config Name="Use DNS over HTTPS" Target="USE_DOH" Default="false" Mode="" Description="Enable DNS over HTTPS for enhanced privacy" Type="Variable" Display="advanced" Required="false" Mask="false">false</Config>
   
   <!-- Application Settings -->
   <Config Name="Log Level" Target="LOG_LEVEL" Default="INFO" Mode="" Description="Application log level (DEBUG, INFO, WARNING, ERROR)" Type="Variable" Display="advanced" Required="false" Mask="false">INFO</Config>
