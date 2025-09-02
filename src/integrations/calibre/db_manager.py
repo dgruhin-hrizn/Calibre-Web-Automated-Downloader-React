@@ -808,7 +808,7 @@ class CalibreDBManager:
             self.close_session(session)
     
     def get_series_with_counts(self, page: int = 1, per_page: int = 50, search: str = None) -> Dict[str, Any]:
-        """Get series list with book counts"""
+        """Get series list with book counts (only series with multiple books)"""
         session = self.get_session()
         try:
             # Base query for series with book counts
@@ -819,6 +819,7 @@ class CalibreDBManager:
                 func.count(books_series_link.c.book).label('book_count')
             ).join(books_series_link, Series.id == books_series_link.c.series) \
              .group_by(Series.id, Series.name, Series.sort) \
+             .having(func.count(books_series_link.c.book) > 1) \
              .order_by(Series.sort)
             
             # Apply search filter if provided

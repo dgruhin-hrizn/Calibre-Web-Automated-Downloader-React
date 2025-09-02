@@ -118,12 +118,15 @@ export function Series() {
       
       for (const series of seriesToLoad) {
         const books = await loadSeriesBooks(series)
-        if (books.length > 0) {
+        // Only include series with multiple books (should already be filtered by backend)
+        if (books.length > 1) {
           seriesWithBooksData.push({
             ...series,
             books,
             currentIndex: Math.floor(books.length / 2) // Start with middle book centered
           })
+        } else if (books.length === 1) {
+          console.log(`⚠️ Skipping single-book series: ${series.name} (${books.length} book)`)
         }
       }
 
@@ -240,7 +243,7 @@ export function Series() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Book Series</h1>
               <p className="text-gray-600 dark:text-gray-400 mt-1">
-                Discover books organized by series
+                Discover multi-book series in your library
               </p>
             </div>
             <Badge variant="secondary" className="text-sm">
@@ -270,12 +273,12 @@ export function Series() {
           <div className="text-center py-12">
             <BookOpen className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-              {searchTerm ? 'No series found' : 'No series available'}
+              {searchTerm ? 'No series found' : 'No multi-book series available'}
             </h3>
             <p className="text-gray-600 dark:text-gray-400">
               {searchTerm 
                 ? `No series match "${searchTerm}". Try a different search term.`
-                : 'No book series found in your library.'
+                : 'No series with multiple books found in your library. Series need at least 2 books to be displayed.'
               }
             </p>
           </div>
