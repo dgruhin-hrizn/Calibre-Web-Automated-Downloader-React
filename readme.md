@@ -59,26 +59,42 @@ A modern, full-featured digital library management system with automated book do
 
 ### Prerequisites
 
-- Docker
-- Docker Compose
-- A running instance of [Calibre-Web-Automated](https://github.com/crocodilestick/Calibre-Web-Automated) (recommended)
-- **[FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) Docker container (highly recommended for reliable Cloudflare bypass)**
+- Docker & Docker Compose
+- A running instance of [Calibre-Web-Automated](https://github.com/crocodilestick/Calibre-Web-Automated)
+- **[FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) container (highly recommended for Cloudflare bypass)**
 
-### Installation Steps
+### Production Deployment
 
-1. Get the docker-compose.yml:
+For production use, deploy via **Unraid Community Apps** or use the pre-built Docker image:
 
-   ```bash
-   curl -O https://raw.githubusercontent.com/calibrain/calibre-web-automated-book-downloader/refs/heads/main/docker-compose.yml
-   ```
+```bash
+# Basic Docker run command
+docker run -d \
+  --name inkdrop \
+  -p 8084:8084 \
+  -v /path/to/cwa/config:/config \
+  -v /path/to/calibre/library:/calibre-library \
+  -v /path/to/book/ingest:/ingest \
+  -v /path/to/inkdrop/data:/app/data \
+  -v /path/to/inkdrop/logs:/logs \
+  -e CWA_BASE_URL=http://your-cwa-server:8083 \
+  -e CWA_USERNAME=admin \
+  -e CWA_PASSWORD=your-cwa-password \
+  -e USING_EXTERNAL_BYPASSER=true \
+  -e EXT_BYPASSER_URL=http://your-flaresolverr:8191 \
+  -e EXT_BYPASSER_PATH=/v1 \
+  -e EXT_BYPASSER_TIMEOUT=60000 \
+  -e TZ=America/New_York \
+  -e PUID=1000 \
+  -e PGID=1000 \
+  ghcr.io/dgruhin-hrizn/inkdrop:latest
+```
 
-2. Start the service:
+**📋 For complete Unraid setup instructions, see [UNRAID_DEPLOYMENT.md](UNRAID_DEPLOYMENT.md)**
 
-   ```bash
-   docker compose up -d
-   ```
+### Development Setup
 
-3. Access the web interface at `http://localhost:8084`
+For local development and testing, see the [Local Development & Testing](#-local-development--testing) section below.
 
 ## 🧪 Local Development & Testing
 
