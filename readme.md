@@ -1,6 +1,6 @@
-# 📚 Calibre-Web-Automated-Book-Downloader
+# 📚 InkDrop
 
-![Calibre-Web Automated Book Downloader](static/media/logo.png 'Calibre-Web Automated Book Downloader')
+![InkDrop](static/media/inkdrop.png 'InkDrop - Automated Book Downloader')
 
 An intuitive web interface for searching and requesting book downloads, designed to work seamlessly with [Calibre-Web-Automated](https://github.com/crocodilestick/Calibre-Web-Automated). This project streamlines the process of downloading books and preparing them for integration into your Calibre library.
 
