@@ -796,7 +796,8 @@ def create_cwa_proxy_routes(app, cwa_proxy):
         from flask import session
         try:
             username = session.get('username')
-            if not username:
+            password = session.get('cwa_password')
+            if not username or not password:
                 return jsonify({"error": "Not authenticated"}), 401
             
             # Get user session
@@ -804,15 +805,36 @@ def create_cwa_proxy_routes(app, cwa_proxy):
                 user_session = cwa_proxy.user_sessions.get(username)
             
             if not user_session:
-                return jsonify({"error": "No CWA session found"}), 401
+                logger.warning(f"No CWA session found for user {username}, creating new one")
+                user_session = cwa_proxy._get_user_session(username, password)
+                if not user_session:
+                    return jsonify({"error": "Failed to create CWA session"}), 401
             
-            # Get CSRF token from CWA
+            # Check if session is expired or not logged in
+            if not user_session.logged_in or user_session.is_expired():
+                logger.info(f"CWA session expired or not logged in for user {username}, re-authenticating")
+                if not cwa_proxy._login_user_session(user_session):
+                    return jsonify({"error": "Failed to authenticate with CWA"}), 401
+            
+            # Get CSRF token from CWA book detail page
             csrf_response = user_session.session.get(f"{user_session.cwa_base_url}/book/{book_id}")
-            if csrf_response.status_code != 200:
-                return jsonify([{
-                    "type": "danger", 
-                    "message": "Failed to get CSRF token from CWA"
-                }]), 500
+            
+            # If we get a login page, try to re-authenticate once more
+            if csrf_response.status_code != 200 or 'Login' in csrf_response.text:
+                logger.warning(f"Got login page when fetching book {book_id}, re-authenticating user {username}")
+                if not cwa_proxy._login_user_session(user_session):
+                    return jsonify([{
+                        "type": "danger", 
+                        "message": "CWA session expired and re-authentication failed"
+                    }]), 401
+                
+                # Try getting the book page again after re-authentication
+                csrf_response = user_session.session.get(f"{user_session.cwa_base_url}/book/{book_id}")
+                if csrf_response.status_code != 200:
+                    return jsonify([{
+                        "type": "danger", 
+                        "message": "Failed to get CSRF token from CWA after re-authentication"
+                    }]), 500
             
             # Extract CSRF token from HTML
             import re
@@ -825,12 +847,22 @@ def create_cwa_proxy_routes(app, cwa_proxy):
             response = user_session.session.post(
                 cwa_url,
                 data={'csrf_token': csrf_token},
+                headers={'Content-Type': 'application/x-www-form-urlencoded'},
                 timeout=30  # Longer timeout for email sending
             )
             
             if response.status_code == 200:
                 # CWA returns JSON response
-                return response.json()
+                try:
+                    return response.json()
+                except ValueError as e:
+                    # If JSON parsing fails, log the response content
+                    logger.error(f"Failed to parse CWA response as JSON: {e}")
+                    logger.error(f"CWA response content: {response.text[:500]}...")
+                    return jsonify([{
+                        "type": "danger", 
+                        "message": f"Invalid response from CWA: {str(e)}"
+                    }]), 500
             else:
                 return jsonify([{
                     "type": "danger", 

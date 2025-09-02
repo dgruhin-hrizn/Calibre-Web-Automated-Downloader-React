@@ -45,6 +45,9 @@ services:
       # Access to CWA's library data - SAME PATH as production for metadata.db access
       - ./cwa-data/library:/calibre-library
       
+      # Access to CWA's config data for cwa.db and app.db
+      - ./cwa-data/config:/config
+      
     restart: unless-stopped
     depends_on:
       - calibre-web-automated
