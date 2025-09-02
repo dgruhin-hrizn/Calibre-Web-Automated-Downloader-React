@@ -211,38 +211,78 @@ export function Series() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <BookOpen className="w-12 h-12 animate-spin mx-auto mb-4 text-blue-600" />
-          <p className="text-lg font-medium">Loading series...</p>
+      <>
+        {/* Header Section */}
+        <div className="bg-background border-b border-border -mx-6 px-4 py-6">
+          <div className="max-w-7xl mx-auto px-6">
+            <h1 className="text-3xl font-bold text-foreground">Book Series</h1>
+            <p className="text-muted-foreground mt-1">
+              Discover multi-book series in your library
+            </p>
+          </div>
         </div>
-      </div>
+        
+        {/* Loading Content */}
+        <div className="space-y-6">
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <BookOpen className="w-12 h-12 animate-spin mx-auto mb-4 text-blue-600" />
+              <p className="text-lg font-medium">Loading series...</p>
+            </div>
+          </div>
+        </div>
+        
+        <ToastContainer />
+      </>
     )
   }
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <p className="text-lg font-medium text-red-600 mb-4">Error loading series</p>
-          <p className="text-gray-600 mb-4">{error}</p>
-          <Button onClick={loadSeriesList}>Try Again</Button>
+      <>
+        {/* Header Section */}
+        <div className="bg-background border-b border-border -mx-6 px-4 py-6">
+          <div className="max-w-7xl mx-auto px-6">
+            <h1 className="text-3xl font-bold text-foreground">Book Series</h1>
+            <p className="text-muted-foreground mt-1">
+              Discover multi-book series in your library
+            </p>
+          </div>
         </div>
-      </div>
+        
+        {/* Error Content */}
+        <div className="space-y-6">
+          <Card>
+            <CardContent className="p-6">
+              <div className="text-center text-red-600">
+                <p className="font-medium">Error loading series</p>
+                <p className="text-sm mt-1">{error}</p>
+                <Button 
+                  onClick={loadSeriesList} 
+                  className="mt-4"
+                  variant="outline"
+                >
+                  Try Again
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        
+        <ToastContainer />
+      </>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <ToastContainer />
-      
-      {/* Header */}
-      <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <>
+      {/* Header Section - Outside containers like Library */}
+      <div className="bg-background border-b border-border -mx-6 px-4 py-6">
+        <div className="max-w-7xl mx-auto px-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Book Series</h1>
-              <p className="text-gray-600 dark:text-gray-400 mt-1">
+              <h1 className="text-3xl font-bold text-foreground">Book Series</h1>
+              <p className="text-muted-foreground mt-1">
                 Discover multi-book series in your library
               </p>
             </div>
@@ -254,7 +294,7 @@ export function Series() {
           {/* Search */}
           <div className="mt-6 max-w-md">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
               <Input
                 type="text"
                 placeholder="Search series..."
@@ -267,8 +307,9 @@ export function Series() {
         </div>
       </div>
 
-      {/* Series Grid */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Content - Match Library layout with space-y-6 */}
+      <div className="space-y-6">
+        <div className="max-w-7xl mx-auto">
         {filteredSeries.length === 0 ? (
           <div className="text-center py-12">
             <BookOpen className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -295,8 +336,12 @@ export function Series() {
             ))}
           </div>
         )}
+        </div>
       </div>
-    </div>
+      
+      {/* Toast Notifications */}
+      <ToastContainer />
+    </>
   )
 }
 
