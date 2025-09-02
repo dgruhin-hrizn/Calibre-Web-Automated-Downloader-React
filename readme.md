@@ -1,25 +1,59 @@
-# 📚 InkDrop
+# 💧 Inkdrop
 
-![InkDrop](static/media/inkdrop.png 'InkDrop - Automated Book Downloader')
+![Inkdrop](static/media/droplet.png 'Inkdrop - Modern Digital Library Manager')
 
-An intuitive web interface for searching and requesting book downloads, designed to work seamlessly with [Calibre-Web-Automated](https://github.com/crocodilestick/Calibre-Web-Automated). This project streamlines the process of downloading books and preparing them for integration into your Calibre library.
+A modern, full-featured digital library management system with automated book downloading capabilities. Forked from [Calibre-Web-Automated Book Downloader](https://github.com/crocodilestick/Calibre-Web-Automated) and enhanced with a comprehensive React-based frontend for seamless library management.
 
 ## ✨ Features
 
-- 🌐 User-friendly web interface for book search and download
-- 🔄 Automated download to your specified ingest folder
+### 📚 Library Management
+- 🎨 Modern React-based frontend with responsive design
+- 📖 Comprehensive library browser with grid and list views
+- 🔍 Advanced search and filtering capabilities
+- 📄 Infinite scroll with intelligent pagination
+- 🏷️ Book metadata display and management
+- 📊 Library statistics and insights
+- 🎯 Smart book recommendations and discovery
+
+### 🔄 Download & Automation
+- 🌐 Intuitive book search and download interface
+- 🤖 Automated download to specified ingest folder
 - 🔌 Seamless integration with Calibre-Web-Automated
 - 📖 Support for multiple book formats (epub, mobi, azw3, fb2, djvu, cbz, cbr)
 - 🛡️ Cloudflare bypass capability for reliable downloads
+- ⚡ Real-time download progress tracking
+- 🔄 Automatic library synchronization
+
+### 🎨 User Experience
+- 🌙 Dark/light theme support with system preference detection
+- 📱 Mobile-first responsive design
+- ⚡ Fast, cached browsing with React Query
+- 🎭 Smooth animations and transitions
+- 🔐 Secure authentication system
+- 🚀 Progressive Web App capabilities
 - 🐳 Docker-based deployment for quick setup
 
 ## 🖼️ Screenshots
 
-![Main search interface Screenshot](README_images/search.png 'Main search interface')
+### Modern Library Interface
+![Library Interface](README_images/inkdrop-library-screenshot.png 'Modern Inkdrop library interface')
+*Modern library interface with infinite scroll, search, and responsive grid layout*
 
-![Details modal Screenshot placeholder](README_images/details.png 'Details modal')
+### Advanced Book Search
+![Book Search](README_images/inkdrop-book-search.png 'Advanced book search and discovery')
+*Powerful book search and discovery with filtering capabilities*
 
-![Download queue Screenshot placeholder](README_images/downloading.png 'Download queue')
+### Download Management
+![Download Manager](README_images/inkdrop-download-manager.png 'Comprehensive download management')
+*Comprehensive download management with queue status and controls*
+
+### Real-time Download Progress
+![Download Progress](README_images/inkdrop-downloading-state.png 'Real-time download tracking')
+*Real-time download progress tracking with detailed status information*
+
+### Queue Processing
+![Queue Management](README_images/inkdrop-queue-processing.png 'Intelligent queue processing')
+*Intelligent queue processing with batch operations and status monitoring*
 
 ## 🚀 Quick Start
 
@@ -28,6 +62,7 @@ An intuitive web interface for searching and requesting book downloads, designed
 - Docker
 - Docker Compose
 - A running instance of [Calibre-Web-Automated](https://github.com/crocodilestick/Calibre-Web-Automated) (recommended)
+- **[FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) Docker container (highly recommended for reliable Cloudflare bypass)**
 
 ### Installation Steps
 
@@ -44,6 +79,66 @@ An intuitive web interface for searching and requesting book downloads, designed
    ```
 
 3. Access the web interface at `http://localhost:8084`
+
+## 🛡️ FlareSolverr Setup (Recommended)
+
+For optimal Cloudflare bypass performance and reliability, we highly recommend using FlareSolverr as an external service:
+
+### Quick FlareSolverr Setup
+
+1. **Start FlareSolverr container:**
+   ```bash
+   docker run -d \
+     --name flaresolverr \
+     -p 8191:8191 \
+     -e LOG_LEVEL=info \
+     --restart unless-stopped \
+     ghcr.io/flaresolverr/flaresolverr:latest
+   ```
+
+2. **Configure Inkdrop to use FlareSolverr:**
+   Add these environment variables to your configuration:
+   ```bash
+   USE_CF_BYPASS=true
+   USING_EXTERNAL_BYPASSER=true
+   EXT_BYPASSER_URL=http://localhost:8191
+   EXT_BYPASSER_PATH=/v1
+   EXT_BYPASSER_TIMEOUT=60000
+   ```
+
+3. **For Docker Compose setup:**
+   ```yaml
+   version: '3.8'
+   services:
+     flaresolverr:
+       image: ghcr.io/flaresolverr/flaresolverr:latest
+       container_name: flaresolverr
+       environment:
+         - LOG_LEVEL=info
+         - LOG_HTML=false
+         - CAPTCHA_SOLVER=none
+       ports:
+         - "8191:8191"
+       restart: unless-stopped
+
+     inkdrop:
+       # ... your Inkdrop configuration
+       environment:
+         - USE_CF_BYPASS=true
+         - USING_EXTERNAL_BYPASSER=true
+         - EXT_BYPASSER_URL=http://flaresolverr:8191
+       depends_on:
+         - flaresolverr
+   ```
+
+### Benefits of Using FlareSolverr
+
+- ✅ **Superior reliability**: Dedicated Cloudflare bypass service
+- ✅ **Better performance**: Optimized for handling anti-bot measures
+- ✅ **Resource efficiency**: Reduces load on main application
+- ✅ **Shared service**: Can be used by multiple applications
+- ✅ **Regular updates**: Actively maintained for latest Cloudflare changes
+- ✅ **Proven solution**: Widely used in the community
 
 ## ⚙️ Configuration
 
@@ -91,7 +186,11 @@ If you change `BOOK_LANGUAGE`, you can add multiple comma separated languages, s
 | Variable               | Description                                               | Default Value                     |
 | ---------------------- | --------------------------------------------------------- | --------------------------------- |
 | `AA_BASE_URL`          | Base URL of Annas-Archive (could be changed for a proxy)  | `https://annas-archive.org`       |
-| `USE_CF_BYPASS`        | Disable CF bypass and use alternative links instead       | `true`                            |
+| `USE_CF_BYPASS`        | Enable Cloudflare bypass (required for FlareSolverr)      | `true`                            |
+| `USING_EXTERNAL_BYPASSER` | Use external bypasser service (FlareSolverr)           | `false`                           |
+| `EXT_BYPASSER_URL`     | FlareSolverr service URL                                   | `http://flaresolverr:8191`        |
+
+**💡 Recommendation**: For optimal performance and reliability, use FlareSolverr as an external bypasser service. See the [FlareSolverr Setup](#️-flaresolverr-setup-recommended) section for configuration details.
 
 If you are a donator on AA, you can use your Key in `AA_DONATOR_KEY` to speed up downloads and bypass the wait times.
 If disabling the cloudflare bypass, you will be using alternative download hosts, such as libgen or z-lib, but they usually have a delay before getting the more recent books and their collection is not as big as aa's. But this setting should work for the majority of books.
@@ -198,9 +297,11 @@ To use the Tor variant:
 *   **Timezone:** When running in Tor mode, the container will attempt to determine the timezone based on the Tor exit node's IP address and set it automatically. This will override the `TZ` environment variable if it is set.
 *   **Network Settings:** Custom DNS, DoH, and HTTP(S) proxy settings (`CUSTOM_DNS`, `USE_DOH`, `HTTP_PROXY`, `HTTPS_PROXY`) are ignored when using the Tor variant, as all traffic goes through Tor.
 
-### External Cloudflare resolver variant
+### External Cloudflare Resolver (FlareSolverr Integration)
 
-This variant allows the application to use an external service to bypass Cloudflare protection, instead of relying on the built-in bypasser. This is useful if you already have a dedicated Cloudflare resolver (such as [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) or compatible services like [ByParr](https://github.com/ThePhaseless/Byparr)) running elsewhere.
+**⚠️ Note: For new installations, please refer to the [FlareSolverr Setup](#️-flaresolverr-setup-recommended) section above for the recommended approach.**
+
+This section covers the legacy external bypasser variant. The application can use an external service to bypass Cloudflare protection, instead of relying on the built-in bypasser. We strongly recommend [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) as the preferred external resolver, though it's also compatible with services like [ByParr](https://github.com/ThePhaseless/Byparr).
 
 #### How it works:
 
@@ -242,9 +343,28 @@ This feature is designed to work with any resolver that implements the `FlareSol
 
 ## 🏗️ Architecture
 
-The application consists of a single service:
+Inkdrop features a modern full-stack architecture:
 
-1. **calibre-web-automated-bookdownloader**: Main application providing web interface and download functionality
+### Frontend
+- **React 18** with TypeScript for type safety
+- **Vite** for fast development and optimized builds
+- **Tailwind CSS** for responsive, utility-first styling
+- **Radix UI** for accessible, unstyled components
+- **React Query** for intelligent data fetching and caching
+- **React Router** for client-side routing with URL state management
+
+### Backend
+- **Flask** Python web framework
+- **SQLite** database with SQLAlchemy ORM
+- **RESTful API** design for frontend-backend communication
+- **Authentication** system integrated with Calibre-Web
+- **Background task processing** for downloads
+
+### Infrastructure
+- **Docker containerization** for consistent deployment
+- **Volume mounting** for persistent data and library access
+- **Health checks** for service monitoring
+- **Logging system** with configurable levels
 
 ## 🏥 Health Monitoring
 
@@ -294,7 +414,22 @@ Please note that the current version:
 - Does not verify if books already exist in your Calibre database
 - Exercise caution when requesting multiple books to avoid duplicates
 
+## 🙏 Acknowledgments
+
+This project is forked from and builds upon the excellent work of [Calibre-Web-Automated Book Downloader](https://github.com/crocodilestick/Calibre-Web-Automated). We extend our gratitude to the original developers and contributors for creating the foundation that made Inkdrop possible.
+
+### Key Enhancements
+- Complete frontend rewrite with modern React architecture
+- Enhanced user experience with responsive design
+- Advanced library management capabilities
+- Improved performance with intelligent caching
+- Modern UI/UX with accessibility in mind
+
 ## 💬 Support
 
 For issues or questions, please file an issue on the GitHub repository.
+
+## 🔄 Migration from Original
+
+If you're migrating from the original Calibre-Web-Automated Book Downloader, Inkdrop maintains full compatibility with existing configurations and data. Simply update your Docker image and enjoy the enhanced frontend experience!
 

@@ -356,7 +356,8 @@ def _get_download_url(link: str, title: str, cancel_flag: Optional[Event] = None
     url = ""
 
     if link.startswith(f"{AA_BASE_URL}/dyn/api/fast_download.json"):
-        page = downloader.html_get_page(link)
+        # Try without bypasser first for fast download API
+        page = downloader.html_get_page(link, use_bypasser=False)
         try:
             api_response = json.loads(page)
             url = api_response.get("download_url")
@@ -364,7 +365,25 @@ def _get_download_url(link: str, title: str, cancel_flag: Optional[Event] = None
             if url is None:
                 error_msg = api_response.get("error", "Unknown error")
                 logger.debug(f"Fast download API returned error: {error_msg} for {link}")
-                return ""
+                # Try with bypasser as fallback for fast download API
+                logger.info(f"Retrying fast download API with bypasser for domain")
+                page_with_bypass = downloader.html_get_page(link, use_bypasser=True)
+                try:
+                    api_response_bypass = json.loads(page_with_bypass)
+                    url = api_response_bypass.get("download_url")
+                    if url is None:
+                        error_msg_bypass = api_response_bypass.get("error", "Unknown error")
+                        logger.debug(f"Fast download API with bypasser also failed: {error_msg_bypass}")
+                        return ""
+                    else:
+                        # Extract domain_index from URL for logging
+                        import re
+                        domain_match = re.search(r'domain_index=(\d+)', link)
+                        domain_index = domain_match.group(1) if domain_match else "0"
+                        logger.info(f"Fast download API success with bypasser (domain {domain_index}): {url[:100]}...")
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Failed to parse bypasser fast download API response: {e}")
+                    return ""
             else:
                 # Extract domain_index from URL for logging
                 import re
@@ -374,12 +393,36 @@ def _get_download_url(link: str, title: str, cancel_flag: Optional[Event] = None
                 
         except json.JSONDecodeError as e:
             logger.warning(f"Failed to parse fast download API response: {e}")
-            return ""
+            # Try with bypasser as fallback for JSON decode errors
+            logger.info(f"Retrying fast download API with bypasser due to JSON decode error")
+            page_with_bypass = downloader.html_get_page(link, use_bypasser=True)
+            try:
+                api_response_bypass = json.loads(page_with_bypass)
+                url = api_response_bypass.get("download_url")
+                if url is None:
+                    error_msg_bypass = api_response_bypass.get("error", "Unknown error")
+                    logger.debug(f"Fast download API with bypasser failed: {error_msg_bypass}")
+                    return ""
+                else:
+                    # Extract domain_index from URL for logging
+                    import re
+                    domain_match = re.search(r'domain_index=(\d+)', link)
+                    domain_index = domain_match.group(1) if domain_match else "0"
+                    logger.info(f"Fast download API success with bypasser after JSON error (domain {domain_index}): {url[:100]}...")
+            except json.JSONDecodeError as e2:
+                logger.warning(f"Failed to parse bypasser fast download API response after JSON error: {e2}")
+                return ""
     else:
-        html = downloader.html_get_page(link)
+        # Try without bypasser first for regular download links
+        html = downloader.html_get_page(link, use_bypasser=False)
 
         if html == "":
-            return ""
+            # Try with bypasser as fallback for regular download links
+            logger.info(f"Retrying regular download link with bypasser: {link[:100]}...")
+            html = downloader.html_get_page(link, use_bypasser=True)
+            if html == "":
+                logger.warning(f"Failed to get HTML even with bypasser for: {link}")
+                return ""
 
         soup = BeautifulSoup(html, "html.parser")
 
