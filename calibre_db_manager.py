@@ -18,6 +18,75 @@ from calibre_models import (
 
 logger = logging.getLogger(__name__)
 
+def sanitize_author_name(author_name: str) -> str:
+    """
+    Sanitize author name for duplicate detection.
+    Handles various formats and characters that might cause false mismatches.
+    
+    Examples:
+    - "Hannah| Kristin" -> "Kristin Hannah"
+    - "Brown, Dan" -> "Dan Brown"
+    - "King|Stephen" -> "Stephen King"
+    - "  Smith , John  " -> "John Smith"
+    """
+    if not author_name:
+        return ""
+    
+    # First handle pipe character cases - assume it's separating Last|First
+    if '|' in author_name:
+        parts = author_name.split('|', 1)  # Split on first pipe only
+        if len(parts) == 2:
+            last = parts[0].strip()
+            first = parts[1].strip()
+            if last and first:
+                # Convert "Last|First" to "First Last"
+                cleaned = f"{first} {last}"
+            else:
+                # Fallback: just remove pipes
+                cleaned = author_name.replace('|', ' ').strip()
+        else:
+            cleaned = author_name.replace('|', ' ').strip()
+    else:
+        cleaned = author_name.strip()
+    
+    # Handle "Last, First" format (but be careful not to break multiple authors)
+    if ',' in cleaned:
+        parts = [part.strip() for part in cleaned.split(',')]
+        
+        # Check if this is a single "Last, First" format vs multiple authors
+        if len(parts) == 2 and parts[0] and parts[1]:
+            # Check if this looks like "Last, First" format
+            # Last name should be a single word, first name can be multiple words
+            if not ' ' in parts[0] and len(parts[1].split()) <= 3:
+                # Convert "Last, First" to "First Last"
+                cleaned = f"{parts[1]} {parts[0]}"
+            else:
+                # Keep as-is (might be multiple authors or complex name)
+                cleaned = ', '.join(parts)
+        elif len(parts) > 2:
+            # Multiple authors - process each pair
+            processed_parts = []
+            i = 0
+            while i < len(parts):
+                if i + 1 < len(parts):
+                    # Check if current and next part form a "Last, First" pair
+                    if not ' ' in parts[i] and len(parts[i + 1].split()) <= 3:
+                        # This looks like "Last, First" - convert it
+                        processed_parts.append(f"{parts[i + 1]} {parts[i]}")
+                        i += 2  # Skip the next part
+                        continue
+                
+                # Not a "Last, First" pair, keep as-is
+                processed_parts.append(parts[i])
+                i += 1
+            
+            cleaned = ', '.join(processed_parts)
+    
+    # Clean up extra whitespace
+    cleaned = ' '.join(cleaned.split())
+    
+    return cleaned
+
 class CalibreDBManager:
     def __init__(self, metadata_db_path: str):
         """Initialize connection to Calibre metadata.db"""
@@ -256,37 +325,10 @@ class CalibreDBManager:
         session = self.get_session()
         try:
             duplicates = {
-                'by_title': [],
                 'by_isbn': [],
                 'by_title_author': [],
                 'by_file_hash': []  # Future: could implement file hash comparison
             }
-            
-            # Find duplicates by exact title match
-            title_duplicates = session.query(Books.title, func.count(Books.id).label('count'))\
-                .group_by(Books.title)\
-                .having(func.count(Books.id) > 1)\
-                .all()
-            
-            for title, count in title_duplicates:
-                books = session.query(Books).filter(Books.title == title).all()
-                duplicate_group = []
-                for book in books:
-                    authors = [author.name for author in book.authors]
-                    duplicate_group.append({
-                        'id': book.id,
-                        'title': book.title,
-                        'authors': authors,
-                        'path': book.path,
-                        'timestamp': book.timestamp.isoformat() if book.timestamp else None,
-                        'formats': [data.format.upper() for data in book.data],
-                        'file_size': sum(data.uncompressed_size or 0 for data in book.data)
-                    })
-                duplicates['by_title'].append({
-                    'title': title,
-                    'count': count,
-                    'books': duplicate_group
-                })
             
             # Find duplicates by ISBN
             isbn_duplicates = session.query(Books.isbn, func.count(Books.id).label('count'))\
@@ -317,42 +359,49 @@ class CalibreDBManager:
                     'books': duplicate_group
                 })
             
-            # Find duplicates by title + primary author
-            title_author_duplicates = session.query(
-                Books.title,
-                Authors.name.label('author_name'),
-                func.count(Books.id).label('count')
-            ).join(Books.authors)\
-            .group_by(Books.title, Authors.name)\
-            .having(func.count(Books.id) > 1)\
-            .all()
+            # Find duplicates by title + sanitized primary author
+            # Get all books with their authors for processing
+            all_books = session.query(Books).all()
             
-            for title, author_name, count in title_author_duplicates:
-                books = session.query(Books)\
-                    .join(Books.authors)\
-                    .filter(Books.title == title)\
-                    .filter(Authors.name == author_name)\
-                    .all()
+            # Group books by sanitized title + primary author
+            title_author_groups = {}
+            for book in all_books:
+                if not book.authors:
+                    continue
                 
-                duplicate_group = []
-                for book in books:
-                    authors = [author.name for author in book.authors]
-                    duplicate_group.append({
-                        'id': book.id,
-                        'title': book.title,
-                        'authors': authors,
-                        'path': book.path,
-                        'timestamp': book.timestamp.isoformat() if book.timestamp else None,
-                        'formats': [data.format.upper() for data in book.data],
-                        'file_size': sum(data.uncompressed_size or 0 for data in book.data)
-                    })
+                # Use first author as primary author and sanitize it
+                primary_author = sanitize_author_name(book.authors[0].name)
+                title = book.title.strip()
+                key = f"{title}|||{primary_author}".lower()  # Use ||| as separator to avoid conflicts
                 
-                duplicates['by_title_author'].append({
-                    'title': title,
-                    'author': author_name,
-                    'count': count,
-                    'books': duplicate_group
+                if key not in title_author_groups:
+                    title_author_groups[key] = {
+                        'title': title,
+                        'author': primary_author,
+                        'original_author': book.authors[0].name,  # Keep original for display
+                        'books': []
+                    }
+                
+                authors = [author.name for author in book.authors]
+                title_author_groups[key]['books'].append({
+                    'id': book.id,
+                    'title': book.title,
+                    'authors': authors,
+                    'path': book.path,
+                    'timestamp': book.timestamp.isoformat() if book.timestamp else None,
+                    'formats': [data.format.upper() for data in book.data],
+                    'file_size': sum(data.uncompressed_size or 0 for data in book.data)
                 })
+            
+            # Only keep groups with more than one book
+            for key, group in title_author_groups.items():
+                if len(group['books']) > 1:
+                    duplicates['by_title_author'].append({
+                        'title': group['title'],
+                        'author': group['author'],  # Sanitized author
+                        'count': len(group['books']),
+                        'books': group['books']
+                    })
             
             # Summary statistics
             total_duplicate_books = sum(
@@ -367,7 +416,6 @@ class CalibreDBManager:
                     'total_duplicate_groups': sum(len(duplicates[cat]) for cat in duplicates),
                     'total_duplicate_books': total_duplicate_books,
                     'by_category': {
-                        'title': len(duplicates['by_title']),
                         'isbn': len(duplicates['by_isbn']),
                         'title_author': len(duplicates['by_title_author'])
                     }

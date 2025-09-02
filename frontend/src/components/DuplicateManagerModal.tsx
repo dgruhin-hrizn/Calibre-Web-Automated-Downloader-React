@@ -34,7 +34,6 @@ interface DuplicateGroup {
 
 interface DuplicatesResponse {
   duplicates: {
-    by_title: DuplicateGroup[];
     by_isbn: DuplicateGroup[];
     by_title_author: DuplicateGroup[];
     by_file_hash: DuplicateGroup[];
@@ -152,16 +151,7 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
       });
     }
     
-    // Add title duplicates last (least specific)
-    if (duplicates.by_title) {
-      duplicates.by_title.forEach(group => {
-        addGroupIfUnique(
-          group,
-          `Same title: "${group.title}"`,
-          'title'
-        );
-      });
-    }
+
     
     return groups;
   };
@@ -231,7 +221,7 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
         const duplicates = updatedData.duplicates.duplicates;
         
         // Remove book from all duplicate categories
-        ['by_title', 'by_isbn', 'by_title_author'].forEach(category => {
+        ['by_isbn', 'by_title_author'].forEach(category => {
           if (duplicates[category]) {
             duplicates[category] = duplicates[category]
               .map(group => ({
@@ -352,7 +342,7 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
         const duplicates = updatedData.duplicates.duplicates;
         
         // Remove books from all duplicate categories
-        ['by_title', 'by_isbn', 'by_title_author'].forEach(category => {
+        ['by_isbn', 'by_title_author'].forEach(category => {
           if (duplicates[category]) {
             duplicates[category] = duplicates[category]
               .map(group => ({
