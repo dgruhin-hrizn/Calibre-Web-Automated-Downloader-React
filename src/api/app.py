@@ -31,9 +31,9 @@ app.wsgi_app = ProxyFix(app.wsgi_app)  # type: ignore
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable caching
 app.config['APPLICATION_ROOT'] = '/'
 
-# Configure Flask sessions
+# Configure Flask sessions - Primary app session
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'cwa-downloader-secret-key-change-in-production')
-app.config['SESSION_COOKIE_NAME'] = 'cwa_downloader_session'
+app.config['SESSION_COOKIE_NAME'] = 'cwa_app_session'  # Main application session
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
@@ -63,7 +63,60 @@ werkzeug_logger = logging.getLogger('werkzeug')
 werkzeug_logger.handlers = logger.handlers
 werkzeug_logger.setLevel(logger.level)
 
-# Session configuration is handled above (lines 35-40) - no duplicate needed
+# Configure secondary session for CWA proxy authentication
+# This creates a second session cookie with different settings
+import os
+
+# Create a secondary session interface for proxy authentication
+class DualSessionApp:
+    """Helper class to manage dual session cookies"""
+    
+    def __init__(self, app):
+        self.app = app
+        self.proxy_session_config = {
+            'SECRET_KEY': os.urandom(32),  # Different secret key for proxy session
+            'SESSION_COOKIE_NAME': 'cwa_proxy_session',
+            'SESSION_COOKIE_HTTPONLY': True,
+            'SESSION_COOKIE_SECURE': False,
+            'SESSION_COOKIE_SAMESITE': 'Lax',
+            'PERMANENT_SESSION_LIFETIME': 86400
+        }
+    
+    def create_proxy_session_cookie(self, response, username, cwa_password):
+        """Create the second session cookie for CWA proxy authentication"""
+        try:
+            from itsdangerous import URLSafeTimedSerializer
+            
+            # Create serializer with proxy session secret
+            serializer = URLSafeTimedSerializer(self.proxy_session_config['SECRET_KEY'])
+            
+            # Create proxy session data
+            proxy_session_data = {
+                'username': username,
+                'cwa_password': cwa_password,
+                'logged_in': True,
+                'session_type': 'cwa_proxy'
+            }
+            
+            # Serialize the session data
+            session_value = serializer.dumps(proxy_session_data)
+            
+            # Set the second cookie
+            response.set_cookie(
+                self.proxy_session_config['SESSION_COOKIE_NAME'],
+                session_value,
+                max_age=self.proxy_session_config['PERMANENT_SESSION_LIFETIME'],
+                httponly=self.proxy_session_config['SESSION_COOKIE_HTTPONLY'],
+                secure=self.proxy_session_config['SESSION_COOKIE_SECURE'],
+                samesite=self.proxy_session_config['SESSION_COOKIE_SAMESITE']
+            )
+            logger.info(f"Created proxy session cookie for user: {username}")
+            
+        except Exception as e:
+            logger.error(f"Failed to create proxy session cookie: {e}")
+
+# Initialize dual session manager
+dual_session_manager = DualSessionApp(app)
 
 # Initialize CWA client with settings
 def get_cwa_client():
@@ -365,10 +418,17 @@ def api_login() -> Union[Response, Tuple[Response, int]]:
                     cwa_proxy.user_sessions[username] = temp_session
                 
                 logger.info(f"User {username} logged in successfully via CWA")
-                return jsonify({
+                
+                # Create the response
+                response = jsonify({
                     "success": True,
                     "user": {"username": username}
                 })
+                
+                # Create the second session cookie for CWA proxy
+                dual_session_manager.create_proxy_session_cookie(response, username, password)
+                
+                return response
             else:
                 logger.warning(f"CWA authentication failed for user: {username}")
                 return jsonify({"error": "Invalid username or password"}), 401
@@ -382,10 +442,17 @@ def api_login() -> Union[Response, Tuple[Response, int]]:
                 session.permanent = True
                 
                 logger.info(f"User {username} logged in successfully (local fallback)")
-                return jsonify({
+                
+                # Create the response
+                response = jsonify({
                     "success": True,
                     "user": {"username": username}
                 })
+                
+                # Create the second session cookie for CWA proxy (even in fallback)
+                dual_session_manager.create_proxy_session_cookie(response, username, password)
+                
+                return response
             else:
                 logger.warning(f"Local authentication failed for user: {username}")
                 return jsonify({"error": "Invalid username or password"}), 401
@@ -414,7 +481,22 @@ def api_logout() -> Union[Response, Tuple[Response, int]]:
         
         session.clear()
         logger.info(f"User {username} logged out")
-        return jsonify({"success": True})
+        
+        # Create response and clear both session cookies
+        response = jsonify({"success": True})
+        
+        # Clear the main app session cookie (Flask handles this automatically with session.clear())
+        # Clear the proxy session cookie manually
+        response.set_cookie(
+            dual_session_manager.proxy_session_config['SESSION_COOKIE_NAME'],
+            '',
+            expires=0,
+            httponly=dual_session_manager.proxy_session_config['SESSION_COOKIE_HTTPONLY'],
+            secure=dual_session_manager.proxy_session_config['SESSION_COOKIE_SECURE'],
+            samesite=dual_session_manager.proxy_session_config['SESSION_COOKIE_SAMESITE']
+        )
+        
+        return response
     except Exception as e:
         logger.error_trace(f"Logout error: {e}")
         return jsonify({"error": "Logout failed"}), 500
