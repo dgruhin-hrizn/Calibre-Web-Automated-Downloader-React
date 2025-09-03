@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { BookOpen, Search } from 'lucide-react'
+import { Button } from '../components/ui/Button'
 import { Swiper, SwiperSlide } from 'swiper/react'
 import { Navigation, FreeMode } from 'swiper/modules'
 import { UnifiedBookCard, type UnifiedBook } from '../components/UnifiedBookCard'
@@ -114,6 +115,7 @@ export function SeriesOptimized() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [searchInput, setSearchInput] = useState('')
 
   // Flatten all series from all pages
   const allSeries = useMemo(() => {
@@ -280,11 +282,33 @@ export function SeriesOptimized() {
 
   // Swiper handles navigation automatically, so we can remove the complex navigation logic
 
-  // Handle search
-  const handleSearch = useCallback((term: string) => {
-    setSearchTerm(term)
-    // Reset pagination and reload when searching
-    if (term !== searchTerm) {
+  // Handle search button click
+  const handleSearch = useCallback(() => {
+    const trimmedInput = searchInput.trim()
+    if (trimmedInput !== searchTerm) {
+      setSearchTerm(trimmedInput)
+      // Reset pagination and reload when searching
+      setSeriesPages([])
+      setSeriesWithBooks(new Map())
+      setCurrentPage(1)
+      setHasNextPage(true)
+      loadSeriesPage(1, false)
+    }
+  }, [searchInput, searchTerm, loadSeriesPage])
+
+  // Handle Enter key press in search input
+  const handleSearchKeyPress = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSearch()
+    }
+  }, [handleSearch])
+
+  // Handle clear search
+  const handleClearSearch = useCallback(() => {
+    setSearchInput('')
+    if (searchTerm !== '') {
+      setSearchTerm('')
+      // Reset pagination and reload
       setSeriesPages([])
       setSeriesWithBooks(new Map())
       setCurrentPage(1)
@@ -401,7 +425,7 @@ export function SeriesOptimized() {
           </div>
         </div>
         
-        <div className="space-y-6">
+        <div className="space-y-6 pt-6">
           <div className="flex items-center justify-center py-12">
             <div className="text-center">
               <BookOpen className="w-12 h-12 animate-spin mx-auto mb-4 text-blue-600" />
@@ -428,7 +452,7 @@ export function SeriesOptimized() {
           </div>
         </div>
         
-        <div className="space-y-6">
+        <div className="space-y-6 pt-6">
           <Card>
             <CardContent className="p-6">
               <div className="text-center text-red-600">
@@ -464,28 +488,39 @@ export function SeriesOptimized() {
               </p>
             </div>
             <Badge variant="secondary" className="text-sm">
-              {seriesWithBooksArray.length} series loaded
+              {seriesWithBooksArray.length} Series Found
             </Badge>
           </div>
           
           {/* Search */}
           <div className="mt-6 max-w-md">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-              <Input
-                type="text"
-                placeholder="Search series..."
-                value={searchTerm}
-                onChange={(e) => handleSearch(e.target.value)}
-                className="pl-10"
-              />
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                <Input
+                  type="text"
+                  placeholder="Search series..."
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  onKeyPress={handleSearchKeyPress}
+                  className="pl-10"
+                />
+              </div>
+              <Button onClick={handleSearch} variant="default">
+                Search
+              </Button>
+              {searchTerm && (
+                <Button onClick={handleClearSearch} variant="outline">
+                  Clear
+                </Button>
+              )}
             </div>
           </div>
         </div>
       </div>
 
       {/* Content */}
-      <div className="space-y-6">
+      <div className="space-y-6 pt-6">
         <div className="max-w-7xl mx-auto">
           {seriesWithBooksArray.length === 0 ? (
             <div className="text-center py-12">
