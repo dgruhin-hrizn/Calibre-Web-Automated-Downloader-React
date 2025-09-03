@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
-import { Book, Send, Star, Check, X, Loader2, Calendar, FileText, Tag, ExternalLink, Globe, Trash2, AlertTriangle } from 'lucide-react'
+import { Book, Send, Star, Check, X, Loader2, Calendar, FileText, Tag, Trash2, AlertTriangle, Edit } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { Card, CardContent } from '../../../components/ui/card'
 import { formatDate } from '../../../lib/utils'
-import { useAdminStatus } from '../hooks/useAdminStatus'
+import { useAuth } from '../../../contexts/AuthContext'
 import { AuthorFormatter } from '../../../utils/authorFormatter'
+
 import type { LibraryBook } from '../types'
 
 // Utility function to check if a date is today
@@ -19,14 +20,15 @@ const isToday = (dateString?: string): boolean => {
          date.getFullYear() === today.getFullYear()
 }
 
-interface EnhancedBookDetailsModalProps {
+interface LibraryBookModalProps {
   book: LibraryBook
   onClose: () => void
   onSendToKindle: (book: LibraryBook) => Promise<{ success: boolean; message: string }>
   onBookDeleted?: () => void
+  onEditMetadata?: (bookId: number) => void
 }
 
-export function EnhancedBookDetailsModal({ book, onClose, onSendToKindle, onBookDeleted }: EnhancedBookDetailsModalProps) {
+export function LibraryBookModal({ book, onClose, onSendToKindle, onBookDeleted, onEditMetadata }: LibraryBookModalProps) {
   const coverUrl = book.has_cover ? `/api/metadata/books/${book.id}/cover` : null
   const isNewBook = isToday(book.timestamp)
   const [kindleState, setKindleState] = useState<'idle' | 'sending' | 'success' | 'failed'>('idle')
@@ -36,13 +38,12 @@ export function EnhancedBookDetailsModal({ book, onClose, onSendToKindle, onBook
   const [isVisible, setIsVisible] = useState(false)
   const [isClosing, setIsClosing] = useState(false)
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false)
+
   
   // Admin status check
-  const { isAdmin } = useAdminStatus()
+  const { isAdmin } = useAuth()
   
-  // Google Books integration with granular loading states
-  const [googleBooksData, setGoogleBooksData] = useState<any>(null)
-  const [isLoadingGoogleBooks, setIsLoadingGoogleBooks] = useState(false)
+
 
   // Animation effects
   useEffect(() => {
@@ -127,70 +128,9 @@ export function EnhancedBookDetailsModal({ book, onClose, onSendToKindle, onBook
 
 
 
-  // Fetch Google Books data for enhanced information
-  useEffect(() => {
-    const fetchGoogleBooksData = async () => {
-      if (!book || !book.title) return
 
-      setIsLoadingGoogleBooks(true)
-      
-      try {
-        const response = await fetch('/api/google-books/search', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-          body: JSON.stringify({
-            title: book.title,
-            author: book.authors?.[0] || ''
-          })
-        })
 
-        if (response.ok) {
-          const googleData = await response.json()
-          setGoogleBooksData(googleData)
-        }
-      } catch (error) {
-        console.error('Error fetching Google Books data:', error)
-      } finally {
-        setIsLoadingGoogleBooks(false)
-      }
-    }
 
-    fetchGoogleBooksData()
-  }, [book])
-
-  // Helper function to format published date
-  const formatPublishedDate = (dateString: string) => {
-    if (!dateString) return ''
-    
-    try {
-      let date: Date
-      
-      if (dateString.match(/^\d{4}$/)) {
-        date = new Date(`${dateString}-01-01`)
-      } else if (dateString.match(/^\d{4}-\d{2}$/)) {
-        date = new Date(`${dateString}-01`)
-      } else if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        date = new Date(dateString)
-      } else {
-        date = new Date(dateString)
-      }
-      
-      if (isNaN(date.getTime())) {
-        return dateString
-      }
-      
-      const month = (date.getMonth() + 1).toString().padStart(2, '0')
-      const day = date.getDate().toString().padStart(2, '0')
-      const year = date.getFullYear()
-      
-      return `${month}/${day}/${year}`
-    } catch (error) {
-      return dateString
-    }
-  }
 
   // Helper function to format file size
   const formatFileSize = (bytes: number): string => {
@@ -201,42 +141,28 @@ export function EnhancedBookDetailsModal({ book, onClose, onSendToKindle, onBook
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
-  // Get enhanced data combining library + Google Books (prioritizing library metadata)
-  const getEnhancedData = () => {
-    const volumeInfo = googleBooksData?.volumeInfo || {}
-    
-    return {
-      // Primary library metadata (always preferred)
-      title: book.title,
-      authors: book.authors,
-      series: book.series,
-      series_index: book.series_index,
-      rating: book.rating,
-      pubdate: book.pubdate,
-      timestamp: book.timestamp,
-      tags: book.tags,
-      languages: book.languages,
-      formats: book.formats,
-      comments: book.comments,
-      
-      // Enhanced data - prefer library metadata, fallback to Google Books
-      description: book.comments || volumeInfo.description, // Library comments first
-      categories: book.tags?.length > 0 ? [] : (volumeInfo.categories || []), // Use Google categories only if no tags
-      averageRating: book.rating ? book.rating / 2 : volumeInfo.averageRating, // Library rating first (convert 10-point to 5-point)
-      ratingsCount: volumeInfo.ratingsCount, // Only from Google Books
-      pageCount: volumeInfo.pageCount, // Only from Google Books (library doesn't have this)
-      publishedDate: book.pubdate ? formatDate(book.pubdate) : formatPublishedDate(volumeInfo.publishedDate), // Library pubdate first
-      publisher: book.publishers?.[0] || volumeInfo.publisher, // Library publisher first, fallback to Google Books
-      infoLink: volumeInfo.infoLink, // Only from Google Books
-      previewLink: volumeInfo.previewLink, // Only from Google Books
-      language: book.languages?.[0] || volumeInfo.language, // Library language first
-      last_modified: book.last_modified, // Library only
-      isbn: book.isbn, // Library only
-      uuid: book.uuid // Library only
-    }
+  // Use only library data (no external API calls needed)
+  const data = {
+    title: book.title,
+    authors: book.authors,
+    series: book.series,
+    series_index: book.series_index,
+    rating: book.rating,
+    pubdate: book.pubdate,
+    timestamp: book.timestamp,
+    tags: book.tags,
+    languages: book.languages,
+    formats: book.formats,
+    comments: book.comments,
+    description: book.comments,
+    averageRating: book.rating ? book.rating / 2 : 0, // Convert 10-point to 5-point scale
+    publishedDate: book.pubdate ? formatDate(book.pubdate) : '',
+    publisher: book.publishers?.[0] || '',
+    language: book.languages?.[0] || '',
+    last_modified: book.last_modified,
+    isbn: book.isbn,
+    uuid: book.uuid
   }
-
-  const data = getEnhancedData()
   
   // Skeleton component for loading states
   const Skeleton = ({ className = "", width = "w-full" }: { className?: string, width?: string }) => (
@@ -326,7 +252,7 @@ export function EnhancedBookDetailsModal({ book, onClose, onSendToKindle, onBook
                         <span className="text-muted-foreground">Publisher:</span>
                         {data.publisher ? (
                           <span className="text-foreground text-right">{data.publisher}</span>
-                        ) : isLoadingGoogleBooks ? (
+                        ) : false ? (
                           <Skeleton width="w-24" />
                         ) : (
                           <span className="text-muted-foreground text-right">Unknown</span>
@@ -334,12 +260,12 @@ export function EnhancedBookDetailsModal({ book, onClose, onSendToKindle, onBook
                       </div>
                       
                       {/* Published Date - Library first, then Google Books */}
-                      {(data.publishedDate || isLoadingGoogleBooks) && (
+                      {(data.publishedDate || false) && (
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Published:</span>
                           {data.publishedDate ? (
                             <span className="text-foreground">{data.publishedDate}</span>
-                          ) : isLoadingGoogleBooks ? (
+                          ) : false ? (
                             <Skeleton width="w-20" />
                           ) : null}
                         </div>
@@ -353,17 +279,7 @@ export function EnhancedBookDetailsModal({ book, onClose, onSendToKindle, onBook
                         </div>
                       )}
                       
-                      {/* Page Count - Google Books only */}
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Pages:</span>
-                        {data.pageCount ? (
-                          <span className="text-foreground">{data.pageCount}</span>
-                        ) : isLoadingGoogleBooks ? (
-                          <Skeleton width="w-16" />
-                        ) : (
-                          <span className="text-muted-foreground">Unknown</span>
-                        )}
-                      </div>
+                      {/* Page Count - Not available in library data */}
 
                       {/* Series - Library only */}
                       {data.series && (
@@ -405,23 +321,16 @@ export function EnhancedBookDetailsModal({ book, onClose, onSendToKindle, onBook
                         </div>
                       )}
                       
-                      {/* Rating - Library first, enhanced by Google Books */}
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Rating:</span>
-                        {data.averageRating ? (
+                      {/* Rating - Library only */}
+                      {data.averageRating > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Rating:</span>
                           <div className="flex items-center gap-1">
                             <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
                             <span className="text-foreground">{data.averageRating}</span>
-                            {data.ratingsCount && (
-                              <span className="text-muted-foreground">({data.ratingsCount} reviews)</span>
-                            )}
                           </div>
-                        ) : isLoadingGoogleBooks ? (
-                          <Skeleton width="w-20" />
-                        ) : (
-                          <span className="text-muted-foreground">No rating</span>
-                        )}
-                      </div>
+                        </div>
+                      )}
 
                       {data.timestamp && (
                         <div className="flex justify-between">
@@ -455,78 +364,27 @@ export function EnhancedBookDetailsModal({ book, onClose, onSendToKindle, onBook
                       )}
                     </div>
 
-                    {/* Tags (Library) or Categories (Google Books) */}
-                    {(data.tags?.length > 0 || data.categories?.length > 0 || isLoadingGoogleBooks) && (
+                    {/* Tags - Library only */}
+                    {data.tags && data.tags.length > 0 && (
                       <div className="space-y-2 pt-3 border-t border-border/50">
                         <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
                           <Tag className="w-4 h-4 text-primary" />
-                          {data.tags?.length > 0 ? 'Tags' : 'Categories'}
+                          Tags
                         </h4>
                         <div className="flex flex-wrap gap-1">
-                          {/* Show library tags first, fallback to Google categories */}
-                          {data.tags?.length > 0 || data.categories?.length > 0 ? (
-                            (data.tags?.length > 0 ? data.tags : data.categories).map((item: string, index: number) => (
-                              <span
-                                key={index}
-                                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20"
-                              >
-                                {item}
-                              </span>
-                            ))
-                          ) : isLoadingGoogleBooks && !data.tags?.length ? (
-                            // Show skeleton badges for loading categories
-                            <>
-                              <Skeleton width="w-16" className="h-6 rounded-full" />
-                              <Skeleton width="w-20" className="h-6 rounded-full" />
-                              <Skeleton width="w-14" className="h-6 rounded-full" />
-                            </>
-                          ) : null}
+                          {data.tags.map((tag: string, index: number) => (
+                            <span
+                              key={index}
+                              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20"
+                            >
+                              {tag}
+                            </span>
+                          ))}
                         </div>
                       </div>
                     )}
 
-                    {/* External Links - Google Books only */}
-                    {(data.infoLink || data.previewLink || isLoadingGoogleBooks) && (
-                      <div className="space-y-2 pt-3 border-t border-border/50">
-                        <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
-                          <ExternalLink className="w-4 h-4 text-primary" />
-                          External Links
-                        </h4>
-                        <div className="space-y-1">
-                          {data.infoLink || data.previewLink ? (
-                            <>
-                              {data.infoLink && (
-                                <a
-                                  href={data.infoLink}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                                >
-                                  <Globe className="w-3 h-3" />
-                                  Google Books Info
-                                </a>
-                              )}
-                              {data.previewLink && (
-                                <a
-                                  href={data.previewLink}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline block"
-                                >
-                                  <Book className="w-3 h-3" />
-                                  Google Books Preview
-                                </a>
-                              )}
-                            </>
-                          ) : isLoadingGoogleBooks ? (
-                            <>
-                              <Skeleton width="w-28" className="h-4" />
-                              <Skeleton width="w-32" className="h-4" />
-                            </>
-                          ) : null}
-                        </div>
-                      </div>
-                    )}
+                    {/* External Links - Not available in library data */}
                   </div>
                 </div>
 
@@ -534,30 +392,20 @@ export function EnhancedBookDetailsModal({ book, onClose, onSendToKindle, onBook
               </div>
             </div>
 
-            {/* Description - Library first, enhanced by Google Books */}
-            {(data.description || isLoadingGoogleBooks) && (
+            {/* Description - Library only */}
+            {data.description && (
               <div className="space-y-3">
                 <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
                   <Book className="w-5 h-5 text-primary" />
                   Description
                 </h3>
                 <div className="border border-border rounded-lg p-4 bg-muted/20">
-                  {data.description ? (
-                    <div className="prose prose-sm max-w-none text-muted-foreground leading-relaxed">
-                      <div 
-                        className="[&>p]:mb-3 [&>p:last-child]:mb-0 [&>br]:block [&>br]:mb-2 [&>b]:font-semibold [&>strong]:font-semibold [&>i]:italic [&>em]:italic [&>u]:underline"
-                        dangerouslySetInnerHTML={{ __html: data.description }} 
-                      />
-                    </div>
-                  ) : isLoadingGoogleBooks ? (
-                    <div className="space-y-2">
-                      <Skeleton width="w-full" />
-                      <Skeleton width="w-full" />
-                      <Skeleton width="w-3/4" />
-                      <Skeleton width="w-full" />
-                      <Skeleton width="w-5/6" />
-                    </div>
-                  ) : null}
+                  <div className="prose prose-sm max-w-none text-muted-foreground leading-relaxed">
+                    <div 
+                      className="[&>p]:mb-3 [&>p:last-child]:mb-0 [&>br]:block [&>br]:mb-2 [&>b]:font-semibold [&>strong]:font-semibold [&>i]:italic [&>em]:italic [&>u]:underline"
+                      dangerouslySetInnerHTML={{ __html: data.description }} 
+                    />
+                  </div>
                 </div>
               </div>
             )}
@@ -568,48 +416,61 @@ export function EnhancedBookDetailsModal({ book, onClose, onSendToKindle, onBook
         
         {/* Footer */}
         <div className="flex-shrink-0 border-t border-border p-6">
-          <div className="flex justify-between">
-            {/* Admin Delete Button */}
-            {isAdmin && (
+          <div className="flex justify-between items-center">
+            {/* Left side - Admin Delete Button */}
+            <div className="flex gap-3">
+              {isAdmin && (
+                <Button
+                  onClick={handleDeleteClick}
+                  disabled={deleteState !== 'idle'}
+                  variant="destructive"
+                  size="lg"
+                  className={`px-6 ${
+                    deleteState === 'success' ? 'bg-green-600 hover:bg-green-700' :
+                    deleteState === 'failed' ? 'bg-red-700 hover:bg-red-800' :
+                    ''
+                  }`}
+                >
+                  {deleteState === 'deleting' && (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Deleting...
+                    </>
+                  )}
+                  {deleteState === 'success' && (
+                    <>
+                      <Check className="h-4 w-4 mr-2" />
+                      Deleted
+                    </>
+                  )}
+                  {deleteState === 'failed' && (
+                    <>
+                      <X className="h-4 w-4 mr-2" />
+                      Delete Failed
+                    </>
+                  )}
+                  {deleteState === 'idle' && (
+                    <>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete Book
+                    </>
+                  )}
+                </Button>
+              )}
+              
+              {/* Edit Metadata Button */}
               <Button
-                onClick={handleDeleteClick}
-                disabled={deleteState !== 'idle'}
-                variant="destructive"
+                onClick={() => onEditMetadata?.(book.id)}
+                variant="outline"
                 size="lg"
-                className={`px-6 ${
-                  deleteState === 'success' ? 'bg-green-600 hover:bg-green-700' :
-                  deleteState === 'failed' ? 'bg-red-700 hover:bg-red-800' :
-                  ''
-                }`}
+                className="px-6"
               >
-                {deleteState === 'deleting' && (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Deleting...
-                  </>
-                )}
-                {deleteState === 'success' && (
-                  <>
-                    <Check className="h-4 w-4 mr-2" />
-                    Deleted
-                  </>
-                )}
-                {deleteState === 'failed' && (
-                  <>
-                    <X className="h-4 w-4 mr-2" />
-                    Delete Failed
-                  </>
-                )}
-                {deleteState === 'idle' && (
-                  <>
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete Book
-                  </>
-                )}
+                <Edit className="h-4 w-4 mr-2" />
+                Edit Metadata
               </Button>
-            )}
+            </div>
             
-            {/* Send to e-Reader Button */}
+            {/* Right side - Send to e-Reader Button */}
             <Button
               onClick={handleSendToKindle}
               disabled={kindleState !== 'idle'}
@@ -704,6 +565,7 @@ export function EnhancedBookDetailsModal({ book, onClose, onSendToKindle, onBook
           </Card>
         </div>
       )}
+
     </div>
   )
 }

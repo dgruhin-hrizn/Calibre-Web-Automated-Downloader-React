@@ -1,5 +1,4 @@
-export { BookDetailsModal } from './BookDetailsModal'
-export { EnhancedBookDetailsModal } from './EnhancedBookDetailsModal'
+export { LibraryBookModal } from './LibraryBookModal'
 export { LibraryStats } from './LibraryStats'
 export { LibraryControls } from './LibraryControls'
 export { InfiniteLibraryGrid } from './InfiniteLibraryGrid'

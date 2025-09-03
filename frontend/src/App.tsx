@@ -15,6 +15,7 @@ import { Settings } from './pages/Settings'
 import Library from './pages/Library'
 import HotBooks from './pages/HotBooks'
 import SeriesOptimized from './pages/SeriesOptimized'
+import Admin from './pages/Admin'
 
 
 import { ToastProvider } from './components/ui/ToastProvider'
@@ -38,6 +39,11 @@ const queryClient = new QueryClient({
     },
   },
 })
+
+// Make query client globally accessible for auth context
+if (typeof window !== 'undefined') {
+  (window as any).__REACT_QUERY_CLIENT__ = queryClient
+}
 
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true) // Start open on desktop
@@ -92,6 +98,7 @@ function App() {
                           <Route path="/hot" element={<HotBooks />} />
                           <Route path="/downloads" element={<Downloads />} />
                           <Route path="/settings" element={<Settings />} />
+                          <Route path="/admin" element={<Admin />} />
                         </Routes>
                       </div>
                     </main>

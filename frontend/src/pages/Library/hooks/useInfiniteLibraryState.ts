@@ -310,6 +310,10 @@ export function useInfiniteLibraryState({
     setSelectedBook(null)
   }, [])
 
+  const updateSelectedBook = useCallback((updatedBook: LibraryBook) => {
+    setSelectedBook(updatedBook)
+  }, [])
+
   // Pagination-style navigation for compatibility
   const handlePageChange = useCallback((page: number) => {
     const booksPerPage = 18
@@ -399,6 +403,7 @@ export function useInfiniteLibraryState({
     handleBookClick,
     handleBookDeleted,
     closeBookModal,
+    updateSelectedBook,
     handlePageChange,
     handleLoadMore,
     

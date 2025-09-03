@@ -3,7 +3,8 @@ export { useInfiniteLibraryState } from './useInfiniteLibraryState'
 
 // React Query hooks for data fetching
 export { 
-  useLibraryBooks, 
+  useLibraryBooks,
+  useLibraryBook,
   useLibraryStats, 
   useInfiniteLibraryBooks,
   usePrefetchLibraryBooks,
@@ -16,6 +17,6 @@ export {
   useBookInView,
   useScrollToBook
 } from './useInfiniteScroll'
-export { useAdminStatus } from './useAdminStatus'
+
 export { useImageLoading } from './useImageLoading'
 export { useBookActions } from './useBookActions'

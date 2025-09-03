@@ -12,12 +12,12 @@ import { AuthorFormatter } from '../utils/authorFormatter'
 
 
 
-interface BookDetailsModalProps {
+interface SearchResultModalProps {
   book: any | null  // Full book data from search results
   onClose: () => void
 }
 
-export function BookDetailsModal({ book: basicBook, onClose }: BookDetailsModalProps) {
+export function SearchResultModal({ book: basicBook, onClose }: SearchResultModalProps) {
   // No need for useBookInfo hook - we already have the book data!
   const downloadBook = useDownloadBook()
   const downloads = useDownloadStore((state) => state.downloads)

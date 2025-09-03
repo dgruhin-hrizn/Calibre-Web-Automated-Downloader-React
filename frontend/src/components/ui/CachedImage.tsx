@@ -38,6 +38,40 @@ export function CachedImage({ src, alt, className, onLoad, onError, style }: Cac
       })
   }, [src]) // Remove onLoad and onError from dependencies to prevent re-renders
 
+  // Listen for cover update events to refresh cached images
+  useEffect(() => {
+    const handleCoverUpdate = (event: CustomEvent) => {
+      const { baseUrl } = event.detail
+      
+      // Check if this cached image is for the updated cover
+      if (src && src.includes(baseUrl)) {
+        // Clear the current image and refetch
+        setImageSrc('')
+        setIsLoading(true)
+        setHasError(false)
+        
+        // Force refetch from server (cache was already invalidated)
+        imageCache.getImage(src)
+          .then(cachedUrl => {
+            setImageSrc(cachedUrl)
+            setIsLoading(false)
+            onLoad?.()
+          })
+          .catch(error => {
+            setHasError(true)
+            setIsLoading(false)
+            onError?.(error)
+          })
+      }
+    }
+
+    window.addEventListener('coverUpdated', handleCoverUpdate as EventListener)
+    
+    return () => {
+      window.removeEventListener('coverUpdated', handleCoverUpdate as EventListener)
+    }
+  }, [src, onLoad, onError])
+
   if (!src || hasError) {
     return null
   }
