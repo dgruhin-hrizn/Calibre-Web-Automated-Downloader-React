@@ -582,8 +582,18 @@ interface SeriesCarouselProps {
 function SeriesCarousel({ series, onBookDetails, onSendToKindle }: SeriesCarouselProps) {
   const { books, booksLoaded } = series
   
+  // Sort books by series index
+  const sortedBooks = useMemo(() => {
+    if (!books || books.length === 0) return books
+    return [...books].sort((a, b) => {
+      const indexA = a.series_index || 0
+      const indexB = b.series_index || 0
+      return indexA - indexB
+    })
+  }, [books])
+  
   // Show loading state if books aren't loaded yet
-  if (!booksLoaded || books.length === 0) {
+  if (!booksLoaded || sortedBooks.length === 0) {
     return (
       <div className="border border-border rounded-lg bg-card p-6">
         {/* Series Header */}
@@ -608,7 +618,7 @@ function SeriesCarousel({ series, onBookDetails, onSendToKindle }: SeriesCarouse
       <div className="mb-6">
         <h2 className="text-xl font-bold text-gray-900 dark:text-white">{series.name}</h2>
         <p className="text-sm text-gray-600 dark:text-gray-400">
-          {books.length} book{books.length !== 1 ? 's' : ''} in series
+          {sortedBooks.length} book{sortedBooks.length !== 1 ? 's' : ''} in series
         </p>
       </div>
 
@@ -629,7 +639,7 @@ function SeriesCarousel({ series, onBookDetails, onSendToKindle }: SeriesCarouse
           watchOverflow={true}
           className="series-swiper"
         >
-          {books.map((book) => (
+          {sortedBooks.map((book) => (
             <SwiperSlide key={book.id} className="!w-[225px]">
               <UnifiedBookCard
                 book={book}
@@ -644,7 +654,7 @@ function SeriesCarousel({ series, onBookDetails, onSendToKindle }: SeriesCarouse
         </Swiper>
         
         {/* Custom Navigation Buttons */}
-        {books.length > 1 && (
+        {sortedBooks.length > 1 && (
           <>
             <div className="swiper-button-prev-custom absolute left-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full shadow-lg bg-background/80 backdrop-blur-sm hover:bg-background/90 border border-border flex items-center justify-center cursor-pointer transition-colors">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
