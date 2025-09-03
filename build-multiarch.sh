@@ -36,6 +36,28 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Function to update version in frontend
+update_frontend_version() {
+    local version=$1
+    local version_file="frontend/src/version.ts"
+    
+    print_status "Updating frontend version to $version..."
+    
+    # Create or update the version file
+    cat > "$version_file" << EOF
+// Auto-generated version file - DO NOT EDIT MANUALLY
+// This file is automatically updated by the build-multiarch.sh script
+export const APP_VERSION = '$version'
+EOF
+    
+    if [[ -f "$version_file" ]]; then
+        print_success "Frontend version updated: $version_file"
+    else
+        print_error "Failed to create version file: $version_file"
+        return 1
+    fi
+}
+
 # Function to show usage
 show_usage() {
     echo "Multi-Architecture Docker Build Script"
@@ -119,6 +141,9 @@ if [[ ! "$VERSION" =~ ^[0-9]{8}-[0-9]{6}$ ]] && [[ ! "$VERSION" =~ ^[0-9]+\.[0-9
         exit 1
     fi
 fi
+
+# Update frontend version file
+update_frontend_version "$VERSION"
 
 # Build image name and tags
 BASE_IMAGE="ghcr.io/${GITHUB_USERNAME}/${DOCKER_IMAGE_NAME}"

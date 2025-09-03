@@ -1863,6 +1863,172 @@ def api_delete_user(user_id: int) -> Union[Response, Tuple[Response, int]]:
         logger.error(f"Error deleting user {user_id}: {e}")
         return jsonify({"error": str(e)}), 500
 
+# User Profile Management (for current user only)
+@app.route('/api/profile', methods=['GET'])
+@login_required
+def api_get_current_user_profile() -> Union[Response, Tuple[Response, int]]:
+    """Get current user's profile information"""
+    try:
+        from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+        cwa_db = get_cwa_db_manager()
+        if not cwa_db:
+            return jsonify({"error": "CWA database not available"}), 503
+        
+        username = session.get('username')
+        if not username:
+            return jsonify({"error": "User not authenticated"}), 401
+        
+        # Get user by username
+        with cwa_db._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, name, email, kindle_mail, locale, default_language, role
+                FROM user WHERE name = ? AND name != 'Guest'
+            """, (username,))
+            row = cursor.fetchone()
+            
+            if not row:
+                return jsonify({"error": "User not found"}), 404
+            
+            user_data = {
+                'id': row['id'],
+                'username': row['name'],
+                'email': row['email'],
+                'kindle_email': row['kindle_mail'] or '',
+                'locale': row['locale'] or 'en',
+                'default_language': row['default_language'] or 'en',
+                'permissions': cwa_db._role_to_permissions(row['role'])
+            }
+            
+            return jsonify(user_data)
+            
+    except Exception as e:
+        logger.error(f"Error fetching profile for user {username}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/profile', methods=['PUT'])
+@login_required
+def api_update_current_user_profile() -> Union[Response, Tuple[Response, int]]:
+    """Update current user's profile (limited fields, no permissions)"""
+    try:
+        from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+        cwa_db = get_cwa_db_manager()
+        if not cwa_db:
+            return jsonify({"error": "CWA database not available"}), 503
+        
+        username = session.get('username')
+        if not username:
+            return jsonify({"error": "User not authenticated"}), 401
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        # Get current user ID
+        with cwa_db._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM user WHERE name = ? AND name != 'Guest'", (username,))
+            row = cursor.fetchone()
+            
+            if not row:
+                return jsonify({"error": "User not found"}), 404
+            
+            user_id = row['id']
+        
+        # Only allow updating specific fields (not permissions)
+        allowed_fields = {
+            'email': data.get('email'),
+            'kindle_email': data.get('kindle_email'),
+            'default_language': data.get('default_language')
+        }
+        
+        # Filter out None values
+        update_data = {k: v for k, v in allowed_fields.items() if v is not None}
+        
+        if not update_data:
+            return jsonify({"error": "No valid fields to update"}), 400
+        
+        # Update user profile (without permissions)
+        success = cwa_db.update_user(
+            user_id=user_id,
+            email=update_data.get('email'),
+            kindle_email=update_data.get('kindle_email'),
+            default_language=update_data.get('default_language')
+        )
+        
+        if success:
+            return jsonify({
+                "success": True,
+                "message": "Profile updated successfully"
+            })
+        else:
+            return jsonify({"error": "Failed to update profile"}), 500
+            
+    except Exception as e:
+        logger.error(f"Error updating profile for user {username}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/profile/password', methods=['PUT'])
+@login_required  
+def api_change_password() -> Union[Response, Tuple[Response, int]]:
+    """Change current user's password"""
+    try:
+        from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+        from werkzeug.security import generate_password_hash, check_password_hash
+        
+        cwa_db = get_cwa_db_manager()
+        if not cwa_db:
+            return jsonify({"error": "CWA database not available"}), 503
+        
+        username = session.get('username')
+        if not username:
+            return jsonify({"error": "User not authenticated"}), 401
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        current_password = data.get('current_password')
+        new_password = data.get('new_password')
+        
+        if not current_password or not new_password:
+            return jsonify({"error": "Both current and new passwords are required"}), 400
+        
+        if len(new_password) < 4:
+            return jsonify({"error": "New password must be at least 4 characters long"}), 400
+        
+        # Get current user and verify current password
+        with cwa_db._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, password FROM user WHERE name = ? AND name != 'Guest'
+            """, (username,))
+            row = cursor.fetchone()
+            
+            if not row:
+                return jsonify({"error": "User not found"}), 404
+            
+            # Verify current password
+            if not check_password_hash(row['password'], current_password):
+                return jsonify({"error": "Current password is incorrect"}), 400
+            
+            # Update password
+            new_password_hash = generate_password_hash(new_password)
+            cursor.execute("""
+                UPDATE user SET password = ? WHERE id = ?
+            """, (new_password_hash, row['id']))
+            
+            conn.commit()
+            
+            return jsonify({
+                "success": True,
+                "message": "Password changed successfully"
+            })
+            
+    except Exception as e:
+        logger.error(f"Error changing password for user {username}: {e}")
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/admin/user-info')
 def api_admin_user_info():
     """Get current user info and admin status - simple version for auth checking"""

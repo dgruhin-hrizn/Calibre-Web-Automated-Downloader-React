@@ -18,17 +18,13 @@ export function Settings() {
   const [isSaving, setIsSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState('')
   
-  // User Profile settings
-  const [kindleEmail, setKindleEmail] = useState('')
-  const [isUpdatingKindleEmail, setIsUpdatingKindleEmail] = useState(false)
-  const [kindleEmailMessage, setKindleEmailMessage] = useState('')
+
   
   // CWA Settings are now managed via environment variables
 
-  // Load current API key and user profile on mount
+  // Load current API key on mount
   useEffect(() => {
     loadGoogleBooksSettings()
-    loadUserProfile()
   }, [])
 
   const loadGoogleBooksSettings = async () => {
@@ -94,98 +90,20 @@ export function Settings() {
     }
   }
 
-  const loadUserProfile = async () => {
-    try {
-      const profile = await apiRequest('/api/cwa/user/profile')
-      setKindleEmail(profile.kindle_mail || '')
-    } catch (error) {
-      console.error('Failed to load user profile:', error)
-    }
-  }
 
-  const updateKindleEmail = async () => {
-    if (!kindleEmail.trim()) {
-      setKindleEmailMessage('Please enter a valid email address')
-      setTimeout(() => setKindleEmailMessage(''), 3000)
-      return
-    }
-
-    setIsUpdatingKindleEmail(true)
-    try {
-      await apiRequest('/api/cwa/user/profile/kindle-email', {
-        method: 'POST',
-        body: JSON.stringify({ kindle_mail: kindleEmail })
-      })
-
-      setKindleEmailMessage('Kindle email updated successfully!')
-      setTimeout(() => setKindleEmailMessage(''), 3000)
-    } catch (error) {
-      console.error('Failed to update Kindle email:', error)
-      setKindleEmailMessage('Failed to update Kindle email')
-      setTimeout(() => setKindleEmailMessage(''), 3000)
-    } finally {
-      setIsUpdatingKindleEmail(false)
-    }
-  }
 
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
         <p className="text-muted-foreground">
-          Configure your book downloader preferences
+          Configure your book downloader preferences and integrations
         </p>
       </div>
 
       <div className="grid gap-6">
         {/* CWA Status */}
         <CWAStatus />
-
-        {/* User Profile Settings */}
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold">User Profile</h2>
-          <p className="text-sm text-muted-foreground">
-            Manage your profile settings and device preferences.
-          </p>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">
-                Kindle Email Address
-              </label>
-              <p className="text-xs text-muted-foreground mb-2">
-                Enter your Kindle's email address to send books directly to your device. Find this in your Amazon account under "Manage Your Content and Devices".
-              </p>
-              <div className="flex space-x-2">
-                <input
-                  type="email"
-                  value={kindleEmail}
-                  onChange={(e) => setKindleEmail(e.target.value)}
-                  placeholder="username@kindle.com"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                />
-                <Button 
-                  onClick={updateKindleEmail}
-                  disabled={isUpdatingKindleEmail}
-                >
-                  {isUpdatingKindleEmail ? 'Updating...' : 'Update'}
-                </Button>
-              </div>
-              {kindleEmailMessage && (
-                <div className={`mt-2 text-sm flex items-center ${
-                  kindleEmailMessage.includes('successfully') ? 'text-green-600' : 'text-red-600'
-                }`}>
-                  {kindleEmailMessage.includes('successfully') ? (
-                    <Check className="w-4 h-4 mr-1" />
-                  ) : (
-                    <AlertCircle className="w-4 h-4 mr-1" />
-                  )}
-                  {kindleEmailMessage}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
 
         {/* Google Books API Settings */}
         <div className="space-y-4">

@@ -263,3 +263,6 @@ app.db*
 
 # Ingest directory (contains book files being processed)
 ingest/
+
+# Auto-generated version file
+frontend/src/version.ts

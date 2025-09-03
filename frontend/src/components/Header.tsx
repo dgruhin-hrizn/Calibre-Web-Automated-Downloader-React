@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Sun, Moon, Monitor, ChevronDown, Menu, Search, LogOut, User } from 'lucide-react'
+import { Sun, Moon, Monitor, ChevronDown, Menu, Search, LogOut, User, Settings } from 'lucide-react'
 import { Button } from './ui/Button'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { cn } from '../lib/utils'
@@ -121,6 +121,14 @@ export function Header({ onMenuClick, theme, onThemeChange }: HeaderProps) {
                 className="min-w-[8rem] bg-popover border border-border rounded-md shadow-md p-1 z-50"
                 sideOffset={5}
               >
+                <DropdownMenu.Item
+                  className="flex items-center space-x-2 px-2 py-1.5 text-sm rounded-sm cursor-pointer outline-none text-popover-foreground hover:bg-accent hover:text-accent-foreground"
+                  onClick={() => navigate('/profile')}
+                >
+                  <Settings className="w-4 h-4" />
+                  <span>Profile</span>
+                </DropdownMenu.Item>
+                <DropdownMenu.Separator className="h-px bg-border my-1" />
                 <DropdownMenu.Item
                   className="flex items-center space-x-2 px-2 py-1.5 text-sm rounded-sm cursor-pointer outline-none text-popover-foreground hover:bg-accent hover:text-accent-foreground"
                   onClick={logout}

@@ -4,7 +4,7 @@ import { X, Save, Loader2, Star } from 'lucide-react';
 import Editor from 'react-simple-wysiwyg';
 import CoverUpload, { type CoverUploadRef } from './CoverUpload';
 import { Button } from './ui/Button';
-import { Input } from './ui/Input';
+import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { cn } from '../lib/utils';
 import { imageCache } from '../lib/imageCache';

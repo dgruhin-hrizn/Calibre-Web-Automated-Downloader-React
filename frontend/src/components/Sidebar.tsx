@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useAuth } from '../contexts/AuthContext'
+import { APP_VERSION } from '../version'
 
 interface SidebarProps {
   open: boolean
@@ -135,7 +136,7 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
           )}>
             {open ? (
               <div className="text-xs text-muted-foreground">
-                Inkdrop v1.3.2
+                Inkdrop v{APP_VERSION}
               </div>
             ) : (
               <div className="flex justify-center">

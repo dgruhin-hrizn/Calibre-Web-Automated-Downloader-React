@@ -16,6 +16,7 @@ import Library from './pages/Library'
 import HotBooks from './pages/HotBooks'
 import SeriesOptimized from './pages/SeriesOptimized'
 import Admin from './pages/Admin'
+import UserProfile from './pages/UserProfile'
 
 
 import { ToastProvider } from './components/ui/ToastProvider'
@@ -104,6 +105,7 @@ function App() {
                           <Route path="/hot" element={<HotBooks />} />
                           <Route path="/downloads" element={<Downloads />} />
                           <Route path="/settings" element={<Settings />} />
+                          <Route path="/profile" element={<UserProfile />} />
                           <Route path="/admin" element={<Admin />} />
                         </Routes>
                       </div>
