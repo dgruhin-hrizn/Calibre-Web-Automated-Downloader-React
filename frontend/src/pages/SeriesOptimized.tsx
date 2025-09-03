@@ -1,12 +1,50 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { ChevronLeft, ChevronRight, BookOpen, Search } from 'lucide-react'
+import { BookOpen, Search } from 'lucide-react'
+import { Swiper, SwiperSlide } from 'swiper/react'
+import { Navigation, FreeMode } from 'swiper/modules'
 import { UnifiedBookCard, type UnifiedBook } from '../components/UnifiedBookCard'
-import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/input'
 import { Card, CardContent } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { useToast } from '../hooks/useToast'
 import { useInfiniteScroll } from './Library/hooks/useInfiniteScroll'
+
+// Import Swiper styles
+import 'swiper/css'
+import 'swiper/css/navigation'
+import 'swiper/css/free-mode'
+
+// Custom styles for Swiper
+const swiperStyles = `
+  .series-swiper {
+    overflow: hidden;
+    width: 100%;
+  }
+  
+  .series-swiper .swiper-wrapper {
+    width: fit-content;
+    max-width: 100%;
+  }
+  
+  .series-swiper .swiper-slide {
+    flex-shrink: 0;
+  }
+  
+  .swiper-button-prev-custom:hover,
+  .swiper-button-next-custom:hover {
+    transform: translateY(-50%) scale(1.1);
+  }
+`
+
+// Inject styles
+if (typeof document !== 'undefined') {
+  const styleElement = document.createElement('style')
+  styleElement.textContent = swiperStyles
+  if (!document.head.querySelector('style[data-swiper-custom]')) {
+    styleElement.setAttribute('data-swiper-custom', 'true')
+    document.head.appendChild(styleElement)
+  }
+}
 
 interface SeriesInfo {
   id: number
@@ -17,7 +55,6 @@ interface SeriesInfo {
 
 interface SeriesWithBooks extends SeriesInfo {
   books: UnifiedBook[]
-  currentIndex: number
   booksLoaded: boolean
 }
 
@@ -175,7 +212,6 @@ export function SeriesOptimized() {
               const seriesWithBooksData: SeriesWithBooks = {
           ...seriesInfo,
           books,
-          currentIndex: 0, // Always start with the first book
           booksLoaded: true
         }
 
@@ -212,22 +248,7 @@ export function SeriesOptimized() {
     enabled: !loading && !error
   })
 
-  // Handle carousel navigation (scroll by pages of 5 books)
-  const navigateCarousel = useCallback((seriesId: number, direction: 'left' | 'right') => {
-    setSeriesWithBooks(prev => {
-      const newMap = new Map(prev)
-      const series = newMap.get(seriesId)
-      if (series) {
-        const maxVisible = 5
-        const maxStartIndex = Math.max(0, series.books.length - maxVisible)
-        const newIndex = direction === 'left' 
-          ? Math.max(0, series.currentIndex - maxVisible)
-          : Math.min(maxStartIndex, series.currentIndex + maxVisible)
-        newMap.set(seriesId, { ...series, currentIndex: newIndex })
-      }
-      return newMap
-    })
-  }, [])
+  // Swiper handles navigation automatically, so we can remove the complex navigation logic
 
   // Handle search
   const handleSearch = useCallback((term: string) => {
@@ -307,7 +328,6 @@ export function SeriesOptimized() {
         setSeriesWithBooks(prev => new Map([...prev, [series.id, {
           ...series,
           books: [],
-          currentIndex: 0, // Always start at the first book
           booksLoaded: false
         }]]))
       }
@@ -456,7 +476,6 @@ export function SeriesOptimized() {
                 <div key={series.id} data-series-id={series.id}>
                   <SeriesCarousel
                     series={series}
-                    onNavigate={(direction) => navigateCarousel(series.id, direction)}
                     onBookDetails={handleBookDetails}
                     onSendToKindle={handleSendToKindle}
                   />
@@ -491,13 +510,12 @@ export function SeriesOptimized() {
 // Series Carousel Component (unchanged from original)
 interface SeriesCarouselProps {
   series: SeriesWithBooks
-  onNavigate: (direction: 'left' | 'right') => void
   onBookDetails: (book: UnifiedBook) => void
   onSendToKindle: (book: UnifiedBook) => Promise<{ success: boolean; message: string }>
 }
 
-function SeriesCarousel({ series, onNavigate, onBookDetails, onSendToKindle }: SeriesCarouselProps) {
-  const { currentIndex, books, booksLoaded } = series
+function SeriesCarousel({ series, onBookDetails, onSendToKindle }: SeriesCarouselProps) {
+  const { books, booksLoaded } = series
   
   // Show loading state if books aren't loaded yet
   if (!booksLoaded || books.length === 0) {
@@ -519,20 +537,6 @@ function SeriesCarousel({ series, onNavigate, onBookDetails, onSendToKindle }: S
     )
   }
 
-  // Calculate visible books (max 5 books, starting from currentIndex)
-  const maxVisible = 5
-  const totalBooks = books.length
-  const canScrollLeft = currentIndex > 0
-  const canScrollRight = currentIndex + maxVisible < totalBooks
-  
-  const getVisibleBooks = () => {
-    const startIndex = Math.max(0, Math.min(currentIndex, totalBooks - maxVisible))
-    const endIndex = Math.min(startIndex + maxVisible, totalBooks)
-    return books.slice(startIndex, endIndex)
-  }
-
-  const visibleBooks = getVisibleBooks()
-
   return (
     <div className="border border-border rounded-lg bg-card p-6">
       {/* Series Header */}
@@ -543,39 +547,25 @@ function SeriesCarousel({ series, onNavigate, onBookDetails, onSendToKindle }: S
         </p>
       </div>
 
-      {/* Carousel Container */}
-      <div className="relative">
-        {/* Navigation Buttons */}
-        {books.length > maxVisible && (
-          <>
-            {/* Previous Button */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onNavigate('left')}
-              disabled={!canScrollLeft}
-              className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 p-0 rounded-full shadow-lg bg-background/80 backdrop-blur-sm hover:bg-background/90"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            
-            {/* Next Button */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onNavigate('right')}
-              disabled={!canScrollRight}
-              className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 p-0 rounded-full shadow-lg bg-background/80 backdrop-blur-sm hover:bg-background/90"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </Button>
-          </>
-        )}
-
-        {/* Book Cards Row */}
-        <div className="flex gap-4 overflow-hidden px-4">
-          {visibleBooks.map((book) => (
-            <div key={book.id} className="flex-shrink-0 w-[225px]">
+      {/* Swiper Carousel */}
+      <div className="relative px-10">
+        <Swiper
+          modules={[Navigation, FreeMode]}
+          spaceBetween={16}
+          slidesPerView="auto"
+          freeMode={{
+            enabled: true,
+            sticky: false,
+          }}
+          navigation={{
+            nextEl: '.swiper-button-next-custom',
+            prevEl: '.swiper-button-prev-custom',
+          }}
+          watchOverflow={true}
+          className="series-swiper"
+        >
+          {books.map((book) => (
+            <SwiperSlide key={book.id} className="!w-[225px]">
               <UnifiedBookCard
                 book={book}
                 cardType="library"
@@ -584,9 +574,25 @@ function SeriesCarousel({ series, onNavigate, onBookDetails, onSendToKindle }: S
                 onSendToKindle={onSendToKindle}
                 showKindleButton={true}
               />
-            </div>
+            </SwiperSlide>
           ))}
-        </div>
+        </Swiper>
+        
+        {/* Custom Navigation Buttons */}
+        {books.length > 1 && (
+          <>
+            <div className="swiper-button-prev-custom absolute left-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full shadow-lg bg-background/80 backdrop-blur-sm hover:bg-background/90 border border-border flex items-center justify-center cursor-pointer transition-colors">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </div>
+            <div className="swiper-button-next-custom absolute right-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full shadow-lg bg-background/80 backdrop-blur-sm hover:bg-background/90 border border-border flex items-center justify-center cursor-pointer transition-colors">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
