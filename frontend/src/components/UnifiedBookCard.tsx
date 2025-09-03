@@ -151,7 +151,14 @@ export function UnifiedBookCard({
     if (cardType === 'search') {
       authorString = book.author || 'Unknown Author'
     } else {
-      authorString = book.authors?.join(', ') || 'Unknown Author'
+      // Handle both array and string formats for authors
+      if (Array.isArray(book.authors)) {
+        authorString = book.authors.join(', ') || 'Unknown Author'
+      } else if (typeof book.authors === 'string') {
+        authorString = book.authors || 'Unknown Author'
+      } else {
+        authorString = 'Unknown Author'
+      }
     }
     
     // Apply author formatting fixes (handles pipe characters, "Last, First" format, etc.)

@@ -61,11 +61,11 @@ export function SeriesOptimized() {
     )
   }, [allSeries, searchTerm])
 
-  // Get series with their loaded books
+  // Get series with their loaded books (show all series, even without books loaded)
   const seriesWithBooksArray = useMemo(() => {
     return filteredSeries
       .map(series => seriesWithBooks.get(series.id))
-      .filter((series): series is SeriesWithBooks => series !== undefined && series.booksLoaded)
+      .filter((series): series is SeriesWithBooks => series !== undefined)
   }, [filteredSeries, seriesWithBooks])
 
   // Load a page of series
@@ -156,7 +156,8 @@ export function SeriesOptimized() {
         authors: Array.isArray(book.authors) 
           ? book.authors.map((author: any) => typeof author === 'string' ? author : author.name).join(', ')
           : typeof book.authors === 'string' ? book.authors : 'Unknown Author',
-        cover_url: book.cover_url || `/api/metadata/cover/${book.id}`,
+        cover_url: book.cover_url || `/api/metadata/books/${book.id}/cover`,
+        has_cover: book.has_cover,
         series: book.series,
         series_index: book.series_index,
         rating: book.rating,
@@ -170,18 +171,19 @@ export function SeriesOptimized() {
       }))
 
       // Only include series with multiple books
-      if (books.length > 1) {
-        const seriesWithBooksData: SeriesWithBooks = {
-          ...seriesInfo,
-          books,
-          currentIndex: Math.floor(books.length / 2), // Start with middle book centered
-          booksLoaded: true
-        }
+      // Always add the series, even if it has only 1 book (backend should have filtered already)
+      const seriesWithBooksData: SeriesWithBooks = {
+        ...seriesInfo,
+        books,
+        currentIndex: Math.floor(Math.max(0, books.length - 1) / 2), // Start with middle book centered
+        booksLoaded: true
+      }
 
-        setSeriesWithBooks(prev => new Map([...prev, [seriesInfo.id, seriesWithBooksData]]))
-        console.log(`✅ Loaded ${books.length} books for series: ${seriesInfo.name}`)
-      } else {
-        console.log(`⚠️ Skipping single-book series: ${seriesInfo.name} (${books.length} book)`)
+      setSeriesWithBooks(prev => new Map([...prev, [seriesInfo.id, seriesWithBooksData]]))
+      console.log(`✅ Loaded ${books.length} books for series: ${seriesInfo.name}`)
+      
+      if (books.length === 1) {
+        console.log(`⚠️ Note: Series "${seriesInfo.name}" only has 1 book, but backend said it should have ${seriesInfo.book_count}`)
       }
 
     } catch (error) {
@@ -274,6 +276,20 @@ export function SeriesOptimized() {
   useEffect(() => {
     loadSeriesPage(1, false)
   }, []) // Only run on mount
+
+  // Initialize series in seriesWithBooks Map when they're loaded from API
+  useEffect(() => {
+    allSeries.forEach(series => {
+      if (!seriesWithBooks.has(series.id)) {
+        setSeriesWithBooks(prev => new Map([...prev, [series.id, {
+          ...series,
+          books: [],
+          currentIndex: 0,
+          booksLoaded: false
+        }]]))
+      }
+    })
+  }, [allSeries])
 
   // Lazy load books for visible series (simple intersection observer)
   useEffect(() => {
@@ -458,7 +474,30 @@ interface SeriesCarouselProps {
 }
 
 function SeriesCarousel({ series, onNavigate, onBookDetails, onSendToKindle }: SeriesCarouselProps) {
-  const { currentIndex, books } = series
+  const { currentIndex, books, booksLoaded } = series
+  
+  // Show loading state if books aren't loaded yet
+  if (!booksLoaded || books.length === 0) {
+    return (
+      <div className="space-y-4">
+        {/* Series Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{series.name}</h2>
+            <p className="text-gray-600 dark:text-gray-400">
+              {booksLoaded ? 'No books found' : `Loading ${series.book_count} books...`}
+            </p>
+          </div>
+        </div>
+        
+        {/* Loading placeholder */}
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </div>
+    )
+  }
+  
   const centerBook = books[currentIndex]
   
   // Calculate visible books (center + 2 on each side)
@@ -492,31 +531,33 @@ function SeriesCarousel({ series, onNavigate, onBookDetails, onSendToKindle }: S
         </div>
         
         {/* Navigation Controls */}
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onNavigate('left')}
-            disabled={currentIndex === 0}
-            className="p-2"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </Button>
-          
-          <span className="text-sm text-gray-600 dark:text-gray-400 px-2">
-            {currentIndex + 1} of {books.length}
-          </span>
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onNavigate('right')}
-            disabled={currentIndex === books.length - 1}
-            className="p-2"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </Button>
-        </div>
+        {books.length > 1 && (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onNavigate('left')}
+              disabled={currentIndex === 0}
+              className="p-2"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            
+            <span className="text-sm text-gray-600 dark:text-gray-400 px-2">
+              {currentIndex + 1} of {books.length}
+            </span>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onNavigate('right')}
+              disabled={currentIndex === books.length - 1}
+              className="p-2"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Carousel Container */}

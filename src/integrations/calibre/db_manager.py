@@ -818,6 +818,7 @@ class CalibreDBManager:
                 Series.sort,
                 func.count(books_series_link.c.book).label('book_count')
             ).join(books_series_link, Series.id == books_series_link.c.series) \
+             .join(Books, books_series_link.c.book == Books.id) \
              .group_by(Series.id, Series.name, Series.sort) \
              .having(func.count(books_series_link.c.book) > 1) \
              .order_by(Series.sort)
@@ -837,6 +838,13 @@ class CalibreDBManager:
             # Format results
             series_data = []
             for s in series:
+                # Debug: Double-check actual book count for this series
+                actual_count = session.query(func.count(books_series_link.c.book)) \
+                    .filter(books_series_link.c.series == s.id).scalar()
+                
+                if s.book_count != actual_count:
+                    logger.warning(f"Series count mismatch for '{s.name}': query says {s.book_count}, actual is {actual_count}")
+                
                 series_data.append({
                     'id': s.id,
                     'name': s.name,
