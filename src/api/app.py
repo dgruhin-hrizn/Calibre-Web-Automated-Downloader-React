@@ -490,29 +490,12 @@ def api_login() -> Union[Response, Tuple[Response, int]]:
                 logger.warning(f"CWA authentication failed for user: {username}")
                 return jsonify({"error": "Invalid username or password"}), 401
         else:
-            # Fallback to local validation if CWA proxy not available
-            logger.warning("CWA proxy not available, falling back to local validation")
-            if validate_credentials(username, password):
-                session['logged_in'] = True
-                session['username'] = username
-                session['cwa_password'] = password
-                session.permanent = True
-                
-                logger.info(f"User {username} logged in successfully (local fallback)")
-                
-                # Create the response
-                response = jsonify({
-                    "success": True,
-                    "user": {"username": username}
-                })
-                
-                # Create the second session cookie for CWA proxy (even in fallback)
-                dual_session_manager.create_proxy_session_cookie(response, username, password)
-                
-                return response
-            else:
-                logger.warning(f"Local authentication failed for user: {username}")
-                return jsonify({"error": "Invalid username or password"}), 401
+            # CWA proxy not available - this should be an error, not a fallback
+            logger.error("CWA proxy not available - cannot authenticate users without CWA")
+            return jsonify({
+                "error": "Authentication service unavailable",
+                "message": "CWA connection required for authentication"
+            }), 503
             
     except Exception as e:
         logger.error_trace(f"Login error: {e}")
@@ -1530,12 +1513,26 @@ def api_admin_user_info():
         
         username = session.get('username')
         
-        # For now, assume admin if logged in (can be enhanced later)
-        # This is just to get the system working again
+        # Check actual admin status via CWA
+        is_admin = False
+        if cwa_proxy:
+            try:
+                # Get user session
+                with cwa_proxy.sessions_lock:
+                    user_session = cwa_proxy.user_sessions.get(username)
+                
+                if user_session:
+                    # Test admin access by trying to access admin endpoints
+                    response = user_session.session.head(f"{user_session.cwa_base_url}/cwa-stats-show", timeout=5)
+                    is_admin = response.status_code == 200
+            except Exception as e:
+                logger.warning(f"Failed to check admin status for {username}: {e}")
+                is_admin = False
+        
         return jsonify({
             'authenticated': True,
             'username': username,
-            'is_admin': True  # Simplified for now
+            'is_admin': is_admin
         })
         
     except Exception as e:

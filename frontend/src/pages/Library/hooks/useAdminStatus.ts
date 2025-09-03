@@ -11,7 +11,9 @@ export function useAdminStatus() {
         })
         
         if (response.ok) {
-          setIsAdmin(true)
+          const data = await response.json()
+          // Check the actual is_admin value from the response
+          setIsAdmin(data.is_admin === true)
         } else {
           setIsAdmin(false)
         }
