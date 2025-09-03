@@ -53,6 +53,7 @@ class BookInfo:
     progress: Optional[float] = None
     wait_time: Optional[int] = None      # Total wait time in seconds
     wait_start: Optional[float] = None   # When waiting started (timestamp)
+    download_id: Optional[int] = None    # Database ID for tracking downloads
 
 class BookQueue:
     """Thread-safe book queue manager with priority support and cancellation."""
@@ -66,13 +67,15 @@ class BookQueue:
         self._cancel_flags: dict[str, Event] = {}  # Cancellation flags for active downloads
         self._active_downloads: dict[str, bool] = {}  # Track currently downloading books
     
-    def add(self, book_id: str, book_data: BookInfo, priority: int = 0) -> None:
+    def add(self, book_id: str, book_data: BookInfo, priority: int = 0, username: str = None, search_url: str = None) -> None:
         """Add a book to the queue with specified priority.
         
         Args:
             book_id: Unique identifier for the book
             book_data: Book information
             priority: Priority level (lower number = higher priority)
+            username: Username for tracking downloads per user
+            search_url: Original search URL for the book
         """
         with self._lock:
             # Don't add if already exists and not in error/done state
@@ -84,6 +87,21 @@ class BookQueue:
             self._queue.put(queue_item)
             self._book_data[book_id] = book_data
             self._update_status(book_id, QueueStatus.QUEUED)
+            
+            # Record in downloads database if username provided
+            if username:
+                try:
+                    from ..api.app import get_downloads_db_manager
+                    downloads_db = get_downloads_db_manager()
+                    if downloads_db:
+                        download_id = downloads_db.record_download_queued(username, book_data, search_url)
+                        # Store download_id in book_data for future reference
+                        book_data.download_id = download_id
+                except Exception as e:
+                    # Don't fail the queue operation if DB recording fails
+                    import logging
+                    logging.getLogger(__name__).warning(f"Failed to record download in DB: {e}")
+                    pass
     
     def get_next(self) -> Optional[Tuple[str, Event]]:
         """Get next book ID from queue with cancellation flag.
@@ -114,10 +132,23 @@ class BookQueue:
         self._status[book_id] = status
         self._status_timestamps[book_id] = datetime.now()
             
-    def update_status(self, book_id: str, status: QueueStatus) -> None:
-        """Update status of a book in the queue."""
+    def update_status(self, book_id: str, status: QueueStatus, **kwargs) -> None:
+        """Update status of a book in the queue and downloads database."""
         with self._lock:
             self._update_status(book_id, status)
+            
+            # Update downloads database if book has download_id
+            book_data = self._book_data.get(book_id)
+            if book_data and hasattr(book_data, 'download_id') and book_data.download_id:
+                try:
+                    from ..api.app import get_downloads_db_manager
+                    downloads_db = get_downloads_db_manager()
+                    if downloads_db:
+                        downloads_db.update_download_status(book_data.download_id, status.value, **kwargs)
+                except Exception as e:
+                    import logging
+                    logging.getLogger(__name__).warning(f"Failed to update download status in DB: {e}")
+                    pass
             
             # Clean up active download tracking when finished
             if status in [QueueStatus.AVAILABLE, QueueStatus.ERROR, QueueStatus.DONE, QueueStatus.CANCELLED]:
@@ -130,11 +161,29 @@ class BookQueue:
             if book_id in self._book_data:
                 self._book_data[book_id].download_path = download_path
                 
-    def update_progress(self, book_id: str, progress: float) -> None:
+    def update_progress(self, book_id: str, progress: float, speed: str = None, eta: int = None) -> None:
         """Update download progress for a book."""
         with self._lock:
             if book_id in self._book_data:
                 self._book_data[book_id].progress = progress
+                
+                # Update downloads database
+                book_data = self._book_data[book_id]
+                if hasattr(book_data, 'download_id') and book_data.download_id:
+                    try:
+                        from ..api.app import get_downloads_db_manager
+                        downloads_db = get_downloads_db_manager()
+                        if downloads_db:
+                            kwargs = {'progress_percent': int(progress)}
+                            if speed:
+                                kwargs['download_speed'] = speed
+                            if eta:
+                                kwargs['eta_seconds'] = eta
+                            downloads_db.update_download_status(book_data.download_id, 'downloading', **kwargs)
+                    except Exception as e:
+                        import logging
+                        logging.getLogger(__name__).warning(f"Failed to update download progress in DB: {e}")
+                        pass
                 
     def update_wait_time(self, book_id: str, wait_time: int, wait_start: float) -> None:
         """Update waiting time information for a book."""

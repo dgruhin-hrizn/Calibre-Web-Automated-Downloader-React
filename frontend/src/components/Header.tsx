@@ -5,6 +5,7 @@ import { Button } from './ui/Button'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { cn } from '../lib/utils'
 import { useAuth } from '../contexts/AuthContext'
+import { HeaderQueueWidget } from './HeaderQueueWidget'
 
 interface HeaderProps {
   onMenuClick: () => void
@@ -18,9 +19,9 @@ export function Header({ onMenuClick, theme, onThemeChange }: HeaderProps) {
   const { logout, user } = useAuth()
 
   const themeOptions = [
-    { value: 'light', label: 'Light', icon: Sun },
-    { value: 'dark', label: 'Dark', icon: Moon },
-    { value: 'system', label: 'System', icon: Monitor },
+    { value: 'light', label: '', icon: Sun },
+    { value: 'dark', label: '', icon: Moon },
+    { value: 'system', label: '', icon: Monitor },
   ]
 
   const currentTheme = themeOptions.find(option => option.value === theme)
@@ -71,37 +72,40 @@ export function Header({ onMenuClick, theme, onThemeChange }: HeaderProps) {
 
         {/* Right section */}
         <div className="flex items-center space-x-4">
+          {/* Queue Widget */}
+          <HeaderQueueWidget />
+
           {/* Theme Selector */}
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
               <Button variant="ghost" size="sm" className="flex items-center space-x-2 text-foreground">
                 {currentTheme && <currentTheme.icon className="w-4 h-4" />}
-                <span className="hidden sm:inline">{currentTheme?.label}</span>
                 <ChevronDown className="w-3 h-3" />
               </Button>
             </DropdownMenu.Trigger>
             <DropdownMenu.Portal>
               <DropdownMenu.Content
-                className="min-w-[8rem] bg-popover border border-border rounded-md shadow-md p-1 z-50"
+                className="min-w-[3rem] bg-popover border border-border rounded-md shadow-md p-1 z-50"
                 sideOffset={5}
               >
                 {themeOptions.map((option) => (
                   <DropdownMenu.Item
                     key={option.value}
                     className={cn(
-                      "flex items-center space-x-2 px-2 py-1.5 text-sm rounded-sm cursor-pointer outline-none text-popover-foreground",
+                      "flex items-center justify-center px-2 py-1.5 text-sm rounded-sm cursor-pointer outline-none text-popover-foreground",
                       "hover:bg-accent hover:text-accent-foreground",
                       theme === option.value && "bg-accent text-accent-foreground"
                     )}
                     onClick={() => onThemeChange(option.value as any)}
                   >
                     <option.icon className="w-4 h-4" />
-                    <span>{option.label}</span>
                   </DropdownMenu.Item>
                 ))}
               </DropdownMenu.Content>
             </DropdownMenu.Portal>
           </DropdownMenu.Root>
+
+          
 
           {/* User Menu */}
           <DropdownMenu.Root>

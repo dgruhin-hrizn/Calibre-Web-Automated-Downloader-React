@@ -7,6 +7,10 @@ def string_to_bool(s: str) -> bool:
 # CWA Database Configuration - fixed container path (users mount their config directory here)
 CWA_DB_PATH = Path("/config/cwa.db")
 
+# Downloads Database Configuration - separate database for per-user download tracking
+DATA_DIR = Path(os.getenv("DATA_DIR", "/app/data"))
+DOWNLOADS_DB_PATH = DATA_DIR / "downloads.db"
+
 # Calibre Library Configuration - fixed container paths (users mount their data here)
 CALIBRE_LIBRARY_PATH = Path("/calibre-library")
 LOG_ROOT = Path(os.getenv("LOG_ROOT", "/var/log/"))

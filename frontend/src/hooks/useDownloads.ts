@@ -48,94 +48,74 @@ export interface StatusResponse {
   cancelled: Record<string, DownloadStatus>
 }
 
-// Hook for getting download status
+// Hook for getting download status (USER-SPECIFIC)
 export function useDownloadStatus() {
   const setDownloadStatus = useDownloadStore((state) => state.setDownloadStatus)
   
   const query = useQuery({
-    queryKey: ['downloadStatus'],
-    queryFn: () => apiRequest(api.status) as Promise<StatusResponse>,
+    queryKey: ['userDownloadStatus'], // Changed key to reflect user-specific data
+    queryFn: () => apiRequest('/api/downloads/status') as Promise<Record<string, any[]>>, // Use user-specific endpoint
     refetchInterval: 2000, // Refetch every 2 seconds
     refetchIntervalInBackground: true,
   })
 
-  // Update download store when status changes
+  // Update download store when status changes (USER-SPECIFIC DATA)
   useEffect(() => {
     if (query.data) {
+      
       // Update downloading items
-      Object.entries(query.data.downloading || {}).forEach(([id, item]) => {
-        setDownloadStatus(id, {
-          status: 'downloading',
-          progress: item.progress || 0,
-          title: item.title,
-          author: item.author,
-          coverUrl: item.preview, // Use preview as cover URL
+      if (Array.isArray(query.data.downloading)) {
+        query.data.downloading.forEach((item: any) => {
+          setDownloadStatus(item.id, {
+            status: 'downloading',
+            progress: item.progress || 0,
+            title: item.title,
+            author: item.author,
+            coverUrl: item.cover_url || item.preview,
+          })
         })
-      })
+      }
 
-      // Update processing items
-      Object.entries(query.data.processing || {}).forEach(([id, item]) => {
-        setDownloadStatus(id, {
-          status: 'processing',
-          progress: 0,
-          title: item.title,
-          author: item.author,
-          coverUrl: item.preview,
+      // Update processing items  
+      if (Array.isArray(query.data.processing)) {
+        query.data.processing.forEach((item: any) => {
+          setDownloadStatus(item.id, {
+            status: 'processing',
+            progress: 0,
+            title: item.title,
+            author: item.author,
+            coverUrl: item.cover_url || item.preview,
+          })
         })
-      })
+      }
 
       // Update waiting items
-      Object.entries(query.data.waiting || {}).forEach(([id, item]) => {
-        setDownloadStatus(id, {
-          status: 'waiting',
-          progress: 0,
-          title: item.title,
-          author: item.author,
-          coverUrl: item.preview,
-          waitTime: item.wait_time,
-          waitStart: item.wait_start,
+      if (Array.isArray(query.data.waiting)) {
+        query.data.waiting.forEach((item: any) => {
+          setDownloadStatus(item.id, {
+            status: 'waiting',
+            progress: 0,
+            title: item.title,
+            author: item.author,
+            coverUrl: item.cover_url || item.preview,
+            waitTime: item.wait_time,
+            waitStart: item.wait_start,
+          })
         })
-      })
+      }
 
-      // Update available items as completed
-      Object.entries(query.data.available || {}).forEach(([id, item]) => {
-        setDownloadStatus(id, {
-          status: 'completed',
-          progress: 100,
-          title: item.title,
-          author: item.author,
-          size: item.size,
-          format: item.format,
-          coverUrl: item.preview,
+      // Update queued items
+      if (Array.isArray(query.data.queued)) {
+        query.data.queued.forEach((item: any) => {
+          setDownloadStatus(item.id, {
+            status: 'processing', // Map 'queued' to 'processing' for UI consistency
+            progress: 0,
+            title: item.title,
+            author: item.author,
+            coverUrl: item.cover_url || item.preview,
+          })
         })
-      })
-
-      // Update done items as completed
-      Object.entries(query.data.done || {}).forEach(([id, item]) => {
-        setDownloadStatus(id, {
-          status: 'completed',
-          progress: 100,
-          title: item.title,
-          author: item.author,
-          size: item.size,
-          format: item.format,
-          coverUrl: item.preview,
-        })
-      })
-
-      // Update error items - these will be added to history automatically
-      Object.entries(query.data.error || {}).forEach(([id, item]) => {
-        setDownloadStatus(id, {
-          status: 'error',
-          progress: 0,
-          title: item.title,
-          author: item.author,
-          error: item.error,
-          size: item.size,
-          format: item.format,
-          coverUrl: item.preview,
-        })
-      })
+      }
     }
   }, [query.data, setDownloadStatus])
 
@@ -265,5 +245,22 @@ export function useActiveDownloads() {
     queryKey: ['activeDownloads'],
     queryFn: () => apiRequest(api.activeDownloads),
     refetchInterval: 5000, // Refetch every 5 seconds
+  })
+}
+
+// Hook for getting user's download history
+export function useUserDownloadHistory(status?: string, limit: number = 50, offset: number = 0) {
+  return useQuery({
+    queryKey: ['userDownloadHistory', status, limit, offset],
+    queryFn: async () => {
+      const params = new URLSearchParams()
+      if (status) params.append('status', status)
+      params.append('limit', limit.toString())
+      params.append('offset', offset.toString())
+      
+      const response = await apiRequest(`/api/downloads/history?${params.toString()}`)
+      return response.downloads || []
+    },
+    refetchInterval: 30000, // Refetch every 30 seconds (less frequent than active status)
   })
 }

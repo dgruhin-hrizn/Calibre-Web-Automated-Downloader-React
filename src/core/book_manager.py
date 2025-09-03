@@ -333,6 +333,20 @@ def download_book(book_info: BookInfo, book_path: Path, progress_callback: Optio
             if download_url != "":
                 logger.info(f"Downloading `{book_info.title}` from `{download_url}`")
 
+                # Store the discovered URL in downloads database
+                if hasattr(book_info, 'download_id') and book_info.download_id:
+                    try:
+                        from ..api.app import get_downloads_db_manager
+                        downloads_db = get_downloads_db_manager()
+                        if downloads_db:
+                            downloads_db.update_download_urls(
+                                book_info.download_id,
+                                search_url=link,
+                                final_url=download_url
+                            )
+                    except Exception as e:
+                        logger.warning(f"Failed to store download URL in DB: {e}")
+
                 data = downloader.download_url(download_url, book_info.size or "", progress_callback, cancel_flag)
                 if not data:
                     raise Exception("No data received")
@@ -340,14 +354,80 @@ def download_book(book_info: BookInfo, book_path: Path, progress_callback: Optio
                 logger.info(f"Download finished. Writing to {book_path}")
                 with open(book_path, "wb") as f:
                     f.write(data.getbuffer())
+                
+                # Mark URL as verified working and update file info
+                if hasattr(book_info, 'download_id') and book_info.download_id:
+                    try:
+                        downloads_db = get_downloads_db_manager()
+                        if downloads_db:
+                            file_size = book_path.stat().st_size if book_path.exists() else None
+                            downloads_db.update_download_status(
+                                book_info.download_id, 
+                                'completed',
+                                file_path=str(book_path),
+                                file_size=file_size
+                            )
+                            downloads_db.mark_url_verified(book_info.download_id, download_url)
+                    except Exception as e:
+                        logger.warning(f"Failed to update download completion in DB: {e}")
+                        
                 logger.info(f"Writing `{book_info.title}` successfully")
                 return True
 
         except Exception as e:
             logger.error_trace(f"Failed to download from {link}: {e}")
+            
+            # Mark URL as failed in database
+            if hasattr(book_info, 'download_id') and book_info.download_id:
+                try:
+                    downloads_db = get_downloads_db_manager()
+                    if downloads_db:
+                        downloads_db.mark_url_failed(book_info.download_id, str(e))
+                except Exception as db_e:
+                    logger.warning(f"Failed to mark URL as failed in DB: {db_e}")
             continue
 
     return False
+
+
+def _download_from_direct_url(download_url: str, book_path: Path, expected_size: int = None, progress_callback: Optional[Callable[[float], None]] = None, cancel_flag: Optional[Event] = None) -> bool:
+    """Download a book directly from a known working URL.
+    
+    Args:
+        download_url: Direct download URL
+        book_path: Path where to save the book
+        expected_size: Expected file size for validation
+        progress_callback: Progress update callback
+        cancel_flag: Cancellation flag
+        
+    Returns:
+        bool: True if download successful
+    """
+    try:
+        logger.info(f"Direct re-download from: {download_url}")
+        
+        data = downloader.download_url(download_url, str(expected_size) if expected_size else "", progress_callback, cancel_flag)
+        if not data:
+            raise Exception("No data received from direct download")
+
+        with open(book_path, "wb") as f:
+            f.write(data.getbuffer())
+        
+        # Validate file size if expected_size provided
+        if expected_size and book_path.exists():
+            actual_size = book_path.stat().st_size
+            if actual_size != expected_size:
+                logger.warning(f"Direct download size mismatch: expected {expected_size}, got {actual_size}")
+                # Don't fail for size mismatch, but log it
+        
+        logger.info(f"Direct re-download completed successfully: {book_path}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Direct re-download failed: {e}")
+        if book_path.exists():
+            book_path.unlink()  # Clean up partial file
+        return False
 
 
 def _get_download_url(link: str, title: str, cancel_flag: Optional[Event] = None) -> str:

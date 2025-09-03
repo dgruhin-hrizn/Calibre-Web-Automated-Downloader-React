@@ -14,13 +14,14 @@ import typing
 
 from ..infrastructure.logger import setup_logger
 from ..infrastructure.config import _SUPPORTED_BOOK_LANGUAGE, BOOK_LANGUAGE
-from ..infrastructure.env import FLASK_HOST, FLASK_PORT, APP_ENV, CWA_DB_PATH, DEBUG, USING_EXTERNAL_BYPASSER, BUILD_VERSION, RELEASE_VERSION, CALIBRE_LIBRARY_PATH
+from ..infrastructure.env import FLASK_HOST, FLASK_PORT, APP_ENV, CWA_DB_PATH, DEBUG, USING_EXTERNAL_BYPASSER, BUILD_VERSION, RELEASE_VERSION, CALIBRE_LIBRARY_PATH, DOWNLOADS_DB_PATH
 from ..core import backend
 
 from ..integrations.cwa.client import CWAClient
 from ..integrations.cwa.settings import cwa_settings
 from ..integrations.cwa.proxy import CWAProxy, create_cwa_proxy_routes, create_opds_routes
 from ..integrations.calibre.db_manager import CalibreDBManager
+from ..infrastructure.downloads_db import DownloadsDBManager
 from ..utils.rate_limiter import get_rate_limiter_stats
 
 from ..core.models import SearchFilters
@@ -54,6 +55,9 @@ CORS(app,
 
 # Initialize Calibre DB manager for direct database access
 calibre_db_manager = None
+
+# Initialize Downloads DB manager for per-user download tracking
+downloads_db_manager = None
 
 # Flask logger
 app.logger.handlers = logger.handlers
@@ -145,6 +149,18 @@ def get_calibre_db_manager():
         else:
             logger.warning(f"Calibre metadata.db not found at {metadata_db_path}")
     return calibre_db_manager
+
+def get_downloads_db_manager():
+    """Get or create Downloads DB manager instance"""
+    global downloads_db_manager
+    if downloads_db_manager is None:
+        try:
+            downloads_db_manager = DownloadsDBManager(DOWNLOADS_DB_PATH)
+            logger.info(f"Downloads database connected: {DOWNLOADS_DB_PATH}")
+        except Exception as e:
+            logger.error(f"Failed to initialize downloads database: {e}")
+            return None
+    return downloads_db_manager
 
 # Initialize with current settings
 cwa_client = get_cwa_client()
@@ -268,6 +284,16 @@ def url_for_with_request(endpoint : str, **values : typing.Any) -> str:
         url = flask_url_for(endpoint, **values)
         return f"/request{url}"
     return flask_url_for(endpoint, **values)
+
+# Initialize downloads database on module load
+try:
+    downloads_db_startup = get_downloads_db_manager()
+    if downloads_db_startup:
+        logger.info("Downloads database initialized successfully on startup")
+    else:
+        logger.warning("Downloads database failed to initialize on startup")
+except Exception as e:
+    logger.error(f"Error initializing downloads database on startup: {e}")
 
 @app.route('/')
 @login_required
@@ -787,6 +813,7 @@ def api_download() -> Union[Response, Tuple[Response, int]]:
 
     Query Parameters:
         id (str): Book identifier (MD5 hash)
+        cover_url (str, optional): Book cover image URL from search results
 
     Returns:
         flask.Response: JSON status object indicating success or failure.
@@ -797,12 +824,193 @@ def api_download() -> Union[Response, Tuple[Response, int]]:
 
     try:
         priority = int(request.args.get('priority', 0))
-        success = backend.queue_book(book_id, priority)
+        username = session.get('username')  # Get current user
+        search_url = request.args.get('search_url', '')  # Optional search URL
+        cover_url = request.args.get('cover_url', '')  # Optional cover URL from frontend
+        
+        success = backend.queue_book(book_id, priority, username, search_url, cover_url)
         if success:
             return jsonify({"status": "queued", "priority": priority})
         return jsonify({"error": "Failed to queue book"}), 500
     except Exception as e:
         logger.error_trace(f"Download error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# ============================================================================
+# User-specific Download Tracking Endpoints
+# ============================================================================
+
+@app.route('/api/downloads/history', methods=['GET'])
+@login_required
+def api_user_download_history():
+    """Get user's download history"""
+    try:
+        username = session.get('username')
+        if not username:
+            return jsonify({"error": "Not authenticated"}), 401
+        
+        downloads_db = get_downloads_db_manager()
+        if not downloads_db:
+            return jsonify({"error": "Downloads database not available"}), 503
+        
+        # Get query parameters
+        status = request.args.get('status')  # Filter by status
+        limit = min(int(request.args.get('limit', 50)), 100)
+        offset = int(request.args.get('offset', 0))
+        
+        downloads = downloads_db.get_user_downloads(username, status, limit, offset)
+        return jsonify({"downloads": downloads})
+        
+    except Exception as e:
+        logger.error(f"Error getting user download history: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/downloads/status', methods=['GET'])
+@login_required
+def api_user_download_status():
+    """Get user's downloads grouped by status with real-time progress data"""
+    try:
+        username = session.get('username')
+        if not username:
+            return jsonify({"error": "Not authenticated"}), 401
+        
+        downloads_db = get_downloads_db_manager()
+        if not downloads_db:
+            return jsonify({"error": "Downloads database not available"}), 503
+        
+        # Get user's database records for active statuses
+        downloads_by_status = downloads_db.get_user_downloads_by_status(username)
+        
+        # Get global queue status for real-time progress data
+        global_status = backend.queue_status()
+        
+        # Enrich user's active downloads with real-time data from global queue
+        for status in ['queued', 'downloading', 'processing', 'waiting']:
+            if status in downloads_by_status:
+                enriched_downloads = []
+                for db_record in downloads_by_status[status]:
+                    book_id = db_record['book_id']
+                    
+                    # Start with database record
+                    enriched_record = {
+                        'id': book_id,
+                        'title': db_record['book_title'],
+                        'author': db_record['book_author'], 
+                        'format': db_record['book_format'],
+                        'cover_url': db_record['cover_url'],
+                        'preview': db_record['cover_url'],  # Alias for compatibility
+                        'progress': 0,
+                        'status': status
+                    }
+                    
+                    # Enrich with real-time data from global queue if available
+                    queue_status_key = status if status != 'error' else 'error'
+                    if queue_status_key in global_status and book_id in global_status[queue_status_key]:
+                        queue_data = global_status[queue_status_key][book_id]  # This is a BookInfo object
+                        enriched_record.update({
+                            'progress': getattr(queue_data, 'progress', 0),
+                            'wait_time': getattr(queue_data, 'wait_time', None),
+                            'wait_start': getattr(queue_data, 'wait_start', None),
+                            'error': getattr(queue_data, 'error', None)
+                        })
+                    
+                    enriched_downloads.append(enriched_record)
+                
+                downloads_by_status[status] = enriched_downloads
+        
+        return jsonify(downloads_by_status)
+        
+    except Exception as e:
+        logger.error(f"Error getting user download status: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/downloads/stats', methods=['GET'])
+@login_required
+def api_user_download_stats():
+    """Get user's download statistics"""
+    try:
+        username = session.get('username')
+        if not username:
+            return jsonify({"error": "Not authenticated"}), 401
+        
+        downloads_db = get_downloads_db_manager()
+        if not downloads_db:
+            return jsonify({"error": "Downloads database not available"}), 503
+        
+        stats = downloads_db.get_user_stats(username)
+        return jsonify(stats)
+        
+    except Exception as e:
+        logger.error(f"Error getting user download stats: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/downloads/redownloadable', methods=['GET'])
+@login_required
+def api_get_redownloadable():
+    """Get list of books that can be re-downloaded directly"""
+    try:
+        username = session.get('username')
+        if not username:
+            return jsonify({"error": "Not authenticated"}), 401
+        
+        downloads_db = get_downloads_db_manager()
+        if not downloads_db:
+            return jsonify({"error": "Downloads database not available"}), 503
+        
+        book_id = request.args.get('book_id')  # Optional filter by book_id
+        books = downloads_db.get_redownloadable_books(username, book_id)
+        return jsonify({"redownloadable_books": books})
+        
+    except Exception as e:
+        logger.error(f"Error getting redownloadable books: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/downloads/redownload/<int:download_id>', methods=['POST'])
+@login_required
+def api_redownload_direct(download_id: int):
+    """Re-download a book using stored direct URL"""
+    try:
+        username = session.get('username')
+        if not username:
+            return jsonify({"error": "Not authenticated"}), 401
+        
+        downloads_db = get_downloads_db_manager()
+        if not downloads_db:
+            return jsonify({"error": "Downloads database not available"}), 503
+        
+        # Verify user owns this download record (secure version)
+        record = downloads_db.get_download_record(download_id, username)
+        if not record:
+            return jsonify({"error": "Download not found or access denied"}), 404
+            
+        if not record['final_download_url']:
+            return jsonify({"error": "No direct download URL available"}), 400
+            
+        # Generate target path in ingest directory
+        from ..infrastructure.env import INGEST_DIR
+        from pathlib import Path
+        filename = f"{record['book_title']}.{record['book_format']}" if record['book_format'] else f"{record['book_title']}.epub"
+        # Sanitize filename
+        filename = "".join(c for c in filename if c.isalnum() or c in (' ', '.', '_', '-')).rstrip()
+        target_path = Path(INGEST_DIR) / filename
+        
+        # Attempt direct re-download
+        success = downloads_db.direct_redownload(download_id, target_path)
+        
+        if success:
+            return jsonify({
+                "success": True, 
+                "message": "Re-download completed successfully",
+                "file_path": str(target_path)
+            })
+        else:
+            return jsonify({
+                "error": "Re-download failed - URL may be expired",
+                "suggestion": "Try downloading from Anna's Archive search instead"
+            }), 400
+            
+    except Exception as e:
+        logger.error(f"Direct redownload error: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/status', methods=['GET'])

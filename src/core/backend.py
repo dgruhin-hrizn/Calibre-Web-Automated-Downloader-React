@@ -58,20 +58,26 @@ def get_book_info(book_id: str) -> Optional[Dict[str, Any]]:
         logger.error_trace(f"Error getting book info: {e}")
         return None
 
-def queue_book(book_id: str, priority: int = 0) -> bool:
+def queue_book(book_id: str, priority: int = 0, username: str = None, search_url: str = None, cover_url: str = None) -> bool:
     """Add a book to the download queue with specified priority.
     
     Args:
         book_id: Book identifier
         priority: Priority level (lower number = higher priority)
+        username: Username for tracking downloads per user
+        search_url: Original search URL for the book
+        cover_url: Book cover image URL from search results
         
     Returns:
         bool: True if book was successfully queued
     """
     try:
         book_info = book_manager.get_book_info(book_id)
-        book_queue.add(book_id, book_info, priority)
-        logger.info(f"Book queued with priority {priority}: {book_info.title}")
+        # If we have a cover URL from frontend, use it to override the book info
+        if cover_url and book_info:
+            book_info.preview = cover_url
+        book_queue.add(book_id, book_info, priority, username, search_url)
+        logger.info(f"Book queued with priority {priority} for user {username}: {book_info.title}")
         return True
     except Exception as e:
         logger.error_trace(f"Error queueing book: {e}")

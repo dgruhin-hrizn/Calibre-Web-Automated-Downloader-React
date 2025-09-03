@@ -18,7 +18,7 @@ interface SidebarProps {
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: Home },
-  { name: 'Search', href: '/search', icon: Search },
+  { name: 'Find Books', href: '/search', icon: Search },
   { name: 'Library', href: '/library', icon: Library },
   { name: 'Series', href: '/series', icon: BookOpen },
   { name: 'Hot Books', href: '/hot', icon: TrendingUp },

@@ -5,7 +5,7 @@ import { AuthProvider } from './contexts/AuthContext'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { Sidebar } from './components/Sidebar'
 import { Header } from './components/Header'
-import { QueueWidget } from './components/QueueWidget'
+// import { QueueWidget } from './components/QueueWidget' // Disabled - using HeaderQueueWidget instead
 import { QueueNotifications } from './components/QueueNotifications'
 import { DragDropProvider } from './components/DragDropProvider'
 import { Dashboard } from './pages/Dashboard'
@@ -100,7 +100,7 @@ function App() {
               </div>
               
                 {/* Queue Widget - Fixed Position */}
-                <QueueWidget />
+                {/* <QueueWidget /> Disabled - using HeaderQueueWidget instead */}
                 
                 {/* Queue Notifications - Fixed Position */}
                 <QueueNotifications />

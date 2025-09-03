@@ -1,15 +1,16 @@
 import { useState, useCallback } from 'react'
-import { Download, AlertCircle, Activity, BarChart3, Clock } from 'lucide-react'
+import { Download, AlertCircle, Activity, BarChart3, Clock, CheckCircle, RotateCcw } from 'lucide-react'
 
-import { QueueItem } from '../components/QueueItem'
+
 import { DraggableQueueItem } from '../components/DraggableQueueItem'
 import { QueueControls } from '../components/QueueControls'
 import * as Tabs from '@radix-ui/react-tabs'
-import { useDownloadStatus, useCancelDownload, useClearCompleted } from '../hooks/useDownloads'
+import { useDownloadStatus, useCancelDownload, useClearCompleted, useUserDownloadHistory } from '../hooks/useDownloads'
 
 export function Downloads() {
   // All hooks must be called at the top level, before any early returns
   const { data: statusData, isLoading, error } = useDownloadStatus()
+  const { data: userHistory } = useUserDownloadHistory(undefined, 100, 0) // Get user's download history
   const cancelDownload = useCancelDownload()
   const clearCompleted = useClearCompleted()
   
@@ -165,13 +166,22 @@ export function Downloads() {
             value="completed"
             className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
           >
-            Completed ({downloads.completed.length})
+            <CheckCircle className="h-4 w-4 mr-2" />
+            Completed ({userHistory?.filter((item: any) => item.status === 'completed').length || 0})
           </Tabs.Trigger>
           <Tabs.Trigger 
             value="failed"
             className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
           >
-            Failed ({downloads.failed.length})
+            <AlertCircle className="h-4 w-4 mr-2" />
+            Failed ({userHistory?.filter((item: any) => item.status === 'error').length || 0})
+          </Tabs.Trigger>
+          <Tabs.Trigger 
+            value="history"
+            className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+          >
+            <Clock className="h-4 w-4 mr-2" />
+            History ({userHistory?.length || 0})
           </Tabs.Trigger>
           <Tabs.Trigger 
             value="analytics"
@@ -255,19 +265,57 @@ export function Downloads() {
 
         {/* Completed Downloads */}
         <Tabs.Content value="completed" className="space-y-4">
-          {downloads.completed.map((download) => (
-            <QueueItem
-              key={download.id}
-              download={{
-                ...download,
-                status: 'completed',
-                coverUrl: download.preview || undefined
-              }}
-            />
-          ))}
-          {downloads.completed.length === 0 && (
+          {userHistory?.filter((item: any) => item.status === 'completed').map((historyItem: any) => (
+            <div key={`${historyItem.id}-${historyItem.created_at}`} className="flex items-center gap-4 p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+              <div className="relative flex-shrink-0">
+                <div className="w-16 h-20 bg-muted rounded-md flex items-center justify-center overflow-hidden">
+                  {historyItem.cover_url ? (
+                    <img 
+                      src={historyItem.cover_url} 
+                      alt={historyItem.book_title}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        target.nextElementSibling!.classList.remove('hidden');
+                      }}
+                    />
+                  ) : (
+                    <div className="text-muted-foreground text-xs">No Cover</div>
+                  )}
+                  <div className="hidden absolute inset-0 flex items-center justify-center text-muted-foreground text-xs">
+                    No Cover
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex-1 min-w-0 space-y-1">
+                <h4 className="font-medium text-sm line-clamp-1">{historyItem.book_title || 'Unknown Title'}</h4>
+                <p className="text-sm text-muted-foreground line-clamp-1">
+                  by {historyItem.book_author || 'Unknown Author'}
+                </p>
+                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                  <span>{new Date(historyItem.completed_at || historyItem.created_at).toLocaleDateString()}</span>
+                  {historyItem.book_format && (
+                    <span className="px-2 py-1 bg-muted rounded-md font-mono">
+                      {historyItem.book_format.toUpperCase()}
+                    </span>
+                  )}
+                  {historyItem.file_size && (
+                    <span>{(historyItem.file_size / (1024 * 1024)).toFixed(1)} MB</span>
+                  )}
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-5 h-5 text-green-500" />
+                <span className="text-sm text-green-600 dark:text-green-400 font-medium">Completed</span>
+              </div>
+            </div>
+          )) || []}
+          {(!userHistory || userHistory.filter((item: any) => item.status === 'completed').length === 0) && (
             <div className="text-center py-8 text-muted-foreground">
-              <Download className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <CheckCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>No completed downloads</p>
             </div>
           )}
@@ -275,21 +323,158 @@ export function Downloads() {
 
         {/* Failed Downloads */}
         <Tabs.Content value="failed" className="space-y-4">
-          {downloads.failed.map((download) => (
-            <QueueItem
-              key={download.id}
-              download={{
-                ...download,
-                status: 'error',
-                coverUrl: download.preview || undefined
-              }}
-              onCancel={handleCancel}
-            />
-          ))}
-          {downloads.failed.length === 0 && (
+          {userHistory?.filter((item: any) => item.status === 'error').map((historyItem: any) => (
+            <div key={`${historyItem.id}-${historyItem.created_at}`} className="flex items-center gap-4 p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+              <div className="relative flex-shrink-0">
+                <div className="w-16 h-20 bg-muted rounded-md flex items-center justify-center overflow-hidden">
+                  {historyItem.cover_url ? (
+                    <img 
+                      src={historyItem.cover_url} 
+                      alt={historyItem.book_title}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        target.nextElementSibling!.classList.remove('hidden');
+                      }}
+                    />
+                  ) : (
+                    <div className="text-muted-foreground text-xs">No Cover</div>
+                  )}
+                  <div className="hidden absolute inset-0 flex items-center justify-center text-muted-foreground text-xs">
+                    No Cover
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex-1 min-w-0 space-y-1">
+                <h4 className="font-medium text-sm line-clamp-1">{historyItem.book_title || 'Unknown Title'}</h4>
+                <p className="text-sm text-muted-foreground line-clamp-1">
+                  by {historyItem.book_author || 'Unknown Author'}
+                </p>
+                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                  <span>{new Date(historyItem.created_at).toLocaleDateString()}</span>
+                  {historyItem.book_format && (
+                    <span className="px-2 py-1 bg-muted rounded-md font-mono">
+                      {historyItem.book_format.toUpperCase()}
+                    </span>
+                  )}
+                  {historyItem.error_message && (
+                    <span className="px-2 py-1 bg-destructive/10 text-destructive rounded-md text-xs">
+                      {historyItem.error_message}
+                    </span>
+                  )}
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5 text-destructive" />
+                  <span className="text-sm text-destructive font-medium">Failed</span>
+                </div>
+                <button
+                  onClick={() => {
+                    // Navigate to search with this book's title
+                    window.location.href = `/search?query=${encodeURIComponent(historyItem.book_title || '')}`
+                  }}
+                  className="px-2 py-1 text-xs bg-destructive/10 text-destructive hover:bg-destructive/20 rounded-md border border-destructive/30"
+                  title="Search for this book again"
+                >
+                  <RotateCcw className="w-3 h-3 mr-1 inline" />
+                  Retry
+                </button>
+              </div>
+            </div>
+          )) || []}
+          {(!userHistory || userHistory.filter((item: any) => item.status === 'error').length === 0) && (
             <div className="text-center py-8 text-muted-foreground">
               <AlertCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>No failed downloads</p>
+            </div>
+          )}
+        </Tabs.Content>
+
+        {/* History Tab - User's Download History from Database */}
+        <Tabs.Content value="history" className="space-y-6">
+          {userHistory && userHistory.length > 0 ? (
+            <div className="space-y-4">
+              {userHistory.map((historyItem: any) => (
+                <div key={`${historyItem.id}-${historyItem.created_at}`} className="flex items-center gap-4 p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+                  <div className="relative flex-shrink-0">
+                    <div className="w-16 h-20 bg-muted rounded-md flex items-center justify-center overflow-hidden">
+                      {historyItem.cover_url ? (
+                        <img 
+                          src={historyItem.cover_url} 
+                          alt={historyItem.book_title}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                            target.nextElementSibling!.classList.remove('hidden');
+                          }}
+                        />
+                      ) : (
+                        <div className="text-muted-foreground text-xs">No Cover</div>
+                      )}
+                      <div className="hidden absolute inset-0 flex items-center justify-center text-muted-foreground text-xs">
+                        No Cover
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <h4 className="font-medium text-sm line-clamp-1">{historyItem.book_title || 'Unknown Title'}</h4>
+                    <p className="text-sm text-muted-foreground line-clamp-1">
+                      by {historyItem.book_author || 'Unknown Author'}
+                    </p>
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      <span>{new Date(historyItem.completed_at || historyItem.created_at).toLocaleDateString()}</span>
+                      {historyItem.book_format && (
+                        <span className="px-2 py-1 bg-muted rounded-md font-mono">
+                          {historyItem.book_format.toUpperCase()}
+                        </span>
+                      )}
+                      {historyItem.file_size && (
+                        <span>{(historyItem.file_size / (1024 * 1024)).toFixed(1)} MB</span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    {historyItem.status === 'completed' && (
+                      <>
+                        <CheckCircle className="w-5 h-5 text-green-500" />
+                        <span className="text-sm text-green-600 dark:text-green-400 font-medium">Completed</span>
+                      </>
+                    )}
+                    {historyItem.status === 'error' && (
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          <AlertCircle className="w-5 h-5 text-destructive" />
+                          <span className="text-sm text-destructive font-medium">Failed</span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            // Navigate to search with this book's title
+                            window.location.href = `/search?query=${encodeURIComponent(historyItem.book_title || '')}`
+                          }}
+                          className="px-2 py-1 text-xs bg-destructive/10 text-destructive hover:bg-destructive/20 rounded-md border border-destructive/30"
+                          title="Search for this book again"
+                        >
+                          <RotateCcw className="w-3 h-3 mr-1 inline" />
+                          Retry
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12 text-muted-foreground">
+              <Clock className="h-16 w-16 mx-auto mb-4 opacity-50" />
+              <h3 className="text-lg font-medium mb-2">No Download History</h3>
+              <p>Your download history will appear here once you start downloading books.</p>
             </div>
           )}
         </Tabs.Content>
@@ -303,7 +488,7 @@ export function Downloads() {
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Total Downloads</p>
                   <p className="text-2xl font-bold">
-                    {downloads.active.length + downloads.queued.length + downloads.completed.length + downloads.failed.length}
+                    {(userHistory?.length || 0) + downloads.active.length + downloads.queued.length}
                   </p>
                 </div>
                 <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center">
@@ -317,9 +502,12 @@ export function Downloads() {
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Success Rate</p>
                   <p className="text-2xl font-bold">
-                    {downloads.completed.length + downloads.failed.length > 0 
-                      ? Math.round((downloads.completed.length / (downloads.completed.length + downloads.failed.length)) * 100)
-                      : 0}%
+                    {(() => {
+                      const completed = userHistory?.filter((item: any) => item.status === 'completed').length || 0
+                      const failed = userHistory?.filter((item: any) => item.status === 'error').length || 0
+                      const total = completed + failed
+                      return total > 0 ? Math.round((completed / total) * 100) : 0
+                    })()}%
                   </p>
                 </div>
                 <div className="h-8 w-8 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center">
@@ -344,7 +532,9 @@ export function Downloads() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Failed Downloads</p>
-                  <p className="text-2xl font-bold">{downloads.failed.length}</p>
+                  <p className="text-2xl font-bold">
+                    {userHistory?.filter((item: any) => item.status === 'error').length || 0}
+                  </p>
                 </div>
                 <div className="h-8 w-8 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center">
                   <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
@@ -353,21 +543,45 @@ export function Downloads() {
             </div>
           </div>
 
-          {/* Queue Health */}
+          {/* Download Statistics */}
           <div className="bg-card rounded-lg p-6 border">
-            <h3 className="text-lg font-semibold mb-4">Queue Health</h3>
+            <h3 className="text-lg font-semibold mb-4">Download Statistics</h3>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Queue Status</span>
+                <span className="text-sm text-muted-foreground">Completed Downloads</span>
+                <span className="text-sm font-medium text-green-600 dark:text-green-400">
+                  {userHistory?.filter((item: any) => item.status === 'completed').length || 0}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Failed Downloads</span>
+                <span className="text-sm font-medium text-red-600 dark:text-red-400">
+                  {userHistory?.filter((item: any) => item.status === 'error').length || 0}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Most Downloaded Format</span>
+                <span className="text-sm text-muted-foreground">
+                  {(() => {
+                    if (!userHistory || userHistory.length === 0) return 'N/A'
+                    const formats = userHistory.reduce((acc: any, item: any) => {
+                      if (item.book_format) {
+                        acc[item.book_format] = (acc[item.book_format] || 0) + 1
+                      }
+                      return acc
+                    }, {})
+                    const mostCommon = Object.entries(formats).sort(([,a]: any, [,b]: any) => b - a)[0]
+                    return mostCommon ? mostCommon[0].toUpperCase() : 'N/A'
+                  })()}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Current Queue Status</span>
                 <span className={`text-sm font-medium ${
                   downloads.active.length > 0 ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'
                 }`}>
                   {downloads.active.length > 0 ? 'Active' : 'Idle'}
                 </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Average Queue Time</span>
-                <span className="text-sm text-muted-foreground">~2.5 minutes</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Estimated Completion</span>

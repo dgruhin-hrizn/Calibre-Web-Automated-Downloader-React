@@ -38,6 +38,7 @@ interface DownloadStore {
   clearCompleted: () => void
   clearHistory: () => void
   clearNotifications: () => void
+  clearAll: () => void
   dismissNotification: (id: string) => void
   getDownloadStatus: (id: string) => DownloadState | null
   getRecentDownloads: () => DownloadHistory[]
@@ -133,6 +134,15 @@ export const useDownloadStore = create<DownloadStore>()(
             dismissedNotifications: new Set([...state.dismissedNotifications])
           }
         })
+      },
+
+      clearAll: () => {
+        set(() => ({
+          downloads: {},
+          history: [],
+          notificationHistory: [],
+          dismissedNotifications: new Set()
+        }))
       },
 
       dismissNotification: (id: string) => {

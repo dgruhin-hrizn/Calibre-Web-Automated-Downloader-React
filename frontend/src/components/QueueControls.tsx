@@ -1,19 +1,15 @@
-import { useState } from 'react'
+
 import { 
   Play, 
   Pause, 
-  Square, 
-  Trash2, 
-  RotateCcw, 
   ArrowUp,
-  Settings,
   Filter,
   SortAsc,
   SortDesc
 } from 'lucide-react'
 import { Button } from './ui/Button'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import * as Dialog from '@radix-ui/react-dialog'
+
 
 interface QueueControlsProps {
   activeCount: number
@@ -22,9 +18,6 @@ interface QueueControlsProps {
   failedCount: number
   onPauseAll?: () => void
   onResumeAll?: () => void
-  onCancelAll?: () => void
-  onClearCompleted?: () => void
-  onRetryAllFailed?: () => void
   onSortChange?: (sort: 'priority' | 'date' | 'title' | 'author') => void
   onFilterChange?: (filter: 'all' | 'downloading' | 'queued' | 'completed' | 'failed') => void
   currentSort?: string
@@ -39,63 +32,19 @@ export function QueueControls({
   failedCount,
   onPauseAll,
   onResumeAll,
-  onCancelAll,
-  onClearCompleted,
-  onRetryAllFailed,
   onSortChange,
   onFilterChange,
   currentSort = 'priority',
   currentFilter = 'all',
   isQueuePaused = false
 }: QueueControlsProps) {
-  const [showConfirmDialog, setShowConfirmDialog] = useState<string | null>(null)
-  const [dialogVisible, setDialogVisible] = useState(false)
+
 
   const totalItems = activeCount + queuedCount + completedCount + failedCount
 
-  const handleBulkAction = (action: string) => {
-    switch (action) {
-      case 'pauseAll':
-        onPauseAll?.()
-        break
-      case 'resumeAll':
-        onResumeAll?.()
-        break
-      case 'cancelAll':
-        setShowConfirmDialog('cancelAll')
-        setDialogVisible(true)
-        break
-      case 'clearCompleted':
-        setShowConfirmDialog('clearCompleted')
-        setDialogVisible(true)
-        break
-      case 'retryFailed':
-        onRetryAllFailed?.()
-        break
-    }
-  }
 
-  const handleDialogClose = () => {
-    setDialogVisible(false)
-    setTimeout(() => {
-      setShowConfirmDialog(null)
-    }, 200)
-  }
-
-  const confirmAction = () => {
-    switch (showConfirmDialog) {
-      case 'cancelAll':
-        onCancelAll?.()
-        break
-      case 'clearCompleted':
-        onClearCompleted?.()
-        break
-    }
-    handleDialogClose()
-  }
 
   return (
-    <>
       <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border">
         {/* Queue Summary */}
         <div className="flex items-center gap-6">
@@ -250,7 +199,7 @@ export function QueueControls({
                   variant="outline"
                   size="sm"
                   className="h-8"
-                  onClick={() => handleBulkAction('pauseAll')}
+                  onClick={() => onPauseAll?.()}
                 >
                   <Pause className="h-3 w-3 mr-1" />
                   Pause All
@@ -260,7 +209,7 @@ export function QueueControls({
                   variant="outline"
                   size="sm"
                   className="h-8"
-                  onClick={() => handleBulkAction('resumeAll')}
+                  onClick={() => onResumeAll?.()}
                 >
                   <Play className="h-3 w-3 mr-1" />
                   Resume All
@@ -269,97 +218,8 @@ export function QueueControls({
             </>
           )}
 
-          {/* Bulk Actions Menu */}
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger asChild>
-              <Button variant="outline" size="sm" className="h-8">
-                <Settings className="h-3 w-3 mr-1" />
-                Actions
-              </Button>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Portal>
-              <DropdownMenu.Content className="min-w-48 bg-popover border border-border rounded-md shadow-lg p-1 z-50">
-                {failedCount > 0 && (
-                  <DropdownMenu.Item
-                    className="px-2 py-1.5 text-sm cursor-pointer hover:bg-accent rounded-sm"
-                    onClick={() => handleBulkAction('retryFailed')}
-                  >
-                    <RotateCcw className="h-3 w-3 mr-2" />
-                    Retry All Failed ({failedCount})
-                  </DropdownMenu.Item>
-                )}
-                {completedCount > 0 && (
-                  <DropdownMenu.Item
-                    className="px-2 py-1.5 text-sm cursor-pointer hover:bg-accent rounded-sm"
-                    onClick={() => handleBulkAction('clearCompleted')}
-                  >
-                    <Trash2 className="h-3 w-3 mr-2" />
-                    Clear Completed ({completedCount})
-                  </DropdownMenu.Item>
-                )}
-                {(activeCount > 0 || queuedCount > 0) && (
-                  <>
-                    <DropdownMenu.Separator className="h-px bg-border my-1" />
-                    <DropdownMenu.Item
-                      className="px-2 py-1.5 text-sm cursor-pointer hover:bg-accent rounded-sm text-destructive"
-                      onClick={() => handleBulkAction('cancelAll')}
-                    >
-                      <Square className="h-3 w-3 mr-2" />
-                      Cancel All Downloads
-                    </DropdownMenu.Item>
-                  </>
-                )}
-              </DropdownMenu.Content>
-            </DropdownMenu.Portal>
-          </DropdownMenu.Root>
+
         </div>
       </div>
-
-      {/* Confirmation Dialog */}
-      <Dialog.Root open={!!showConfirmDialog} onOpenChange={handleDialogClose}>
-        <Dialog.Portal>
-          <Dialog.Overlay 
-            className={`fixed inset-0 bg-black z-50 transition-opacity duration-200 ${
-              dialogVisible ? 'bg-opacity-50' : 'bg-opacity-0'
-            }`} 
-          />
-          <Dialog.Content 
-            className={`fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-background border border-border rounded-lg shadow-lg p-6 w-96 z-50 transition-all duration-200 ${
-              dialogVisible 
-                ? 'opacity-100 scale-100 translate-y-0' 
-                : 'opacity-0 scale-95 translate-y-4'
-            }`}
-          >
-            <Dialog.Title className="text-lg font-semibold mb-2">
-              {showConfirmDialog === 'cancelAll' && 'Cancel All Downloads'}
-              {showConfirmDialog === 'clearCompleted' && 'Clear Completed Downloads'}
-            </Dialog.Title>
-            <Dialog.Description className="text-sm text-muted-foreground mb-4">
-              {showConfirmDialog === 'cancelAll' && 
-                `This will cancel ${activeCount + queuedCount} downloads. This action cannot be undone.`
-              }
-              {showConfirmDialog === 'clearCompleted' && 
-                `This will remove ${completedCount} completed downloads from the list. This action cannot be undone.`
-              }
-            </Dialog.Description>
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={handleDialogClose}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={confirmAction}
-              >
-                {showConfirmDialog === 'cancelAll' && 'Cancel All'}
-                {showConfirmDialog === 'clearCompleted' && 'Clear All'}
-              </Button>
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
-    </>
   )
 }
