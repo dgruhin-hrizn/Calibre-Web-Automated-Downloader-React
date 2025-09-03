@@ -5,14 +5,13 @@ import { Download, AlertCircle, Activity, BarChart3, Clock, CheckCircle, RotateC
 import { DraggableQueueItem } from '../components/DraggableQueueItem'
 import { QueueControls } from '../components/QueueControls'
 import * as Tabs from '@radix-ui/react-tabs'
-import { useDownloadStatus, useCancelDownload, useClearCompleted, useUserDownloadHistory } from '../hooks/useDownloads'
+import { useDownloadStatus, useCancelDownload, useUserDownloadHistory } from '../hooks/useDownloads'
 
 export function Downloads() {
   // All hooks must be called at the top level, before any early returns
   const { data: statusData, isLoading, error } = useDownloadStatus()
   const { data: userHistory } = useUserDownloadHistory(undefined, 100, 0) // Get user's download history
   const cancelDownload = useCancelDownload()
-  const clearCompleted = useClearCompleted()
   
   // State for queue management
   const [currentSort, setCurrentSort] = useState<'priority' | 'date' | 'title' | 'author'>('priority')
@@ -107,9 +106,7 @@ export function Downloads() {
     console.log('Set priority:', bookId, priority)
   }
 
-  const handleClearCompleted = () => {
-    clearCompleted.mutate()
-  }
+
 
   // Handle loading and error states after all hooks are called
   if (isLoading) {
@@ -146,7 +143,6 @@ export function Downloads() {
         queuedCount={downloads.processing.length + downloads.waiting.length + downloads.queued.length}
         completedCount={downloads.completed.length}
         failedCount={downloads.failed.length}
-        onClearCompleted={handleClearCompleted}
         onSortChange={setCurrentSort}
         onFilterChange={setCurrentFilter}
         currentSort={currentSort}
