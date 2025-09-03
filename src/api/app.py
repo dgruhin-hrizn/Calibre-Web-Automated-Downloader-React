@@ -118,6 +118,11 @@ class DualSessionApp:
 # Initialize dual session manager
 dual_session_manager = DualSessionApp(app)
 
+# Helper function for getting project root path
+def get_project_root():
+    """Get the project root directory (two levels up from src/api/)"""
+    return os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+
 # Initialize CWA client with settings
 def get_cwa_client():
     """Get CWA client with current settings"""
@@ -271,25 +276,78 @@ def index() -> str:
     Serve React frontend in production, or render template in development.
     """
     # Check if we have a built React app
-    react_build_path = os.path.join(app.root_path, 'frontend', 'dist', 'index.html')
+    project_root = get_project_root()
+    react_build_path = os.path.join(project_root, 'frontend', 'dist', 'index.html')
+    
+    logger.info(f"Looking for React frontend at: {react_build_path}")
+    logger.info(f"Project root: {project_root}")
+    logger.info(f"Frontend exists: {os.path.exists(react_build_path)}")
+    
     if os.path.exists(react_build_path):
+        logger.info("Serving React frontend")
         return send_file(react_build_path)
     
-    # Fallback to original template for development
-    return render_template('index.html', 
-                           book_languages=_SUPPORTED_BOOK_LANGUAGE, 
-                           default_language=BOOK_LANGUAGE, 
-                           debug=DEBUG,
-                           build_version=BUILD_VERSION,
-                           release_version=RELEASE_VERSION,
-                           app_env=APP_ENV
-                           )
+    # If React build doesn't exist, return error message instead of broken template
+    logger.warning(f"React frontend not found at {react_build_path}")
+    return jsonify({
+        "error": "Frontend not available",
+        "message": "React frontend not built. Please build the frontend or check your deployment.",
+        "expected_path": react_build_path,
+        "project_root": project_root,
+        "exists": os.path.exists(react_build_path),
+        "frontend_dist_dir_exists": os.path.exists(os.path.join(project_root, 'frontend', 'dist')),
+        "frontend_dir_exists": os.path.exists(os.path.join(project_root, 'frontend'))
+    }), 503
 
 # Serve React static files
 @app.route('/assets/<path:filename>')
 def react_assets(filename):
     """Serve React build assets."""
-    return send_from_directory(os.path.join(app.root_path, 'frontend', 'dist', 'assets'), filename)
+    # Use project root for correct path
+    assets_path = os.path.join(get_project_root(), 'frontend', 'dist', 'assets')
+    return send_from_directory(assets_path, filename)
+
+# Serve static files from static/media directory
+@app.route('/static/media/<path:filename>')
+@app.route('/request/static/media/<path:filename>')
+def static_media(filename):
+    """Serve static media files (images, icons, etc.)"""
+    # Use project root for correct path
+    static_media_path = os.path.join(get_project_root(), 'static', 'media')
+    return send_from_directory(static_media_path, filename)
+
+# Serve files directly from root (for legacy compatibility)
+@app.route('/<filename>')
+@app.route('/request/<filename>')
+def root_static_files(filename):
+    """Serve static files directly from root for legacy compatibility (like droplet.png)"""
+    logger.info(f"Static file requested: {filename}")
+    
+    # Only serve specific file types to avoid conflicts with SPA routing
+    if not filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.ico', '.svg', '.css', '.js')):
+        logger.info(f"File type not allowed for static serving: {filename}")
+        return "Not Found", 404
+    
+    # Check static/media directory first
+    static_media_path = os.path.join(get_project_root(), 'static', 'media')
+    static_file_path = os.path.join(static_media_path, filename)
+    
+    logger.info(f"Checking static/media path: {static_file_path}")
+    if os.path.exists(static_file_path):
+        logger.info(f"Serving from static/media: {filename}")
+        return send_from_directory(static_media_path, filename)
+    
+    # Check frontend/public directory
+    frontend_public_path = os.path.join(get_project_root(), 'frontend', 'public')
+    public_file_path = os.path.join(frontend_public_path, filename)
+    
+    logger.info(f"Checking frontend/public path: {public_file_path}")
+    if os.path.exists(public_file_path):
+        logger.info(f"Serving from frontend/public: {filename}")
+        return send_from_directory(frontend_public_path, filename)
+    
+    logger.warning(f"Static file not found: {filename}")
+    return "Not Found", 404
 
 # Catch-all route for React Router (SPA routing)
 @app.route('/<path:path>')
@@ -304,20 +362,19 @@ def catch_all(path):
         return "Not Found", 404
     
     # Check if we have a built React app
-    react_build_path = os.path.join(app.root_path, 'frontend', 'dist', 'index.html')
+    react_build_path = os.path.join(get_project_root(), 'frontend', 'dist', 'index.html')
+    
     if os.path.exists(react_build_path):
         return send_file(react_build_path)
     
     # Fallback to 404 if no React build found
     return "Frontend not built", 404
 
- 
-
 @app.route('/favico<path:_>')
 @app.route('/request/favico<path:_>')
 @app.route('/request/static/favico<path:_>')
 def favicon(_ : typing.Any) -> Response:
-    return send_from_directory(os.path.join(app.root_path, 'static', 'media'),
+    return send_from_directory(os.path.join(get_project_root(), 'static', 'media'),
         'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 from typing import Union, Tuple
