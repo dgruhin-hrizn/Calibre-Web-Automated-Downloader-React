@@ -4,7 +4,7 @@ import { Button } from '../components/ui/Button'
 import { Swiper, SwiperSlide } from 'swiper/react'
 import { Navigation, FreeMode } from 'swiper/modules'
 import { UnifiedBookCard, type UnifiedBook } from '../components/UnifiedBookCard'
-import { Input } from '../components/ui/input'
+import { Input } from '../components/ui/Input'
 import { Card, CardContent } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { useToast } from '../hooks/useToast'
@@ -104,7 +104,7 @@ export function SeriesOptimized() {
   const [seriesPages, setSeriesPages] = useState<SeriesPage[]>([])
   const [currentPage, setCurrentPage] = useState(1)
   const [hasNextPage, setHasNextPage] = useState(true)
-  const [totalSeries, setTotalSeries] = useState(0)
+
   
   // Series with books state
   const [seriesWithBooks, setSeriesWithBooks] = useState<Map<number, SeriesWithBooks>>(new Map())
@@ -178,7 +178,7 @@ export function SeriesOptimized() {
         setSeriesPages([pageData])
       }
 
-      setTotalSeries(data.total || 0)
+
       setHasNextPage(page < (data.pages || 1))
       setCurrentPage(page)
 
