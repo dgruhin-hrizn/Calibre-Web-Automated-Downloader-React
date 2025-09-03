@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { LoginPage } from './LoginPage'
+import { ActivityTracker } from './ActivityTracker'
 import { Loader2 } from 'lucide-react'
 
 interface ProtectedRouteProps {
@@ -28,5 +29,10 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   // Show protected content if authenticated
-  return <>{children}</>
+  return (
+    <>
+      <ActivityTracker />
+      {children}
+    </>
+  )
 }

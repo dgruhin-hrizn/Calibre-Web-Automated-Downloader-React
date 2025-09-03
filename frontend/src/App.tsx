@@ -25,7 +25,9 @@ const queryClient = new QueryClient({
     queries: {
       refetchOnWindowFocus: false,
       retry: (failureCount, error: any) => {
-        // Don't retry on 4xx errors
+        // Don't retry on 401 (auth errors) - let auth system handle it
+        if (error?.status === 401 || error?.response?.status === 401) return false
+        // Don't retry on other 4xx errors
         if (error?.status >= 400 && error?.status < 500) return false
         return failureCount < 2
       },
@@ -35,7 +37,11 @@ const queryClient = new QueryClient({
       refetchIntervalInBackground: false,
     },
     mutations: {
-      retry: 1,
+      retry: (failureCount, error: any) => {
+        // Don't retry mutations on 401 errors
+        if (error?.status === 401 || error?.response?.status === 401) return false
+        return failureCount < 1
+      },
     },
   },
 })

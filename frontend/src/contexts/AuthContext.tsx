@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 
 const API_BASE_URL = import.meta.env.PROD ? '' : 'http://localhost:8084'
 
@@ -17,6 +17,7 @@ interface AuthContextType {
   login: (username: string, password: string) => Promise<boolean>
   logout: () => void
   refreshUserInfo: () => Promise<void>
+  recordActivity: () => void
   user?: { username: string }
 }
 
@@ -34,14 +35,21 @@ interface AuthProviderProps {
   children: ReactNode
 }
 
-// Cache duration: 10 minutes
+// Cache duration: 10 minutes (for user info caching)
 const CACHE_DURATION = 10 * 60 * 1000
+// Inactivity timeout: 30 minutes
+const INACTIVITY_TIMEOUT = 30 * 60 * 1000
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [user, setUser] = useState<{ username: string } | undefined>(undefined)
+  const [lastActivity, setLastActivity] = useState<number>(Date.now())
+  
+  // Use refs to prevent stale closures and avoid dependency issues
+  const lastActivityRef = useRef<number>(Date.now())
+  const isRefreshingRef = useRef<boolean>(false)
 
   // Fetch fresh user info from the server
   const fetchUserInfo = async (): Promise<CachedUserInfo | null> => {
@@ -117,12 +125,48 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }
 
+  // Record user activity and extend session if needed
+  const recordActivity = useCallback(() => {
+    const now = Date.now()
+    const timeSinceLastActivity = now - lastActivityRef.current
+    
+    // Throttle activity recording to every 30 seconds to prevent excessive updates
+    if (timeSinceLastActivity < 30 * 1000) {
+      return
+    }
+    
+    lastActivityRef.current = now
+    setLastActivity(now)
+    
+    // If user is authenticated and cache is getting stale, refresh it proactively
+    if (isAuthenticated && !isRefreshingRef.current) {
+      const cachedInfo = getCachedUserInfo()
+      if (cachedInfo) {
+        const timeUntilExpiry = cachedInfo.expires - now
+        // If less than 5 minutes until cache expiry, refresh it
+        if (timeUntilExpiry < 5 * 60 * 1000) {
+          isRefreshingRef.current = true
+          fetchUserInfo().then(userInfo => {
+            if (userInfo) {
+              updateAuthState(userInfo)
+            }
+          }).catch(() => {
+            // If refresh fails, user might be logged out - let normal flow handle it
+          }).finally(() => {
+            isRefreshingRef.current = false
+          })
+        }
+      }
+    }
+  }, [isAuthenticated])
+
   // Manual refresh function for when admin status might have changed
   const refreshUserInfo = async () => {
     setIsLoading(true)
     try {
       const userInfo = await fetchUserInfo()
       updateAuthState(userInfo)
+      recordActivity() // Update activity timestamp
     } finally {
       setIsLoading(false)
     }
@@ -163,6 +207,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
     checkAuth()
   }, [])
 
+  // Inactivity timeout - logout user after 30 minutes of inactivity
+  useEffect(() => {
+    if (!isAuthenticated) return
+
+    const checkInactivity = () => {
+      const now = Date.now()
+      const timeSinceActivity = now - lastActivityRef.current
+      
+      if (timeSinceActivity >= INACTIVITY_TIMEOUT) {
+        console.log('User inactive for 30 minutes, logging out')
+        logout()
+      }
+    }
+
+    // Check every minute for inactivity
+    const inactivityTimer = setInterval(checkInactivity, 60 * 1000)
+    
+    return () => clearInterval(inactivityTimer)
+  }, [isAuthenticated]) // Remove lastActivity from dependencies
+
   const login = async (username: string, password: string): Promise<boolean> => {
     setIsLoading(true)
     try {
@@ -183,6 +247,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           const userInfo = await fetchUserInfo()
           if (userInfo) {
             updateAuthState(userInfo)
+            recordActivity() // Record login as activity
             // Remove old basic auth storage
             localStorage.removeItem('cwa_auth')
             return true
@@ -232,6 +297,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     login,
     logout,
     refreshUserInfo,
+    recordActivity,
     user,
   }
 
