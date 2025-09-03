@@ -1,4 +1,5 @@
-import { Search, Grid, List, AlertTriangle, ChevronDown } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Search, Grid, List, AlertTriangle, ChevronDown, X, Calendar, User, BookOpen, TrendingUp, TrendingDown, Clock, ArrowUp, ArrowDown } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { LibraryPagination } from './LibraryPagination'
@@ -25,18 +26,18 @@ interface LibraryToolbarProps {
   onManageDuplicates: () => void
 }
 
-// Sort options configuration
+// Sort options configuration with icons
 const sortOptions = [
-  { value: 'new' as SortParam, label: 'Date Added (Newest)' },
-  { value: 'old' as SortParam, label: 'Date Added (Oldest)' },
-  { value: 'abc' as SortParam, label: 'Title (A-Z)' },
-  { value: 'zyx' as SortParam, label: 'Title (Z-A)' },
-  { value: 'authaz' as SortParam, label: 'Author (A-Z)' },
-  { value: 'authza' as SortParam, label: 'Author (Z-A)' },
-  { value: 'pubnew' as SortParam, label: 'Publication (Newest)' },
-  { value: 'pubold' as SortParam, label: 'Publication (Oldest)' },
-  { value: 'hotasc' as SortParam, label: 'Downloads (Low to High)' },
-  { value: 'hotdesc' as SortParam, label: 'Downloads (High to Low)' }
+  { value: 'new' as SortParam, label: 'Date Added (Newest)', icon: Clock },
+  { value: 'old' as SortParam, label: 'Date Added (Oldest)', icon: Clock },
+  { value: 'abc' as SortParam, label: 'Title (A-Z)', icon: ArrowUp },
+  { value: 'zyx' as SortParam, label: 'Title (Z-A)', icon: ArrowDown },
+  { value: 'authaz' as SortParam, label: 'Author (A-Z)', icon: User },
+  { value: 'authza' as SortParam, label: 'Author (Z-A)', icon: User },
+  { value: 'pubnew' as SortParam, label: 'Publication (Newest)', icon: Calendar },
+  { value: 'pubold' as SortParam, label: 'Publication (Oldest)', icon: Calendar },
+  { value: 'hotasc' as SortParam, label: 'Downloads (Low to High)', icon: TrendingUp },
+  { value: 'hotdesc' as SortParam, label: 'Downloads (High to Low)', icon: TrendingDown }
 ]
 
 export function LibraryToolbar({
@@ -54,6 +55,37 @@ export function LibraryToolbar({
   isAdmin,
   onManageDuplicates
 }: LibraryToolbarProps) {
+  // Local search input state (separate from actual search query)
+  const [searchInput, setSearchInput] = useState(searchQuery)
+
+  // Handle search form submission
+  const handleSearch = (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    const trimmedInput = searchInput.trim()
+    if (trimmedInput !== searchQuery) {
+      onSearchChange(trimmedInput)
+    }
+  }
+
+  // Handle clear search
+  const handleClearSearch = () => {
+    setSearchInput('')
+    if (searchQuery !== '') {
+      onSearchChange('')
+    }
+  }
+
+  // Handle Enter key press
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSearch()
+    }
+  }
+
+  // Sync local search input with external search query changes
+  useEffect(() => {
+    setSearchInput(searchQuery)
+  }, [searchQuery])
 
   return (
     <div className="sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/90 border-b border-border -mx-6 mb-8">
@@ -84,63 +116,103 @@ export function LibraryToolbar({
 
           {/* Bottom Row: Search, Filters, View Mode, and Pagination */}
           <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
-            {/* Left Side: Search and Filters */}
+            {/* Left Side: Search */}
             <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center flex-1">
               {/* Search */}
-              <div className="relative w-full sm:w-80">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                <input
-                  type="text"
-                  placeholder="Search books..."
-                  value={searchQuery}
-                  onChange={(e) => onSearchChange(e.target.value)}
+              <form onSubmit={handleSearch} className="flex gap-2 w-full sm:w-auto items-center">
+                <div className="relative flex-1 sm:w-80">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                  <input
+                    type="text"
+                    placeholder="Search books..."
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    disabled={loading}
+                    className="pl-10 pr-10 py-2 w-full h-10 rounded-md border border-input bg-background text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                  {searchInput && (
+                    <button
+                      type="button"
+                      onClick={handleClearSearch}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                <Button 
+                  type="submit" 
+                  variant="outline" 
                   disabled={loading}
-                  className="pl-10 pr-4 py-2 w-full rounded-md border border-input bg-background text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                />
-              </div>
+                  className="flex items-center gap-2 h-10 px-4"
+                >
+                  <Search className="h-4 w-4" />
+                  Search
+                </Button>
+                {searchQuery && (
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    onClick={handleClearSearch}
+                    disabled={loading}
+                    className="flex items-center gap-2 h-10 px-4"
+                  >
+                    <X className="h-4 w-4" />
+                    Clear
+                  </Button>
+                )}
+              </form>
+            </div>
 
+            {/* Right Side: Sort, View Mode, and Pagination */}
+            <div className="flex items-center gap-4">
               {/* Sort Dropdown */}
               <DropdownMenu.Root>
                 <DropdownMenu.Trigger asChild>
                   <Button 
                     variant="outline" 
-                    size="sm" 
+                    size="sm"
                     disabled={loading}
-                    className="min-w-[180px] justify-between"
+                    className="flex items-center gap-2"
+                    title={sortOptions.find(option => option.value === sortParam)?.label || 'Sort by...'}
                   >
-                    <span className="truncate">
-                      {sortOptions.find(option => option.value === sortParam)?.label || 'Sort by...'}
-                    </span>
-                    <ChevronDown className="h-4 w-4 ml-2 flex-shrink-0" />
+                    {(() => {
+                      const currentOption = sortOptions.find(option => option.value === sortParam)
+                      const IconComponent = currentOption?.icon || BookOpen
+                      return <IconComponent className="h-4 w-4" />
+                    })()}
+                    <ChevronDown className="h-4 w-4" />
                   </Button>
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Portal>
                   <DropdownMenu.Content 
                     className="min-w-[220px] bg-background border border-border rounded-md shadow-lg p-1 z-50"
-                    align="start"
+                    align="end"
                     sideOffset={4}
                   >
-                    {sortOptions.map((option) => (
-                      <DropdownMenu.Item
-                        key={option.value}
-                        className={`
-                          flex items-center px-3 py-2 text-sm rounded-sm cursor-pointer outline-none
-                          hover:bg-accent hover:text-accent-foreground
-                          focus:bg-accent focus:text-accent-foreground
-                          ${sortParam === option.value ? 'bg-accent text-accent-foreground' : ''}
-                        `}
-                        onSelect={() => onSortChange(option.value)}
-                      >
-                        {option.label}
-                      </DropdownMenu.Item>
-                    ))}
+                    {sortOptions.map((option) => {
+                      const IconComponent = option.icon
+                      return (
+                        <DropdownMenu.Item
+                          key={option.value}
+                          className={`
+                            flex items-center gap-3 px-3 py-2 text-sm rounded-sm cursor-pointer outline-none
+                            hover:bg-accent hover:text-accent-foreground
+                            focus:bg-accent focus:text-accent-foreground
+                            ${sortParam === option.value ? 'bg-accent text-accent-foreground' : ''}
+                          `}
+                          onSelect={() => onSortChange(option.value)}
+                        >
+                          <IconComponent className="h-4 w-4 flex-shrink-0" />
+                          <span className="flex-1">{option.label}</span>
+                        </DropdownMenu.Item>
+                      )
+                    })}
                   </DropdownMenu.Content>
                 </DropdownMenu.Portal>
               </DropdownMenu.Root>
-            </div>
 
-            {/* Right Side: View Mode and Pagination */}
-            <div className="flex items-center gap-4">
               {/* View Mode Toggle */}
               <div className="flex items-center border rounded-md">
                 <Button
