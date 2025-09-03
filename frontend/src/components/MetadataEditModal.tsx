@@ -1,7 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import * as Dialog from '@radix-ui/react-dialog';
 import { X, Save, Loader2, Star } from 'lucide-react';
 import Editor from 'react-simple-wysiwyg';
-import CoverUpload from './CoverUpload';
+import CoverUpload, { type CoverUploadRef } from './CoverUpload';
+import { Button } from './ui/Button';
+import { Input } from './ui/Input';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { cn } from '../lib/utils';
+import { imageCache } from '../lib/imageCache';
 
 interface BookMetadata {
   title: string;
@@ -21,14 +27,16 @@ interface MetadataEditModalProps {
   bookId: number;
   isOpen: boolean;
   onClose: () => void;
-  onSave: () => void;
+  onSave: () => Promise<void>;
+  isRefreshing?: boolean;
 }
 
 const MetadataEditModal: React.FC<MetadataEditModalProps> = ({
   bookId,
   isOpen,
   onClose,
-  onSave
+  onSave,
+  isRefreshing = false
 }) => {
   const [metadata, setMetadata] = useState<BookMetadata>({
     title: '',
@@ -47,6 +55,32 @@ const MetadataEditModal: React.FC<MetadataEditModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const coverUploadRef = useRef<CoverUploadRef>(null);
+  
+  // Simple function to update cover images with timestamp
+  const handleCoverUpdated = (bookId: number) => {
+    const timestamp = Date.now()
+    const baseUrl = `/api/metadata/books/${bookId}/cover`
+    
+    // 1. Invalidate the image cache for this book's cover
+    imageCache.invalidateUrl(baseUrl)
+    
+    // 2. Update all regular cover images with a timestamp to force reload
+    const coverImages = document.querySelectorAll(`img[src*="${baseUrl}"]`) as NodeListOf<HTMLImageElement>
+    
+    coverImages.forEach((img) => {
+      const url = new URL(img.src, window.location.origin)
+      url.searchParams.set('t', timestamp.toString())
+      img.src = url.toString()
+    })
+    
+    // 3. Force re-render of CachedImage components by dispatching a custom event
+    // This will trigger useEffect in CachedImage components that listen for cover updates
+    const event = new CustomEvent('coverUpdated', { 
+      detail: { bookId, baseUrl, timestamp } 
+    })
+    window.dispatchEvent(event)
+  }
 
   // Load current metadata when modal opens
   useEffect(() => {
@@ -96,6 +130,7 @@ const MetadataEditModal: React.FC<MetadataEditModalProps> = ({
     setError(null);
 
     try {
+      // First, save the metadata to CWA
       const response = await fetch(`/api/cwa/library/books/${bookId}/edit`, {
         method: 'POST',
         headers: {
@@ -110,300 +145,321 @@ const MetadataEditModal: React.FC<MetadataEditModalProps> = ({
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          onSave(); // Notify parent component
-          onClose(); // Close modal
+          // If there's a cover selected, upload it before triggering refresh
+          if (coverUploadRef.current?.hasSelection) {
+            try {
+              await coverUploadRef.current.uploadSelected();
+            } catch (coverError) {
+              console.error('[MetadataEditModal] Cover upload failed:', coverError);
+              // Don't fail the whole save for cover upload errors
+            }
+          }
+          
+          // Metadata saved successfully, now trigger the refresh process
+          await onSave(); // This will handle the refresh and close the modal
         } else {
           setError(data.error || 'Failed to update metadata');
+          setIsSaving(false);
         }
       } else {
         const errorData = await response.json();
         setError(errorData.error || 'Failed to update metadata');
+        setIsSaving(false);
       }
     } catch (err) {
       setError('Network error saving metadata');
       console.error('Error saving metadata:', err);
-    } finally {
       setIsSaving(false);
     }
+    // Note: setIsSaving(false) is handled by parent after successful refresh
   };
 
   const handleInputChange = (field: keyof BookMetadata, value: string) => {
     setMetadata(prev => ({ ...prev, [field]: value }));
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div 
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70]"
-      onClick={onClose}
-    >
-      <div 
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header - Fixed */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-            Edit Book Metadata
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-
-        {/* Content - Scrollable */}
-        <div className="p-6 flex-1 overflow-y-auto">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-              <span className="ml-2 text-gray-600 dark:text-gray-300">Loading metadata...</span>
+    <Dialog.Root open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 bg-black/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 z-50" />
+        <Dialog.Content className="fixed left-[50%] top-[50%] z-50 w-full max-w-4xl translate-x-[-50%] translate-y-[-50%] border bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg max-h-[90vh] flex flex-col">
+          {/* Header - Fixed */}
+          <div className="flex items-center justify-between p-6 border-b border-border flex-shrink-0">
+            <div>
+              <Dialog.Title className="text-lg font-semibold text-foreground">
+                Edit Book Metadata
+              </Dialog.Title>
+              <Dialog.Description className="text-sm text-muted-foreground mt-1">
+                Update the book's title, authors, description, and other metadata fields.
+              </Dialog.Description>
             </div>
-          ) : (
-            <div className="space-y-4">
-              {error && (
-                <div className="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-300 px-4 py-3 rounded">
-                  {error}
-                </div>
-              )}
+            <Dialog.Close asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                disabled={isSaving || isRefreshing}
+              >
+                <X className="h-4 w-4" />
+                <span className="sr-only">Close</span>
+              </Button>
+            </Dialog.Close>
+          </div>
 
-              {/* Title */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Title
-                </label>
-                <input
-                  type="text"
-                  value={metadata.title}
-                  onChange={(e) => handleInputChange('title', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                  placeholder="Book title"
-                />
+          {/* Content - Scrollable */}
+          <div className="flex-1 overflow-y-auto p-6">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                <span className="ml-2 text-muted-foreground">Loading metadata...</span>
               </div>
-
-              {/* Authors */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Authors
-                </label>
-                <input
-                  type="text"
-                  value={metadata.authors}
-                  onChange={(e) => handleInputChange('authors', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                  placeholder="Author names (separate multiple authors with &)"
-                />
-              </div>
-
-              {/* Description */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Description
-                </label>
-                <div className="border border-gray-300 dark:border-gray-600 rounded-md overflow-hidden [&_.rsww-editor]:bg-white [&_.rsww-editor]:dark:bg-gray-700 [&_.rsww-editor]:dark:text-white [&_.rsww-toolbar]:bg-gray-50 [&_.rsww-toolbar]:dark:bg-gray-800 [&_.rsww-toolbar]:dark:border-gray-600">
-                  <Editor
-                    value={metadata.comments}
-                    onChange={(e) => handleInputChange('comments', e.target.value)}
-                    placeholder="Book description..."
-                    containerProps={{
-                      style: {
-                        minHeight: '120px',
-                        resize: 'vertical'
-                      }
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Tags */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Tags
-                </label>
-                <input
-                  type="text"
-                  value={metadata.tags}
-                  onChange={(e) => handleInputChange('tags', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                  placeholder="Tags (separate with commas)"
-                />
-              </div>
-
-              {/* Series and Series Index Row */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Series */}
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Series
-                  </label>
-                  <input
-                    type="text"
-                    value={metadata.series}
-                    onChange={(e) => handleInputChange('series', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                    placeholder="Series name"
-                  />
-                </div>
-                
-                {/* Series Index */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Book #
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={metadata.series_index}
-                    onChange={(e) => handleInputChange('series_index', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                    placeholder="1"
-                  />
-                </div>
-              </div>
-
-              {/* Publisher */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Publisher
-                </label>
-                <input
-                  type="text"
-                  value={metadata.publisher}
-                  onChange={(e) => handleInputChange('publisher', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                  placeholder="Publisher name"
-                />
-              </div>
-
-              {/* Rating */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Rating
-                </label>
-                <div className="flex items-center space-x-2">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      key={star}
-                      type="button"
-                      onClick={() => handleInputChange('rating', star.toString())}
-                      className={`p-1 rounded transition-colors ${
-                        parseInt(metadata.rating) >= star
-                          ? 'text-yellow-400 hover:text-yellow-500'
-                          : 'text-gray-300 dark:text-gray-600 hover:text-yellow-300'
-                      }`}
-                    >
-                      <Star className={`w-6 h-6 ${parseInt(metadata.rating) >= star ? 'fill-current' : ''}`} />
-                    </button>
-                  ))}
-                  {metadata.rating && (
-                    <button
-                      type="button"
-                      onClick={() => handleInputChange('rating', '')}
-                      className="ml-2 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Publication Date and Language Row */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Publication Date */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Publication Date
-                  </label>
-                  <input
-                    type="date"
-                    value={metadata.pubdate}
-                    onChange={(e) => handleInputChange('pubdate', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                  />
-                </div>
-
-                {/* Language */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Language
-                  </label>
-                  <input
-                    type="text"
-                    value={metadata.language}
-                    onChange={(e) => handleInputChange('language', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                    placeholder="e.g., English, Spanish, French"
-                  />
-                </div>
-              </div>
-
-              {/* ISBN */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  ISBN
-                </label>
-                <input
-                  type="text"
-                  value={metadata.isbn}
-                  onChange={(e) => handleInputChange('isbn', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                  placeholder="ISBN-10 or ISBN-13"
-                />
-              </div>
-
-              {/* Cover Upload */}
-              <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
-                <CoverUpload
-                  bookId={bookId}
-                  currentCoverUrl={`/api/metadata/books/${bookId}/cover`}
-                  onCoverUpdated={() => {
-                    // Refresh the cover image by adding a timestamp
-                    const coverImages = document.querySelectorAll(`img[src*="/api/metadata/books/${bookId}/cover"]`);
-                    coverImages.forEach((img) => {
-                      const htmlImg = img as HTMLImageElement;
-                      const url = new URL(htmlImg.src);
-                      url.searchParams.set('t', Date.now().toString());
-                      htmlImg.src = url.toString();
-                    });
-                  }}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Footer - Fixed */}
-        <div className="flex items-center justify-end space-x-3 p-6 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
-          <button
-            onClick={onClose}
-            disabled={isSaving}
-            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={isSaving || isLoading}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 flex items-center"
-          >
-            {isSaving ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                Saving...
-              </>
             ) : (
-              <>
-                <Save className="w-4 h-4 mr-2" />
-                Save Changes
-              </>
+              <div className="pb-4">
+                {error && (
+                  <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-md mb-6">
+                    {error}
+                  </div>
+                )}
+
+                {/* Two Column Layout */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  {/* Left Column - Cover */}
+                  <div className="lg:col-span-1 space-y-6">
+                    {/* Cover Upload */}
+                    <div>
+                      <CoverUpload
+                        ref={coverUploadRef}
+                        bookId={bookId}
+                        currentCoverUrl={`/api/metadata/books/${bookId}/cover`}
+                        previewOnly={true}
+                        onCoverUpdated={() => {
+                          // Simple cover image update with timestamp
+                          handleCoverUpdated(bookId);
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Right Column - Other Metadata */}
+                  <div className="lg:col-span-2 space-y-6">
+                    {/* Title */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">
+                        Title
+                      </label>
+                      <Input
+                        value={metadata.title}
+                        onChange={(e) => handleInputChange('title', e.target.value)}
+                        placeholder="Book title"
+                      />
+                    </div>
+
+                    {/* Authors */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">
+                        Authors
+                      </label>
+                      <Input
+                        value={metadata.authors}
+                        onChange={(e) => handleInputChange('authors', e.target.value)}
+                        placeholder="Author names (separate multiple authors with &)"
+                      />
+                    </div>
+
+                    {/* Rating */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">
+                        Rating
+                      </label>
+                      <div className="flex items-center space-x-2">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <Button
+                            key={star}
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleInputChange('rating', star.toString())}
+                            className={cn(
+                              "h-8 w-8 p-0 transition-colors",
+                              parseInt(metadata.rating) >= star
+                                ? 'text-yellow-500 hover:text-yellow-600'
+                                : 'text-muted-foreground hover:text-yellow-400'
+                            )}
+                          >
+                            <Star className={cn(
+                              "w-5 h-5",
+                              parseInt(metadata.rating) >= star ? 'fill-current' : ''
+                            )} />
+                          </Button>
+                        ))}
+                        {metadata.rating && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleInputChange('rating', '')}
+                            className="ml-2 text-xs text-muted-foreground hover:text-foreground"
+                          >
+                            Clear
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Description */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">
+                        Description
+                      </label>
+                      <div className="border border-input rounded-md overflow-hidden [&_.rsww-editor]:bg-background [&_.rsww-editor]:text-foreground [&_.rsww-toolbar]:bg-muted [&_.rsww-toolbar]:border-border">
+                        <Editor
+                          value={metadata.comments}
+                          onChange={(e) => handleInputChange('comments', e.target.value)}
+                          placeholder="Book description..."
+                          containerProps={{
+                            style: {
+                              minHeight: '120px',
+                              resize: 'vertical'
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Series and Series Index Row */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Series */}
+                      <div className="md:col-span-2 space-y-2">
+                        <label className="text-sm font-medium text-foreground">
+                          Series
+                        </label>
+                        <Input
+                          value={metadata.series}
+                          onChange={(e) => handleInputChange('series', e.target.value)}
+                          placeholder="Series name"
+                        />
+                      </div>
+                      
+                      {/* Series Index */}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-foreground">
+                          Book #
+                        </label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          value={metadata.series_index}
+                          onChange={(e) => handleInputChange('series_index', e.target.value)}
+                          placeholder="1"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Tags */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">
+                        Tags
+                      </label>
+                      <Input
+                        value={metadata.tags}
+                        onChange={(e) => handleInputChange('tags', e.target.value)}
+                        placeholder="Tags (separate with commas)"
+                      />
+                    </div>
+
+                    {/* Publisher and Publication Date Row */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Publisher */}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-foreground">
+                          Publisher
+                        </label>
+                        <Input
+                          value={metadata.publisher}
+                          onChange={(e) => handleInputChange('publisher', e.target.value)}
+                          placeholder="Publisher name"
+                        />
+                      </div>
+
+                      {/* Publication Date */}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-foreground">
+                          Publication Date
+                        </label>
+                        <Input
+                          type="date"
+                          value={metadata.pubdate}
+                          onChange={(e) => handleInputChange('pubdate', e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Language and ISBN Row */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Language */}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-foreground">
+                          Language
+                        </label>
+                        <Input
+                          value={metadata.language}
+                          onChange={(e) => handleInputChange('language', e.target.value)}
+                          placeholder="e.g., English, Spanish, French"
+                        />
+                      </div>
+
+                      {/* ISBN */}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-foreground">
+                          ISBN
+                        </label>
+                        <Input
+                          value={metadata.isbn}
+                          onChange={(e) => handleInputChange('isbn', e.target.value)}
+                          placeholder="ISBN-10 or ISBN-13"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
-          </button>
-        </div>
-      </div>
-    </div>
+          </div>
+
+          {/* Footer - Fixed */}
+          <div className="flex items-center justify-end space-x-3 p-6 border-t border-border flex-shrink-0">
+            <Button
+              variant="outline"
+              onClick={onClose}
+              disabled={isSaving || isRefreshing}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={isSaving || isRefreshing || isLoading}
+            >
+              {isSaving && !isRefreshing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Saving...
+                </>
+              ) : isRefreshing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Saving Metadata...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4 mr-2" />
+                  Save Changes
+                </>
+              )}
+            </Button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 };
 

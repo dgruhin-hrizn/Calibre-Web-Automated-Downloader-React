@@ -5,7 +5,7 @@ import { Card, CardContent } from '../../../components/ui/card'
 import { formatDate } from '../../../lib/utils'
 import { useAdminStatus } from '../hooks/useAdminStatus'
 import { AuthorFormatter } from '../../../utils/authorFormatter'
-import MetadataEditModal from '../../../components/MetadataEditModal'
+
 import type { LibraryBook } from '../types'
 
 // Utility function to check if a date is today
@@ -25,9 +25,10 @@ interface LibraryBookModalProps {
   onClose: () => void
   onSendToKindle: (book: LibraryBook) => Promise<{ success: boolean; message: string }>
   onBookDeleted?: () => void
+  onEditMetadata?: (bookId: number) => void
 }
 
-export function LibraryBookModal({ book, onClose, onSendToKindle, onBookDeleted }: LibraryBookModalProps) {
+export function LibraryBookModal({ book, onClose, onSendToKindle, onBookDeleted, onEditMetadata }: LibraryBookModalProps) {
   const coverUrl = book.has_cover ? `/api/metadata/books/${book.id}/cover` : null
   const isNewBook = isToday(book.timestamp)
   const [kindleState, setKindleState] = useState<'idle' | 'sending' | 'success' | 'failed'>('idle')
@@ -37,7 +38,7 @@ export function LibraryBookModal({ book, onClose, onSendToKindle, onBookDeleted 
   const [isVisible, setIsVisible] = useState(false)
   const [isClosing, setIsClosing] = useState(false)
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false)
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+
   
   // Admin status check
   const { isAdmin } = useAdminStatus()
@@ -459,7 +460,7 @@ export function LibraryBookModal({ book, onClose, onSendToKindle, onBookDeleted 
               
               {/* Edit Metadata Button */}
               <Button
-                onClick={() => setIsEditModalOpen(true)}
+                onClick={() => onEditMetadata?.(book.id)}
                 variant="outline"
                 size="lg"
                 className="px-6"
@@ -564,18 +565,7 @@ export function LibraryBookModal({ book, onClose, onSendToKindle, onBookDeleted 
           </Card>
         </div>
       )}
-      
-      {/* Metadata Edit Modal */}
-      <MetadataEditModal
-        bookId={book.id}
-        isOpen={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
-        onSave={() => {
-          // TODO: Refresh book data after metadata update
-          console.log('Metadata updated successfully')
-          setIsEditModalOpen(false)
-        }}
-      />
+
     </div>
   )
 }

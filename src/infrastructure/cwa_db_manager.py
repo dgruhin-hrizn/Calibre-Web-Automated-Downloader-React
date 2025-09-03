@@ -126,13 +126,14 @@ class CWADBManager:
         return permissions
     
     def get_all_users(self) -> List[Dict[str, Any]]:
-        """Get all users from the database"""
+        """Get all users from the database (excludes system Guest user)"""
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
                     SELECT id, name, email, kindle_mail, locale, default_language, role
                     FROM user 
+                    WHERE name != 'Guest'
                     ORDER BY LOWER(name) ASC
                 """)
                 
@@ -157,14 +158,14 @@ class CWADBManager:
             return []
     
     def get_user_by_id(self, user_id: int) -> Optional[Dict[str, Any]]:
-        """Get a specific user by ID"""
+        """Get a specific user by ID (excludes system Guest user)"""
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
                     SELECT id, name, email, kindle_mail, locale, default_language, role
                     FROM user 
-                    WHERE id = ?
+                    WHERE id = ? AND name != 'Guest'
                 """, (user_id,))
                 
                 row = cursor.fetchone()
@@ -189,8 +190,13 @@ class CWADBManager:
                    kindle_email: str = '', locale: str = 'en', 
                    default_language: str = 'en', 
                    permissions: Dict[str, bool] = None) -> bool:
-        """Create a new user"""
+        """Create a new user (prevents creating system Guest user)"""
         try:
+            # Prevent creating a user named "Guest" (system reserved)
+            if username.lower() == 'guest':
+                logger.warning(f"Attempted to create system reserved username: {username}")
+                return False
+                
             if permissions is None:
                 permissions = {'download': True, 'passwd': True}  # Default permissions
             
@@ -216,10 +222,17 @@ class CWADBManager:
                    kindle_email: str = None, locale: str = None,
                    default_language: str = None, 
                    permissions: Dict[str, bool] = None) -> bool:
-        """Update an existing user"""
+        """Update an existing user (prevents updating system Guest user)"""
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
+                
+                # Check if this is the Guest user - prevent updates
+                cursor.execute("SELECT name FROM user WHERE id = ?", (user_id,))
+                user_row = cursor.fetchone()
+                if user_row and user_row['name'] == 'Guest':
+                    logger.warning(f"Attempted to update system Guest user (ID: {user_id})")
+                    return False
                 
                 # Build dynamic update query
                 updates = []
@@ -270,10 +283,18 @@ class CWADBManager:
             return False
     
     def delete_user(self, user_id: int) -> bool:
-        """Delete a user"""
+        """Delete a user (prevents deleting system Guest user)"""
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
+                
+                # Check if this is the Guest user - prevent deletion
+                cursor.execute("SELECT name FROM user WHERE id = ?", (user_id,))
+                user_row = cursor.fetchone()
+                if user_row and user_row['name'] == 'Guest':
+                    logger.warning(f"Attempted to delete system Guest user (ID: {user_id})")
+                    return False
+                
                 cursor.execute("DELETE FROM user WHERE id = ?", (user_id,))
                 conn.commit()
                 

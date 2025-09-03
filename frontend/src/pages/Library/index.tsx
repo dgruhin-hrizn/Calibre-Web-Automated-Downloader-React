@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { Button } from '../../components/ui/Button'
 import { Card, CardContent } from '../../components/ui/card'
 import { DuplicateManagerModal } from '../../components/DuplicateManagerModal'
+import MetadataEditModal from '../../components/MetadataEditModal'
 import { useToast } from '../../hooks/useToast'
 
 import {
@@ -14,7 +16,8 @@ import {
   useInfiniteLibraryState,
   useAdminStatus,
   useImageLoading,
-  useBookActions
+  useBookActions,
+  useLibraryCache
 } from './hooks'
 
 import type { LibraryBook } from './types'
@@ -22,6 +25,11 @@ import type { LibraryBook } from './types'
 export function Library() {
   const { showToast, ToastContainer } = useToast()
   const { isAdmin } = useAdminStatus()
+  
+  // Metadata edit modal state
+  const [editingBookId, setEditingBookId] = useState<number | null>(null)
+  const [isMetadataModalOpen, setIsMetadataModalOpen] = useState(false)
+  const [isRefreshingMetadata, setIsRefreshingMetadata] = useState(false)
   
   // Infinite scroll state management
   const {
@@ -49,11 +57,14 @@ export function Library() {
     handleBookClick,
     handleBookDeleted,
     closeBookModal,
+    updateSelectedBook,
     handleLoadMore,
     loadMoreRef,
     registerBookRef,
     scrollToTop
   } = useInfiniteLibraryState()
+  
+  const { refetchBook, updateBookInCache, invalidateLibraryBooks } = useLibraryCache()
   
   const { downloadBook, sendToKindle } = useBookActions()
   const { shouldLoadImage, markImageLoaded } = useImageLoading(books)
@@ -81,6 +92,59 @@ export function Library() {
       const errorMessage = error instanceof Error ? error.message : 'Failed to send to Kindle'
       showToast({ type: 'error', title: errorMessage })
       return { success: false, message: errorMessage }
+    }
+  }
+
+  const handleEditMetadata = (bookId: number) => {
+    setEditingBookId(bookId)
+    setIsMetadataModalOpen(true)
+  }
+
+  const handleMetadataModalClose = () => {
+    setIsMetadataModalOpen(false)
+    setEditingBookId(null)
+    setIsRefreshingMetadata(false)
+  }
+
+  const handleMetadataSave = async () => {
+    if (!editingBookId) return
+    
+    // Start the refreshing state (this will show "Updating Display..." in the save button)
+    setIsRefreshingMetadata(true)
+    
+    try {
+      // Give the metadata database a moment to update after CWA processes the change
+      await new Promise(resolve => setTimeout(resolve, 1500))
+      
+      // Refetch the updated book data
+      const updatedBook = await refetchBook(editingBookId)
+      
+      if (updatedBook) {
+        // Update the selectedBook if it's the one we just edited
+        if (selectedBook && selectedBook.id === editingBookId) {
+          updateSelectedBook(updatedBook)
+        }
+        
+        // Update all caches with the new book data
+        updateBookInCache(editingBookId, updatedBook)
+        
+        showToast({ type: 'success', title: 'Metadata updated successfully' })
+      } else {
+        // Try a fallback approach - invalidate caches to force refresh on next access
+        invalidateLibraryBooks()
+        
+        showToast({ type: 'warning', title: 'Metadata updated, display will refresh when you navigate back' })
+      }
+    } catch (error) {
+      console.error('[Library] Error refetching book after metadata update:', error)
+      
+      // Fallback: invalidate caches so data refreshes on next navigation
+      console.log('[Library] Using fallback: invalidating caches')
+      invalidateLibraryBooks()
+      showToast({ type: 'warning', title: 'Metadata updated, display will refresh when you navigate back' })
+    } finally {
+      // Close the modal and reset the refreshing state
+      handleMetadataModalClose()
     }
   }
 
@@ -195,6 +259,7 @@ export function Library() {
             handleBookDeleted(selectedBook.id)
             closeBookModal() // Close modal to show delete animation
           }}
+          onEditMetadata={handleEditMetadata}
         />
       )}
       
@@ -207,6 +272,17 @@ export function Library() {
           setShowDuplicateModal(false)
         }}
       />
+      
+      {/* Metadata Edit Modal */}
+      {editingBookId && (
+        <MetadataEditModal
+          bookId={editingBookId}
+          isOpen={isMetadataModalOpen}
+          onClose={handleMetadataModalClose}
+          onSave={handleMetadataSave}
+          isRefreshing={isRefreshingMetadata}
+        />
+      )}
       
       {/* Toast Notifications */}
       <ToastContainer />

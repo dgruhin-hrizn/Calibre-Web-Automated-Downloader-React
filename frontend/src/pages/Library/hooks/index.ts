@@ -3,7 +3,8 @@ export { useInfiniteLibraryState } from './useInfiniteLibraryState'
 
 // React Query hooks for data fetching
 export { 
-  useLibraryBooks, 
+  useLibraryBooks,
+  useLibraryBook,
   useLibraryStats, 
   useInfiniteLibraryBooks,
   usePrefetchLibraryBooks,
