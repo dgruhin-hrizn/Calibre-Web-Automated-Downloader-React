@@ -19,6 +19,7 @@ const swiperStyles = `
   .series-swiper {
     overflow: hidden;
     width: 100%;
+    position: relative;
   }
   
   .series-swiper .swiper-wrapper {
@@ -30,9 +31,38 @@ const swiperStyles = `
     flex-shrink: 0;
   }
   
+  .series-swiper::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 40px;
+    background: linear-gradient(to right, hsl(var(--card)), transparent);
+    z-index: 10;
+    pointer-events: none;
+  }
+  
+  .series-swiper::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 40px;
+    background: linear-gradient(to left, hsl(var(--card)), transparent);
+    z-index: 10;
+    pointer-events: none;
+  }
+  
   .swiper-button-prev-custom:hover,
   .swiper-button-next-custom:hover {
     transform: translateY(-50%) scale(1.1);
+  }
+  
+  .swiper-button-prev-custom,
+  .swiper-button-next-custom {
+    z-index: 20;
   }
 `
 
