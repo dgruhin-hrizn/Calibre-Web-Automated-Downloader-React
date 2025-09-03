@@ -1708,6 +1708,161 @@ def api_rate_limiter_status():
         logger.error(f"Error getting rate limiter status: {e}")
         return jsonify({'error': str(e)}), 500
 
+# Direct CWA Database User Management
+@app.route('/api/useradmin/users', methods=['GET'])
+@login_required
+def api_get_users() -> Union[Response, Tuple[Response, int]]:
+    """Get all CWA users via direct database access"""
+    try:
+        from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+        cwa_db = get_cwa_db_manager()
+        if not cwa_db:
+            return jsonify({"error": "CWA database not available"}), 503
+        
+        users = cwa_db.get_all_users()
+        return jsonify({
+            'users': users,
+            'total': len(users)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching users: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/useradmin/users/<int:user_id>', methods=['GET'])
+@login_required
+def api_get_user_details(user_id: int) -> Union[Response, Tuple[Response, int]]:
+    """Get detailed information for a specific user"""
+    try:
+        from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+        cwa_db = get_cwa_db_manager()
+        if not cwa_db:
+            return jsonify({"error": "CWA database not available"}), 503
+        
+        user = cwa_db.get_user_by_id(user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        return jsonify(user)
+        
+    except Exception as e:
+        logger.error(f"Error fetching user {user_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/useradmin/users', methods=['POST'])
+@login_required
+def api_create_user() -> Union[Response, Tuple[Response, int]]:
+    """Create a new CWA user"""
+    try:
+        from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+        cwa_db = get_cwa_db_manager()
+        if not cwa_db:
+            return jsonify({"error": "CWA database not available"}), 503
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        # Validate required fields
+        username = data.get('username', '').strip()
+        email = data.get('email', '').strip()
+        password = data.get('password', '').strip()
+        
+        if not username:
+            return jsonify({"error": "Username is required"}), 400
+        if not email:
+            return jsonify({"error": "Email is required"}), 400
+        if not password:
+            return jsonify({"error": "Password is required"}), 400
+        
+        # Check if user already exists
+        if cwa_db.user_exists(username):
+            return jsonify({"error": "User already exists"}), 400
+        
+        # Create user
+        success = cwa_db.create_user(
+            username=username,
+            email=email,
+            password=password,
+            kindle_email=data.get('kindle_email', ''),
+            locale=data.get('locale', 'en'),
+            default_language=data.get('default_language', 'en'),
+            permissions=data.get('permissions', {})
+        )
+        
+        if success:
+            return jsonify({
+                "success": True,
+                "message": "User created successfully"
+            })
+        else:
+            return jsonify({"error": "Failed to create user"}), 500
+            
+    except Exception as e:
+        logger.error(f"Error creating user: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/useradmin/users/<int:user_id>', methods=['PUT'])
+@login_required
+def api_update_user(user_id: int) -> Union[Response, Tuple[Response, int]]:
+    """Update user permissions and details"""
+    try:
+        from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+        cwa_db = get_cwa_db_manager()
+        if not cwa_db:
+            return jsonify({"error": "CWA database not available"}), 503
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        # Update user
+        success = cwa_db.update_user(
+            user_id=user_id,
+            username=data.get('username'),
+            email=data.get('email'),
+            kindle_email=data.get('kindle_email'),
+            locale=data.get('locale'),
+            default_language=data.get('default_language'),
+            permissions=data.get('permissions')
+        )
+        
+        if success:
+            return jsonify({
+                "success": True,
+                "message": "User updated successfully"
+            })
+        else:
+            return jsonify({"error": "Failed to update user or user not found"}), 404
+            
+    except Exception as e:
+        logger.error(f"Error updating user {user_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/useradmin/users/<int:user_id>', methods=['DELETE'])
+@login_required
+def api_delete_user(user_id: int) -> Union[Response, Tuple[Response, int]]:
+    """Delete a CWA user"""
+    try:
+        from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+        cwa_db = get_cwa_db_manager()
+        if not cwa_db:
+            return jsonify({"error": "CWA database not available"}), 503
+        
+        success = cwa_db.delete_user(user_id)
+        
+        if success:
+            return jsonify({
+                "success": True,
+                "message": "User deleted successfully"
+            })
+        else:
+            return jsonify({"error": "Failed to delete user or user not found"}), 404
+            
+    except Exception as e:
+        logger.error(f"Error deleting user {user_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/admin/user-info')
 def api_admin_user_info():
     """Get current user info and admin status - simple version for auth checking"""

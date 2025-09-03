@@ -8,7 +8,7 @@ import {
 } from './components'
 import { LibraryToolbar } from './components/LibraryToolbar'
 import { InfiniteLibraryGrid } from './components/InfiniteLibraryGrid'
-import { EnhancedBookDetailsModal } from './components/EnhancedBookDetailsModal'
+import { LibraryBookModal } from './components/LibraryBookModal'
 
 import {
   useInfiniteLibraryState,
@@ -185,9 +185,9 @@ export function Library() {
         )}
       </div>
 
-      {/* Enhanced Book Details Modal */}
+      {/* Library Book Details Modal */}
       {selectedBook && (
-        <EnhancedBookDetailsModal
+        <LibraryBookModal
           book={selectedBook}
           onClose={closeBookModal}
           onSendToKindle={handleSendToKindle}

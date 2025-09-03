@@ -376,6 +376,16 @@ CWA_ENDPOINTS = {
     
     # Health check
     'health': '/health',
+    
+    # Book metadata editing
+    'book_edit_form': '/admin/book/<int:book_id>',
+    'book_edit_submit': '/admin/book/<int:book_id>',
+    'book_ajax_edit': '/ajax/editbooks/<field>',
+    
+    # Book cover management
+    'book_cover_upload': '/admin/book/<int:book_id>',  # Same endpoint as edit, but with file upload
+    
+
 }
 
 def create_opds_routes(app, cwa_proxy):
@@ -907,6 +917,503 @@ def create_cwa_proxy_routes(app, cwa_proxy):
     @cwa_proxy.proxy_request('/download/<int:book_id>/<book_format>', methods=['GET'])
     def cwa_download_book(book_id, book_format):
         pass
+    
+    # Book metadata editing
+    @app.route('/api/cwa/library/books/<int:book_id>/edit', methods=['GET'])
+    def cwa_get_book_edit_form(book_id):
+        """Get book edit form data from CWA"""
+        from flask import session
+        try:
+            username = session.get('username')
+            password = session.get('cwa_password')
+            if not username or not password:
+                return jsonify({"error": "Not authenticated"}), 401
+            
+            # Get user session
+            with cwa_proxy.sessions_lock:
+                user_session = cwa_proxy.user_sessions.get(username)
+            
+            if not user_session:
+                logger.warning(f"No CWA session found for user {username}, creating new one")
+                user_session = cwa_proxy._get_user_session(username, password)
+                if not user_session:
+                    return jsonify({"error": "Failed to create CWA session"}), 401
+            
+            # Check if session is expired or not logged in
+            if not user_session.logged_in or user_session.is_expired():
+                logger.info(f"CWA session expired or not logged in for user {username}, re-authenticating")
+                if not cwa_proxy._login_user_session(user_session):
+                    return jsonify({"error": "Failed to authenticate with CWA"}), 401
+            
+            # Get book edit form from CWA
+            response = user_session.session.get(f"{user_session.cwa_base_url}/admin/book/{book_id}")
+            
+            if response.status_code == 200:
+                # Parse HTML to extract current metadata
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(response.text, 'html.parser')
+                
+                # Extract current values from form inputs
+                metadata = {}
+                
+                # Title
+                title_input = soup.find('input', {'name': 'title'})
+                metadata['title'] = title_input.get('value', '') if title_input else ''
+                
+                # Authors
+                authors_input = soup.find('input', {'name': 'authors'})
+                metadata['authors'] = authors_input.get('value', '') if authors_input else ''
+                
+                # Description/Comments
+                comments_textarea = soup.find('textarea', {'name': 'comments'})
+                metadata['comments'] = comments_textarea.get_text('') if comments_textarea else ''
+                
+                # Tags
+                tags_input = soup.find('input', {'name': 'tags'})
+                metadata['tags'] = tags_input.get('value', '') if tags_input else ''
+                
+                # Series
+                series_input = soup.find('input', {'name': 'series'})
+                metadata['series'] = series_input.get('value', '') if series_input else ''
+                
+                # Publisher
+                publisher_input = soup.find('input', {'name': 'publisher'})
+                metadata['publisher'] = publisher_input.get('value', '') if publisher_input else ''
+                
+                # Series Index
+                series_index_input = soup.find('input', {'name': 'series_index'})
+                metadata['series_index'] = series_index_input.get('value', '') if series_index_input else ''
+                
+                # Rating
+                rating_input = soup.find('input', {'name': 'rating'})
+                metadata['rating'] = rating_input.get('value', '') if rating_input else ''
+                
+                # Publication Date
+                pubdate_input = soup.find('input', {'name': 'pubdate'})
+                metadata['pubdate'] = pubdate_input.get('value', '') if pubdate_input else ''
+                
+                # Language
+                language_input = soup.find('input', {'name': 'languages'}) or soup.find('select', {'name': 'languages'})
+                if language_input:
+                    if language_input.name == 'select':
+                        # If it's a select, get the selected option
+                        selected_option = language_input.find('option', {'selected': True})
+                        metadata['language'] = selected_option.get_text('') if selected_option else ''
+                    else:
+                        metadata['language'] = language_input.get('value', '')
+                else:
+                    metadata['language'] = ''
+                
+                # ISBN
+                isbn_input = soup.find('input', {'name': 'isbn'})
+                metadata['isbn'] = isbn_input.get('value', '') if isbn_input else ''
+                
+                # Extract CSRF token for future edits
+                csrf_input = soup.find('input', {'name': 'csrf_token'})
+                csrf_token = csrf_input.get('value', '') if csrf_input else ''
+                
+                return jsonify({
+                    "book_id": book_id,
+                    "metadata": metadata,
+                    "csrf_token": csrf_token
+                })
+            else:
+                return jsonify({"error": f"Failed to fetch edit form. Status: {response.status_code}"}), 400
+            
+        except Exception as e:
+            logger.error(f"Error fetching book edit form: {e}")
+            return jsonify({"error": str(e)}), 500
+    
+    @app.route('/api/cwa/library/books/<int:book_id>/edit', methods=['POST'])
+    def cwa_update_book_metadata(book_id):
+        """Update book metadata via CWA"""
+        from flask import session, request
+        try:
+            username = session.get('username')
+            password = session.get('cwa_password')
+            if not username or not password:
+                return jsonify({"error": "Not authenticated"}), 401
+            
+            # Get user session
+            with cwa_proxy.sessions_lock:
+                user_session = cwa_proxy.user_sessions.get(username)
+            
+            if not user_session:
+                logger.warning(f"No CWA session found for user {username}, creating new one")
+                user_session = cwa_proxy._get_user_session(username, password)
+                if not user_session:
+                    return jsonify({"error": "Failed to create CWA session"}), 401
+            
+            # Check if session is expired or not logged in
+            if not user_session.logged_in or user_session.is_expired():
+                logger.info(f"CWA session expired or not logged in for user {username}, re-authenticating")
+                if not cwa_proxy._login_user_session(user_session):
+                    return jsonify({"error": "Failed to authenticate with CWA"}), 401
+            
+            # Get the JSON data from request
+            data = request.get_json()
+            if not data:
+                return jsonify({"error": "No data provided"}), 400
+            
+            # Prepare form data for CWA
+            form_data = {
+                'title': data.get('title', ''),
+                'authors': data.get('authors', ''),
+                'comments': data.get('comments', ''),
+                'tags': data.get('tags', ''),
+                'series': data.get('series', ''),
+                'series_index': data.get('series_index', ''),
+                'publisher': data.get('publisher', ''),
+                'rating': data.get('rating', ''),
+                'pubdate': data.get('pubdate', ''),
+                'languages': data.get('language', ''),  # Note: CWA uses 'languages' field name
+                'isbn': data.get('isbn', ''),
+                'csrf_token': data.get('csrf_token', '')
+            }
+            
+            # Submit the form to CWA
+            response = user_session.session.post(
+                f"{user_session.cwa_base_url}/admin/book/{book_id}",
+                data=form_data,
+                headers={'Content-Type': 'application/x-www-form-urlencoded'},
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                # Check if the response indicates success
+                if 'Metadata successfully updated' in response.text or response.url.endswith(f'/book/{book_id}'):
+                    return jsonify({
+                        "success": True,
+                        "message": "Metadata successfully updated"
+                    })
+                else:
+                    # Parse error messages from HTML
+                    from bs4 import BeautifulSoup
+                    soup = BeautifulSoup(response.text, 'html.parser')
+                    error_alerts = soup.find_all('div', class_='alert-danger')
+                    errors = [alert.get_text().strip() for alert in error_alerts]
+                    
+                    return jsonify({
+                        "error": "Update failed",
+                        "details": errors if errors else ["Unknown error occurred"]
+                    }), 400
+            else:
+                return jsonify({"error": f"Failed to update metadata. Status: {response.status_code}"}), 400
+            
+        except Exception as e:
+            logger.error(f"Error updating book metadata: {e}")
+            return jsonify({"error": str(e)}), 500
+    
+    # Book cover upload
+    @app.route('/api/cwa/library/books/<int:book_id>/cover/upload', methods=['POST'])
+    def cwa_upload_book_cover(book_id):
+        """Upload a new cover image for a book via CWA"""
+        from flask import session, request
+        try:
+            username = session.get('username')
+            password = session.get('cwa_password')
+            if not username or not password:
+                return jsonify({"error": "Not authenticated"}), 401
+            
+            # Check if file was uploaded
+            if 'cover_file' not in request.files:
+                return jsonify({"error": "No cover file provided"}), 400
+            
+            cover_file = request.files['cover_file']
+            if cover_file.filename == '':
+                return jsonify({"error": "No file selected"}), 400
+            
+            # Validate file type
+            allowed_extensions = {'jpg', 'jpeg', 'png', 'webp', 'bmp'}
+            file_ext = cover_file.filename.rsplit('.', 1)[1].lower() if '.' in cover_file.filename else ''
+            if file_ext not in allowed_extensions:
+                return jsonify({"error": "Invalid file type. Only JPG, PNG, WebP, and BMP files are allowed"}), 400
+            
+            # Get user session
+            with cwa_proxy.sessions_lock:
+                user_session = cwa_proxy.user_sessions.get(username)
+            
+            if not user_session:
+                logger.warning(f"No CWA session found for user {username}, creating new one")
+                user_session = cwa_proxy._get_user_session(username, password)
+                if not user_session:
+                    return jsonify({"error": "Failed to create CWA session"}), 401
+            
+            # Check if session is expired or not logged in
+            if not user_session.logged_in or user_session.is_expired():
+                logger.info(f"CWA session expired or not logged in for user {username}, re-authenticating")
+                if not cwa_proxy._login_user_session(user_session):
+                    return jsonify({"error": "Failed to authenticate with CWA"}), 401
+            
+            # First, get the current book edit form to extract CSRF token
+            edit_response = user_session.session.get(f"{user_session.cwa_base_url}/admin/book/{book_id}")
+            if edit_response.status_code != 200:
+                return jsonify({"error": f"Failed to fetch book edit form. Status: {edit_response.status_code}"}), 400
+            
+            # Parse HTML to extract CSRF token and current metadata
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(edit_response.text, 'html.parser')
+            csrf_input = soup.find('input', {'name': 'csrf_token'})
+            csrf_token = csrf_input.get('value', '') if csrf_input else ''
+            
+            if not csrf_token:
+                return jsonify({"error": "Could not extract CSRF token"}), 400
+            
+            # Extract current metadata values to avoid validation errors
+            def get_input_value(name):
+                input_elem = soup.find('input', {'name': name})
+                return input_elem.get('value', '') if input_elem else ''
+            
+            def get_textarea_value(name):
+                textarea_elem = soup.find('textarea', {'name': name})
+                return textarea_elem.get_text('') if textarea_elem else ''
+            
+            # Prepare multipart form data with the cover file
+            files = {
+                'btn-upload-cover': (cover_file.filename, cover_file.stream, cover_file.mimetype)
+            }
+            
+            form_data = {
+                'csrf_token': csrf_token,
+                # Include current metadata values to avoid validation errors
+                'title': get_input_value('title'),
+                'authors': get_input_value('authors'),
+                'comments': get_textarea_value('comments'),
+                'tags': get_input_value('tags'),
+                'series': get_input_value('series'),
+                'series_index': get_input_value('series_index'),
+                'publisher': get_input_value('publisher'),
+                'rating': get_input_value('rating'),
+                'pubdate': get_input_value('pubdate'),
+                'languages': get_input_value('languages'),
+                'isbn': get_input_value('isbn')
+            }
+            
+            # Submit the form with cover file to CWA
+            response = user_session.session.post(
+                f"{user_session.cwa_base_url}/admin/book/{book_id}",
+                data=form_data,
+                files=files,
+                timeout=60  # Longer timeout for file upload
+            )
+            
+            if response.status_code == 200:
+                # Check if the response indicates success
+                if 'alert-success' in response.text or 'successfully' in response.text.lower():
+                    return jsonify({
+                        "success": True,
+                        "message": "Cover uploaded successfully"
+                    })
+                else:
+                    # Parse for error messages
+                    soup = BeautifulSoup(response.text, 'html.parser')
+                    error_alerts = soup.find_all('div', class_=['alert-danger', 'alert-error'])
+                    error_message = "Upload failed"
+                    
+                    if error_alerts:
+                        error_message = error_alerts[0].get_text(strip=True)
+                    
+                    # Check for specific permission error
+                    if 'no rights to upload cover' in response.text.lower():
+                        error_message = "User has no rights to upload cover. Please check your CWA user permissions."
+                    
+                    logger.error(f"Cover upload failed for book {book_id}: {error_message}")
+                    return jsonify({"error": error_message}), 400
+            else:
+                logger.error(f"Cover upload failed for book {book_id} with status {response.status_code}")
+                return jsonify({"error": f"Upload failed. Status: {response.status_code}"}), response.status_code
+            
+        except Exception as e:
+            logger.error(f"Error uploading cover: {e}")
+            return jsonify({"error": str(e)}), 500
+    
+    @app.route('/api/cwa/library/books/<int:book_id>/cover/url', methods=['POST'])
+    def cwa_update_book_cover_from_url(book_id):
+        """Update book cover from URL via CWA"""
+        from flask import session, request
+        try:
+            username = session.get('username')
+            password = session.get('cwa_password')
+            if not username or not password:
+                return jsonify({"error": "Not authenticated"}), 401
+            
+            # Get the JSON data from request
+            data = request.get_json()
+            if not data or not data.get('cover_url'):
+                return jsonify({"error": "No cover URL provided"}), 400
+            
+            cover_url = data.get('cover_url').strip()
+            if not cover_url:
+                return jsonify({"error": "Cover URL cannot be empty"}), 400
+            
+            # Basic URL validation
+            if not (cover_url.startswith('http://') or cover_url.startswith('https://')):
+                return jsonify({"error": "Invalid URL format"}), 400
+            
+            # Get user session
+            with cwa_proxy.sessions_lock:
+                user_session = cwa_proxy.user_sessions.get(username)
+            
+            if not user_session:
+                logger.warning(f"No CWA session found for user {username}, creating new one")
+                user_session = cwa_proxy._get_user_session(username, password)
+                if not user_session:
+                    return jsonify({"error": "Failed to create CWA session"}), 401
+            
+            # Check if session is expired or not logged in
+            if not user_session.logged_in or user_session.is_expired():
+                logger.info(f"CWA session expired or not logged in for user {username}, re-authenticating")
+                if not cwa_proxy._login_user_session(user_session):
+                    return jsonify({"error": "Failed to authenticate with CWA"}), 401
+            
+            # First, get the current book edit form to extract CSRF token
+            edit_response = user_session.session.get(f"{user_session.cwa_base_url}/admin/book/{book_id}")
+            if edit_response.status_code != 200:
+                return jsonify({"error": f"Failed to fetch book edit form. Status: {edit_response.status_code}"}), 400
+            
+            # Parse HTML to extract CSRF token and current metadata
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(edit_response.text, 'html.parser')
+            csrf_input = soup.find('input', {'name': 'csrf_token'})
+            csrf_token = csrf_input.get('value', '') if csrf_input else ''
+            
+            if not csrf_token:
+                return jsonify({"error": "Could not extract CSRF token"}), 400
+            
+            # Extract current metadata values to avoid validation errors
+            def get_input_value(name):
+                input_elem = soup.find('input', {'name': name})
+                return input_elem.get('value', '') if input_elem else ''
+            
+            def get_textarea_value(name):
+                textarea_elem = soup.find('textarea', {'name': name})
+                return textarea_elem.get_text('') if textarea_elem else ''
+            
+            # Prepare form data with the cover URL
+            form_data = {
+                'csrf_token': csrf_token,
+                'cover_url': cover_url,
+                # Include current metadata values to avoid validation errors
+                'title': get_input_value('title'),
+                'authors': get_input_value('authors'),
+                'comments': get_textarea_value('comments'),
+                'tags': get_input_value('tags'),
+                'series': get_input_value('series'),
+                'series_index': get_input_value('series_index'),
+                'publisher': get_input_value('publisher'),
+                'rating': get_input_value('rating'),
+                'pubdate': get_input_value('pubdate'),
+                'languages': get_input_value('languages'),
+                'isbn': get_input_value('isbn')
+            }
+            
+            # Submit the form to CWA
+            response = user_session.session.post(
+                f"{user_session.cwa_base_url}/admin/book/{book_id}",
+                data=form_data,
+                headers={'Content-Type': 'application/x-www-form-urlencoded'},
+                timeout=60  # Longer timeout for URL download
+            )
+            
+            if response.status_code == 200:
+                # Check if the response indicates success
+                if 'alert-success' in response.text or 'successfully' in response.text.lower():
+                    return jsonify({
+                        "success": True,
+                        "message": "Cover updated from URL successfully"
+                    })
+                else:
+                    # Parse for error messages
+                    soup = BeautifulSoup(response.text, 'html.parser')
+                    error_alerts = soup.find_all('div', class_=['alert-danger', 'alert-error'])
+                    error_message = "URL update failed"
+                    
+                    if error_alerts:
+                        error_message = error_alerts[0].get_text(strip=True)
+                    
+                    # Check for specific permission error
+                    if 'no rights to upload cover' in response.text.lower():
+                        error_message = "User has no rights to upload cover. Please check your CWA user permissions."
+                    
+                    logger.error(f"Cover URL update failed for book {book_id}: {error_message}")
+                    return jsonify({"error": error_message}), 400
+            else:
+                logger.error(f"Cover URL update failed for book {book_id} with status {response.status_code}")
+                return jsonify({"error": f"URL update failed. Status: {response.status_code}"}), response.status_code
+            
+        except Exception as e:
+            logger.error(f"Error updating cover from URL: {e}")
+            return jsonify({"error": str(e)}), 500
+    
+    @app.route('/api/cwa/library/books/<int:book_id>/cover/debug', methods=['GET'])
+    def cwa_debug_cover_permissions(book_id):
+        """Debug cover upload permissions for a book"""
+        from flask import session
+        try:
+            username = session.get('username')
+            password = session.get('cwa_password')
+            if not username or not password:
+                return jsonify({"error": "Not authenticated"}), 401
+            
+            # Get user session
+            with cwa_proxy.sessions_lock:
+                user_session = cwa_proxy.user_sessions.get(username)
+            
+            if not user_session:
+                return jsonify({"error": "No CWA session found"}), 401
+            
+            # Check if session is expired or not logged in
+            if not user_session.logged_in or user_session.is_expired():
+                if not cwa_proxy._login_user_session(user_session):
+                    return jsonify({"error": "Failed to authenticate with CWA"}), 401
+            
+            # Get the book edit form to check permissions
+            edit_response = user_session.session.get(f"{user_session.cwa_base_url}/admin/book/{book_id}")
+            
+            if edit_response.status_code != 200:
+                return jsonify({
+                    "error": f"Cannot access book edit form. Status: {edit_response.status_code}",
+                    "book_id": book_id,
+                    "user": username
+                }), edit_response.status_code
+            
+            # Parse HTML to check for upload elements
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(edit_response.text, 'html.parser')
+            
+            # Check for cover upload elements
+            upload_input = soup.find('input', {'name': 'btn-upload-cover'})
+            url_input = soup.find('input', {'name': 'cover_url'})
+            
+            # Check for permission-related text
+            permission_text = []
+            if 'no rights to upload' in edit_response.text.lower():
+                permission_text.append("Found 'no rights to upload' text in page")
+            
+            # Check user info if available
+            user_info = {}
+            user_elem = soup.find('a', {'href': '/me'})
+            if user_elem:
+                user_info['display_name'] = user_elem.get_text(strip=True)
+            
+            return jsonify({
+                "book_id": book_id,
+                "user": username,
+                "user_info": user_info,
+                "edit_form_accessible": True,
+                "cover_upload_input_present": upload_input is not None,
+                "cover_url_input_present": url_input is not None,
+                "permission_issues": permission_text,
+                "debug_info": {
+                    "edit_form_status": edit_response.status_code,
+                    "session_logged_in": user_session.logged_in,
+                    "session_expired": user_session.is_expired()
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"Error debugging cover permissions: {e}")
+            return jsonify({"error": str(e)}), 500
     
     # Library management
     @app.route('/api/cwa/library/refresh', methods=['GET', 'POST'])

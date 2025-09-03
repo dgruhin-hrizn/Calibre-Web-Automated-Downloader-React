@@ -4,7 +4,7 @@ import { Search as SearchIcon, Filter, Download, Eye, AlertCircle, Loader2 } fro
 import { Button } from '../components/ui/Button'
 import { CircularProgress } from '../components/ui/CircularProgress'
 import { SkeletonGrid } from '../components/ui/SkeletonCard'
-import { BookDetailsModal } from '../components/BookDetailsModal'
+import { SearchResultModal } from '../components/SearchResultModal'
 import { useSearchBooks, useSearchCache } from '../hooks/useSearchCache'
 import { useDownloadBook, useDownloadStatus, type Book } from '../hooks/useDownloads'
 import { useDownloadStore } from '../stores/downloadStore'
@@ -307,8 +307,8 @@ export function Search() {
         </div>
       )}
 
-      {/* Book Details Modal */}
-      <BookDetailsModal 
+      {/* Search Result Details Modal */}
+      <SearchResultModal 
         book={selectedBook} 
         onClose={() => setSelectedBook(null)} 
       />
