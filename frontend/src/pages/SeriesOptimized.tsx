@@ -172,12 +172,12 @@ export function SeriesOptimized() {
 
       // Only include series with multiple books
       // Always add the series, even if it has only 1 book (backend should have filtered already)
-      const seriesWithBooksData: SeriesWithBooks = {
-        ...seriesInfo,
-        books,
-        currentIndex: Math.floor(Math.max(0, books.length - 1) / 2), // Start with middle book centered
-        booksLoaded: true
-      }
+              const seriesWithBooksData: SeriesWithBooks = {
+          ...seriesInfo,
+          books,
+          currentIndex: 0, // Always start with the first book
+          booksLoaded: true
+        }
 
       setSeriesWithBooks(prev => new Map([...prev, [seriesInfo.id, seriesWithBooksData]]))
       console.log(`✅ Loaded ${books.length} books for series: ${seriesInfo.name}`)
@@ -212,15 +212,17 @@ export function SeriesOptimized() {
     enabled: !loading && !error
   })
 
-  // Handle carousel navigation
+  // Handle carousel navigation (scroll by pages of 5 books)
   const navigateCarousel = useCallback((seriesId: number, direction: 'left' | 'right') => {
     setSeriesWithBooks(prev => {
       const newMap = new Map(prev)
       const series = newMap.get(seriesId)
       if (series) {
+        const maxVisible = 5
+        const maxStartIndex = Math.max(0, series.books.length - maxVisible)
         const newIndex = direction === 'left' 
-          ? Math.max(0, series.currentIndex - 1)
-          : Math.min(series.books.length - 1, series.currentIndex + 1)
+          ? Math.max(0, series.currentIndex - maxVisible)
+          : Math.min(maxStartIndex, series.currentIndex + maxVisible)
         newMap.set(seriesId, { ...series, currentIndex: newIndex })
       }
       return newMap
@@ -250,23 +252,44 @@ export function SeriesOptimized() {
     try {
       console.log('📤 Sending to Kindle:', book.title)
       
-      const response = await fetch('/api/send-to-kindle', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ book_id: book.id })
-      })
-
-      const result = await response.json()
+      // Get available formats - prioritize Kindle-compatible formats
+      const availableFormats = book.formats || []
       
-      if (response.ok && result.success) {
-        showToast({ type: 'success', title: 'Book sent to Kindle!' })
-        return { success: true, message: result.message || 'Book sent successfully' }
+      if (availableFormats.length === 0) {
+        throw new Error('No formats available for Kindle')
+      }
+      
+      const kindleFormatPriority = ['MOBI', 'AZW3', 'EPUB', 'PDF']
+      const kindleFormat = kindleFormatPriority.find(format => 
+        availableFormats.some(f => f.toUpperCase() === format)
+      ) || availableFormats[0]
+      
+      const response = await fetch(`/api/cwa/library/books/${book.id}/send-to-kindle`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          format: kindleFormat
+        })
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success) {
+          showToast({ type: 'success', title: result.message || 'Book sent to Kindle successfully' })
+          return { success: true, message: result.message || 'Book sent to Kindle successfully' }
+        } else {
+          throw new Error(result.error || 'Failed to send book to Kindle')
+        }
       } else {
-        throw new Error(result.message || 'Failed to send to Kindle')
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `Failed to send book (${response.status})`)
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to send to Kindle'
+      console.error('Error sending book to Kindle:', error)
+      const message = error instanceof Error ? error.message : 'Network error occurred'
       showToast({ type: 'error', title: message })
       return { success: false, message }
     }
@@ -284,7 +307,7 @@ export function SeriesOptimized() {
         setSeriesWithBooks(prev => new Map([...prev, [series.id, {
           ...series,
           books: [],
-          currentIndex: 0,
+          currentIndex: 0, // Always start at the first book
           booksLoaded: false
         }]]))
       }
@@ -479,15 +502,13 @@ function SeriesCarousel({ series, onNavigate, onBookDetails, onSendToKindle }: S
   // Show loading state if books aren't loaded yet
   if (!booksLoaded || books.length === 0) {
     return (
-      <div className="space-y-4">
+      <div className="border border-border rounded-lg bg-card p-6">
         {/* Series Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{series.name}</h2>
-            <p className="text-gray-600 dark:text-gray-400">
-              {booksLoaded ? 'No books found' : `Loading ${series.book_count} books...`}
-            </p>
-          </div>
+        <div className="mb-4">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">{series.name}</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            {booksLoaded ? 'No books found' : `Loading ${series.book_count} books...`}
+          </p>
         </div>
         
         {/* Loading placeholder */}
@@ -497,91 +518,75 @@ function SeriesCarousel({ series, onNavigate, onBookDetails, onSendToKindle }: S
       </div>
     )
   }
+
+  // Calculate visible books (max 5 books, starting from currentIndex)
+  const maxVisible = 5
+  const totalBooks = books.length
+  const canScrollLeft = currentIndex > 0
+  const canScrollRight = currentIndex + maxVisible < totalBooks
   
-  const centerBook = books[currentIndex]
-  
-  // Calculate visible books (center + 2 on each side)
   const getVisibleBooks = () => {
-    const visibleBooks = []
-    const totalBooks = books.length
-    
-    for (let i = -2; i <= 2; i++) {
-      const index = currentIndex + i
-      if (index >= 0 && index < totalBooks) {
-        visibleBooks.push({
-          book: books[index],
-          position: i,
-          index
-        })
-      }
-    }
-    
-    return visibleBooks
+    const startIndex = Math.max(0, Math.min(currentIndex, totalBooks - maxVisible))
+    const endIndex = Math.min(startIndex + maxVisible, totalBooks)
+    return books.slice(startIndex, endIndex)
   }
 
   const visibleBooks = getVisibleBooks()
 
   return (
-    <div className="space-y-4">
+    <div className="border border-border rounded-lg bg-card p-6">
       {/* Series Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{series.name}</h2>
-          <p className="text-gray-600 dark:text-gray-400">{books.length} books in series</p>
-        </div>
-        
-        {/* Navigation Controls */}
-        {books.length > 1 && (
-          <div className="flex items-center gap-2">
+      <div className="mb-6">
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white">{series.name}</h2>
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          {books.length} book{books.length !== 1 ? 's' : ''} in series
+        </p>
+      </div>
+
+      {/* Carousel Container */}
+      <div className="relative">
+        {/* Navigation Buttons */}
+        {books.length > maxVisible && (
+          <>
+            {/* Previous Button */}
             <Button
               variant="outline"
               size="sm"
               onClick={() => onNavigate('left')}
-              disabled={currentIndex === 0}
-              className="p-2"
+              disabled={!canScrollLeft}
+              className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 p-0 rounded-full shadow-lg bg-background/80 backdrop-blur-sm hover:bg-background/90"
             >
               <ChevronLeft className="w-4 h-4" />
             </Button>
             
-            <span className="text-sm text-gray-600 dark:text-gray-400 px-2">
-              {currentIndex + 1} of {books.length}
-            </span>
-            
+            {/* Next Button */}
             <Button
               variant="outline"
               size="sm"
               onClick={() => onNavigate('right')}
-              disabled={currentIndex === books.length - 1}
-              className="p-2"
+              disabled={!canScrollRight}
+              className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 p-0 rounded-full shadow-lg bg-background/80 backdrop-blur-sm hover:bg-background/90"
             >
               <ChevronRight className="w-4 h-4" />
             </Button>
-          </div>
+          </>
         )}
-      </div>
 
-      {/* Carousel Container */}
-      <div className="flex items-center justify-center space-x-4 py-4">
-        {visibleBooks.map(({ book, position }) => (
-          <div
-            key={book.id}
-            className={`transition-all duration-300 ${
-              position === 0 
-                ? 'scale-100 opacity-100 z-10' 
-                : 'scale-75 opacity-60 hover:opacity-80'
-            }`}
-            style={{
-              transform: `translateX(${position * 20}px)`,
-            }}
-          >
-            <UnifiedBookCard
-              book={book}
-              onBookClick={() => onBookDetails(book)}
-              onSendToKindle={() => onSendToKindle(book)}
-              className={position === 0 ? 'ring-2 ring-blue-500' : ''}
-            />
-          </div>
-        ))}
+        {/* Book Cards Row */}
+        <div className="flex gap-4 overflow-hidden px-4">
+          {visibleBooks.map((book) => (
+            <div key={book.id} className="flex-shrink-0 w-[225px]">
+              <UnifiedBookCard
+                book={book}
+                cardType="library"
+                viewMode="grid"
+                onDetails={onBookDetails}
+                onSendToKindle={onSendToKindle}
+                showKindleButton={true}
+              />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )
