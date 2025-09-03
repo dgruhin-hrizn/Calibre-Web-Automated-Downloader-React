@@ -260,3 +260,6 @@ cookies.txt
 cwa.db
 *.db
 app.db*
+
+# Ingest directory (contains book files being processed)
+ingest/
