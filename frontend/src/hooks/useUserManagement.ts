@@ -14,30 +14,20 @@ export const useUserManagement = () => {
     setError(null);
 
     try {
-      console.log('[useUserManagement] Fetching users from /api/useradmin/users');
       const response = await fetch('/api/useradmin/users', {
         credentials: 'include'
       });
 
-      console.log('[useUserManagement] Response status:', response.status);
-
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('[useUserManagement] Error response:', errorData);
         setError(errorData.error || 'Failed to fetch users');
         return;
       }
 
       const data = await response.json();
-      console.log('[useUserManagement] Raw API response:', data);
-      console.log('[useUserManagement] Users array:', data.users);
-      console.log('[useUserManagement] Users array length:', data.users?.length || 0);
-      
       setUsers(data.users || []);
-      console.log('[useUserManagement] Set users state to:', data.users || []);
     } catch (err) {
       setError('Network error fetching users');
-      console.error('[useUserManagement] Error fetching users:', err);
     } finally {
       setIsLoading(false);
     }
@@ -58,7 +48,6 @@ export const useUserManagement = () => {
       return await response.json();
     } catch (err) {
       setError('Network error fetching user details');
-      console.error('Error fetching user details:', err);
       return null;
     }
   };
@@ -87,7 +76,6 @@ export const useUserManagement = () => {
       return true;
     } catch (err) {
       setError('Network error creating user');
-      console.error('Error creating user:', err);
       return false;
     }
   };
@@ -116,7 +104,6 @@ export const useUserManagement = () => {
       return true;
     } catch (err) {
       setError('Network error updating user');
-      console.error('Error updating user:', err);
       return false;
     }
   };
@@ -141,7 +128,6 @@ export const useUserManagement = () => {
       return true;
     } catch (err) {
       setError('Network error deleting user');
-      console.error('Error deleting user:', err);
       return false;
     }
   };

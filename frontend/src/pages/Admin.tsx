@@ -15,17 +15,8 @@ const Admin: React.FC = () => {
   const [deleteConfirmUser, setDeleteConfirmUser] = useState<User | null>(null);
 
   useEffect(() => {
-    console.log('[Admin] Component mounted, fetching users...');
     fetchUsers();
   }, []);
-
-  // Debug logging for state changes
-  useEffect(() => {
-    console.log('[Admin] Users state changed:', users);
-    console.log('[Admin] Users length:', users.length);
-    console.log('[Admin] Loading state:', isLoading);
-    console.log('[Admin] Error state:', error);
-  }, [users, isLoading, error]);
 
   const handleEditUser = async (user: User) => {
     // Fetch detailed user information
