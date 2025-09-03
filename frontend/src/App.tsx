@@ -40,6 +40,11 @@ const queryClient = new QueryClient({
   },
 })
 
+// Make query client globally accessible for auth context
+if (typeof window !== 'undefined') {
+  (window as any).__REACT_QUERY_CLIENT__ = queryClient
+}
+
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true) // Start open on desktop
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system')

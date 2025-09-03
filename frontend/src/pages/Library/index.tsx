@@ -14,17 +14,17 @@ import { LibraryBookModal } from './components/LibraryBookModal'
 
 import {
   useInfiniteLibraryState,
-  useAdminStatus,
   useImageLoading,
   useBookActions,
   useLibraryCache
 } from './hooks'
+import { useAuth } from '../../contexts/AuthContext'
 
 import type { LibraryBook } from './types'
 
 export function Library() {
   const { showToast, ToastContainer } = useToast()
-  const { isAdmin } = useAdminStatus()
+  const { isAdmin } = useAuth()
   
   // Metadata edit modal state
   const [editingBookId, setEditingBookId] = useState<number | null>(null)

@@ -11,7 +11,7 @@ import {
   X
 } from 'lucide-react'
 import { cn } from '../lib/utils'
-import { useAdminStatus } from '../pages/Library/hooks/useAdminStatus'
+import { useAuth } from '../contexts/AuthContext'
 
 interface SidebarProps {
   open: boolean
@@ -30,7 +30,7 @@ const navigation = [
 
 export function Sidebar({ open, onOpenChange }: SidebarProps) {
   const location = useLocation()
-  const { isAdmin } = useAdminStatus()
+  const { isAdmin } = useAuth()
 
   return (
     <>

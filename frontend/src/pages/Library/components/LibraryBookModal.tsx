@@ -3,7 +3,7 @@ import { Book, Send, Star, Check, X, Loader2, Calendar, FileText, Tag, Trash2, A
 import { Button } from '../../../components/ui/Button'
 import { Card, CardContent } from '../../../components/ui/card'
 import { formatDate } from '../../../lib/utils'
-import { useAdminStatus } from '../hooks/useAdminStatus'
+import { useAuth } from '../../../contexts/AuthContext'
 import { AuthorFormatter } from '../../../utils/authorFormatter'
 
 import type { LibraryBook } from '../types'
@@ -41,7 +41,7 @@ export function LibraryBookModal({ book, onClose, onSendToKindle, onBookDeleted,
 
   
   // Admin status check
-  const { isAdmin } = useAdminStatus()
+  const { isAdmin } = useAuth()
   
 
 
