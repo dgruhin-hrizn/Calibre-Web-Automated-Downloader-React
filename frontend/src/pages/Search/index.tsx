@@ -162,25 +162,25 @@ export function Search() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-foreground">Add Books</h1>
         <p className="text-muted-foreground">
-          Upload your own books or search online to add to your library
+          Search online for books or upload your own files to add to your library
         </p>
       </div>
 
-      <Tabs.Root defaultValue="upload" className="w-full">
+      <Tabs.Root defaultValue="search" className="w-full">
         <Tabs.List className="inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground">
-          <Tabs.Trigger
-            value="upload"
-            className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
-          >
-            <Upload className="w-4 h-4 mr-2" />
-            Upload Books
-          </Tabs.Trigger>
           <Tabs.Trigger
             value="search"
             className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
           >
             <SearchIcon className="w-4 h-4 mr-2" />
             Search Online
+          </Tabs.Trigger>
+          <Tabs.Trigger
+            value="upload"
+            className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+          >
+            <Upload className="w-4 h-4 mr-2" />
+            Upload Books
           </Tabs.Trigger>
         </Tabs.List>
 

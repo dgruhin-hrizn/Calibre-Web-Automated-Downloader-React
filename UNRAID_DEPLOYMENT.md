@@ -96,7 +96,7 @@ In your Inkdrop container settings, configure these environment variables:
 
 | Setting | Description | Example |
 |---------|-------------|---------|
-| `CWA_BASE_URL` | URL of your CWA instance | `http://192.168.1.100:8083` |
+| `CWA_BASE_URL` | URL of your CWA instance | `http://192.168.1.8:8083` |
 | `CWA_USERNAME` | CWA admin username | `admin` |
 | `CWA_PASSWORD` | CWA admin password | `your-password` |
 
@@ -126,6 +126,7 @@ In your Inkdrop container settings, configure these environment variables:
 - `BOOK_LANGUAGE=en` - Default book language
 - `USE_BOOK_TITLE=true` - Include book title in filename
 - `MAX_CONCURRENT_DOWNLOADS=3` - Maximum concurrent downloads
+- `INGEST_DIR=/ingest` - **CRITICAL**: Container path to ingest directory (must match volume mount)
 - `AA_DONATOR_KEY=` - Anna's Archive donator key (optional)
 
 ### Network Settings
@@ -137,7 +138,18 @@ In your Inkdrop container settings, configure these environment variables:
 - `TZ=America/New_York` - Container timezone
 - `PUID=1000` - User ID for file permissions
 - `PGID=1000` - Group ID for file permissions
+
+### Path Configuration (IMPORTANT)
+- `INGEST_DIR=/ingest` - **CRITICAL**: Must match the ingest volume mount path
+- `CWA_DB_PATH=/config/app.db` - Path to CWA's user database
+- `CALIBRE_LIBRARY_PATH=/calibre-library` - Path to Calibre library inside container
+
+> ⚠️ **Common Issue**: If `INGEST_DIR` is not set, downloaded books will be saved to `/tmp/cwa-book-ingest` instead of your mounted ingest directory, causing files to disappear on container restart.
+
+### Application Settings
 - `LOG_LEVEL=INFO` - Log level (DEBUG, INFO, WARNING, ERROR)
+- `DEBUG=false` - Enable debug mode
+- `APP_ENV=production` - Application environment
 
 ## Directory Structure
 
@@ -197,6 +209,7 @@ In your Inkdrop container settings, configure these environment variables:
 **Solutions**:
 - Verify CWA_BASE_URL is accessible from the container
 - Check CWA username/password
+- **CRITICAL**: Ensure `INGEST_DIR=/ingest` environment variable is set (must match volume mount)
 - Ensure ingest directory is writable
 - Check network connectivity to Anna's Archive
 

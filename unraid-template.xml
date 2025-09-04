@@ -48,6 +48,7 @@
   <Config Name="Book Language" Target="BOOK_LANGUAGE" Default="en" Mode="" Description="Default book language" Type="Variable" Display="advanced" Required="false" Mask="false">en</Config>
   <Config Name="Use Book Title" Target="USE_BOOK_TITLE" Default="true" Mode="" Description="Include book title in filename" Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
   <Config Name="Max Concurrent Downloads" Target="MAX_CONCURRENT_DOWNLOADS" Default="3" Mode="" Description="Maximum concurrent downloads" Type="Variable" Display="advanced" Required="false" Mask="false">3</Config>
+  <Config Name="Ingest Directory Path" Target="INGEST_DIR" Default="/ingest" Mode="" Description="Container path to ingest directory (should match volume mount)" Type="Variable" Display="always" Required="true" Mask="false">/ingest</Config>
   <Config Name="Anna's Archive Donator Key" Target="AA_DONATOR_KEY" Default="" Mode="" Description="Anna's Archive donator key (optional - improves download speed)" Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
   
   <!-- Cloudflare Bypass Settings -->
@@ -66,4 +67,10 @@
   <!-- Application Settings -->
   <Config Name="Log Level" Target="LOG_LEVEL" Default="INFO" Mode="" Description="Application log level (DEBUG, INFO, WARNING, ERROR)" Type="Variable" Display="advanced" Required="false" Mask="false">INFO</Config>
   <Config Name="Debug Mode" Target="DEBUG" Default="false" Mode="" Description="Enable debug mode" Type="Variable" Display="advanced" Required="false" Mask="false">false</Config>
+  <Config Name="App Environment" Target="APP_ENV" Default="production" Mode="" Description="Application environment (development, production)" Type="Variable" Display="advanced" Required="false" Mask="false">production</Config>
+  <Config Name="Flask Port" Target="FLASK_PORT" Default="8084" Mode="" Description="Internal Flask port (should match exposed port)" Type="Variable" Display="advanced" Required="false" Mask="false">8084</Config>
+  <Config Name="Flask Host" Target="FLASK_HOST" Default="0.0.0.0" Mode="" Description="Flask host binding" Type="Variable" Display="advanced" Required="false" Mask="false">0.0.0.0</Config>
+  <Config Name="Enable Logging" Target="ENABLE_LOGGING" Default="true" Mode="" Description="Enable detailed logging for download operations" Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
+  <Config Name="CWA User Database Path" Target="CWA_USER_DB_PATH" Default="/config/app.db" Mode="" Description="Path to CWA's user database (app.db)" Type="Variable" Display="advanced" Required="false" Mask="false">/config/app.db</Config>
+  <Config Name="Calibre Library Path" Target="CALIBRE_LIBRARY_PATH" Default="/calibre-library" Mode="" Description="Internal path to Calibre library (container path)" Type="Variable" Display="advanced" Required="false" Mask="false">/calibre-library</Config>
 </Container>

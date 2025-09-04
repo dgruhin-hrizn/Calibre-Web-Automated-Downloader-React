@@ -315,33 +315,79 @@ except Exception as e:
 
 @app.route('/')
 @login_required
-def index() -> str:
+def index():
     """
-    Serve React frontend in production, or render template in development.
+    Serve React frontend for the root route (Library page).
     """
-    # Check if we have a built React app
+    return serve_react_app()
+
+# Helper function for serving React app
+def serve_react_app():
+    """Helper function to serve the React app"""
     project_root = get_project_root()
     react_build_path = os.path.join(project_root, 'frontend', 'dist', 'index.html')
     
-    logger.info(f"Looking for React frontend at: {react_build_path}")
-    logger.info(f"Project root: {project_root}")
-    logger.info(f"Frontend exists: {os.path.exists(react_build_path)}")
-    
     if os.path.exists(react_build_path):
-        logger.info("Serving React frontend")
         return send_file(react_build_path)
     
-    # If React build doesn't exist, return error message instead of broken template
-    logger.warning(f"React frontend not found at {react_build_path}")
-    return jsonify({
-        "error": "Frontend not available",
-        "message": "React frontend not built. Please build the frontend or check your deployment.",
-        "expected_path": react_build_path,
-        "project_root": project_root,
-        "exists": os.path.exists(react_build_path),
-        "frontend_dist_dir_exists": os.path.exists(os.path.join(project_root, 'frontend', 'dist')),
-        "frontend_dir_exists": os.path.exists(os.path.join(project_root, 'frontend'))
-    }), 503
+    # Fallback to 404 if no React build found
+    logger.error(f"Frontend not built - React build not found at: {react_build_path}")
+    return "Frontend not built", 404
+
+# React page routes - each corresponds to a route in App.tsx
+@app.route('/stats')
+@login_required
+def stats_page():
+    """Serve React app for /stats page"""
+    return serve_react_app()
+
+@app.route('/search')
+@login_required
+def search_page():
+    """Serve React app for /search page"""
+    return serve_react_app()
+
+@app.route('/library')
+@login_required
+def library_page():
+    """Serve React app for /library page"""
+    return serve_react_app()
+
+@app.route('/series')
+@login_required
+def series_page():
+    """Serve React app for /series page"""
+    return serve_react_app()
+
+@app.route('/hot')
+@login_required
+def hot_page():
+    """Serve React app for /hot page"""
+    return serve_react_app()
+
+@app.route('/downloads')
+@login_required
+def downloads_page():
+    """Serve React app for /downloads page"""
+    return serve_react_app()
+
+@app.route('/settings')
+@login_required
+def settings_page():
+    """Serve React app for /settings page"""
+    return serve_react_app()
+
+@app.route('/profile')
+@login_required
+def profile_page():
+    """Serve React app for /profile page"""
+    return serve_react_app()
+
+@app.route('/admin')
+@login_required
+def admin_page():
+    """Serve React app for /admin page"""
+    return serve_react_app()
 
 # Serve React static files
 @app.route('/assets/<path:filename>')
@@ -393,33 +439,15 @@ def root_static_files(filename):
     logger.warning(f"Static file not found: {filename}")
     return "Not Found", 404
 
-# Catch-all route for React Router (SPA routing)
-@app.route('/<path:path>')
-@login_required
-def catch_all(path):
-    """
-    Catch-all route to serve React app for client-side routing.
-    This ensures that React Router can handle routes like /search, /downloads, etc.
-    """
-    # Skip API routes and other backend routes
-    if path.startswith(('api/', 'static/', 'assets/', 'request/', 'opds/')):
-        return "Not Found", 404
-    
-    # Check if we have a built React app
-    react_build_path = os.path.join(get_project_root(), 'frontend', 'dist', 'index.html')
-    
-    if os.path.exists(react_build_path):
-        return send_file(react_build_path)
-    
-    # Fallback to 404 if no React build found
-    return "Frontend not built", 404
-
+@app.route('/favicon.ico')
+@app.route('/droplet.png')
 @app.route('/favico<path:_>')
 @app.route('/request/favico<path:_>')
 @app.route('/request/static/favico<path:_>')
-def favicon(_ : typing.Any) -> Response:
-    return send_from_directory(os.path.join(get_project_root(), 'static', 'media'),
-        'favicon.ico', mimetype='image/vnd.microsoft.icon')
+def favicon(_ : typing.Any = None) -> Response:
+    """Serve favicon - always serve droplet.png for consistency"""
+    return send_from_directory(os.path.join(get_project_root(), 'frontend', 'dist'),
+        'droplet.png', mimetype='image/png')
 
 from typing import Union, Tuple
 
@@ -1670,18 +1698,47 @@ def api_metadata_tag_books(tag_id):
 def api_admin_status():
     """Check if current user has admin privileges"""
     try:
+        is_admin = False
+        
+        # Method 1: Try CWA client-based admin check
         client = get_cwa_client()
-        if not client:
-            return jsonify({'error': 'CWA not configured'}), 400
-            
-        # Check admin status via CWA
-        response = client.get('/admin/view')
-        is_admin = response.status_code == 200
+        if client:
+            try:
+                # Check admin status via CWA
+                admin_url = '/admin/view'
+                logger.info(f"Admin status check: Testing {client.base_url}{admin_url}")
+                response = client.get(admin_url)
+                logger.info(f"Admin status check: Response status = {response.status_code}")
+                is_admin = response.status_code == 200
+            except Exception as e:
+                logger.error(f"CWA client admin check failed: {e}")
+                is_admin = False
+        else:
+            logger.error("Admin status check: CWA client not available")
+        
+        # Method 2: Fallback to database-based admin check if client method failed
+        if not is_admin:
+            try:
+                username = session.get('username')
+                if username:
+                    from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+                    cwa_db = get_cwa_db_manager()
+                    if cwa_db:
+                        logger.info(f"Admin status check: Trying database fallback for {username}")
+                        user_permissions = cwa_db.get_user_permissions(username)
+                        is_admin = user_permissions.get('admin', False)
+                        logger.info(f"Admin status check: Database result = {is_admin}")
+                    else:
+                        logger.warning("Admin status check: CWA database not available for fallback")
+            except Exception as e:
+                logger.error(f"Database admin check failed: {e}")
+                is_admin = False
         
         return jsonify({'is_admin': is_admin})
         
     except Exception as e:
         logger.error(f"Error checking admin status: {e}")
+        logger.error(f"Admin status check exception type: {type(e).__name__}")
         return jsonify({'is_admin': False})
 
 @app.route('/api/admin/rate-limiter/status')
@@ -2199,18 +2256,45 @@ def api_admin_user_info():
         
         # Check actual admin status via CWA
         is_admin = False
+        
+        # Method 1: Try session-based admin check
         if cwa_proxy:
             try:
                 # Get user session
                 with cwa_proxy.sessions_lock:
                     user_session = cwa_proxy.user_sessions.get(username)
                 
+                logger.info(f"Admin check for {username}: user_session exists = {user_session is not None}")
                 if user_session:
+                    logger.info(f"Admin check: CWA base URL = {user_session.cwa_base_url}")
+                    admin_url = f"{user_session.cwa_base_url}/cwa-stats-show"
+                    logger.info(f"Admin check: Testing access to {admin_url}")
+                    
                     # Test admin access by trying to access admin endpoints
-                    response = user_session.session.head(f"{user_session.cwa_base_url}/cwa-stats-show", timeout=5)
+                    response = user_session.session.head(admin_url, timeout=5)
+                    logger.info(f"Admin check: Response status = {response.status_code}")
                     is_admin = response.status_code == 200
+                else:
+                    logger.warning(f"Admin check: No user session found for {username}")
             except Exception as e:
-                logger.warning(f"Failed to check admin status for {username}: {e}")
+                logger.error(f"Failed session-based admin check for {username}: {e}")
+                logger.error(f"Admin check exception type: {type(e).__name__}")
+                is_admin = False
+        
+        # Method 2: Fallback to database-based admin check if session method failed
+        if not is_admin:
+            try:
+                from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+                cwa_db = get_cwa_db_manager()
+                if cwa_db:
+                    logger.info(f"Admin check: Trying database fallback for {username}")
+                    user_permissions = cwa_db.get_user_permissions(username)
+                    is_admin = user_permissions.get('admin', False)
+                    logger.info(f"Admin check: Database result = {is_admin}")
+                else:
+                    logger.warning("Admin check: CWA database not available for fallback")
+            except Exception as e:
+                logger.error(f"Failed database-based admin check for {username}: {e}")
                 is_admin = False
         
         return jsonify({

@@ -274,6 +274,8 @@ For optimal Cloudflare bypass performance and reliability, we highly recommend u
 | `DEBUG`           | Debug mode toggle       | `false`            |
 | `INGEST_DIR`      | Book download directory | `/cwa-book-ingest` |
 | `TZ`              | Container timezone      | `UTC`              |
+
+> ⚠️ **Important for Unraid/Production**: Set `INGEST_DIR=/ingest` to match your volume mount path, otherwise downloaded books will be saved to a temporary directory and disappear on container restart.
 | `UID`             | Runtime user ID         | `1000`             |
 | `GID`             | Runtime group ID        | `100`              |
 | `CWA_DB_PATH`     | Calibre-Web's database  | None               |
