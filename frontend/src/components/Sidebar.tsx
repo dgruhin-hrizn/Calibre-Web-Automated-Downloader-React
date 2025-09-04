@@ -22,7 +22,7 @@ interface SidebarProps {
 const navigation = [
   { name: 'Library', href: '/', icon: Library },
   { name: 'Series', href: '/series', icon: BookOpen },
-  { name: 'Top 10 Books', href: '/hot', icon: TrendingUp },
+  { name: 'Top 10 Books', href: '/top10', icon: TrendingUp },
   { name: 'Add Books', href: '/search', icon: Plus },
   { name: 'Downloads', href: '/downloads', icon: Download },
   { name: 'Stats', href: '/stats', icon: BarChart3 },

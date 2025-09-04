@@ -1,81 +1,12 @@
 import { useState, useEffect } from 'react'
 import { TrendingUp } from 'lucide-react'
 import { Button } from '../components/ui/Button'
-import { Swiper, SwiperSlide } from 'swiper/react'
-import { Navigation, FreeMode } from 'swiper/modules'
 import { Card, CardContent } from '../components/ui/card'
 import { UnifiedBookCard, type UnifiedBook } from '../components/UnifiedBookCard'
 
 import { useToast } from '../hooks/useToast'
 
-// Import Swiper styles
-import 'swiper/css'
-import 'swiper/css/navigation'
-import 'swiper/css/free-mode'
 
-// Custom styles for Swiper
-const swiperStyles = `
-  .hot-books-swiper {
-    overflow: hidden;
-    width: 100%;
-    position: relative;
-    min-height: 420px;
-  }
-  
-  .hot-books-swiper .swiper-wrapper {
-    width: fit-content;
-    max-width: 100%;
-    min-height: 420px;
-  }
-  
-  .hot-books-swiper .swiper-slide {
-    flex-shrink: 0;
-  }
-  
-  .hot-books-swiper::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 40px;
-    background: linear-gradient(to right, hsl(var(--card)), transparent);
-    z-index: 10;
-    pointer-events: none;
-  }
-  
-  .hot-books-swiper::after {
-    content: '';
-    position: absolute;
-    right: 0;
-    top: 0;
-    bottom: 0;
-    width: 40px;
-    background: linear-gradient(to left, hsl(var(--card)), transparent);
-    z-index: 10;
-    pointer-events: none;
-  }
-  
-  .swiper-button-prev-hot,
-  .swiper-button-next-hot {
-    z-index: 20;
-  }
-  
-  .swiper-button-prev-hot:hover,
-  .swiper-button-next-hot:hover {
-    transform: translateY(-50%) scale(1.1);
-  }
-`
-
-// Inject styles
-if (typeof document !== 'undefined') {
-  const styleElement = document.createElement('style')
-  styleElement.textContent = swiperStyles
-  if (!document.head.querySelector('style[data-hot-books-swiper]')) {
-    styleElement.setAttribute('data-hot-books-swiper', 'true')
-    document.head.appendChild(styleElement)
-  }
-}
 
 interface HotBook extends UnifiedBook {
   download_count?: number
@@ -83,7 +14,7 @@ interface HotBook extends UnifiedBook {
   originalId?: number // Store the original numeric ID for API calls
 }
 
-export function HotBooks() {
+export function Top10() {
   const { showToast, ToastContainer } = useToast()
   const [books, setBooks] = useState<HotBook[]>([])
   const [loading, setLoading] = useState(true)
@@ -283,70 +214,43 @@ export function HotBooks() {
       </div>
 
       {/* Hot Books Carousel */}
-      <Card>
-        <CardContent className="pt-6">
-
-          {loading ? (
-            <div className="flex justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      {loading ? (
+        <div className="flex justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      ) : !books || books.length === 0 ? (
+        <div className="text-center py-12">
+          <TrendingUp className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <p className="text-lg font-medium">No Top 10 Books Found</p>
+          <p className="text-muted-foreground">No books have been downloaded to devices yet. Start downloading books to see what's popular!</p>
+        </div>
+      ) : (
+        /* Grid Layout - Following Library page pattern */
+        <div className="flex flex-wrap gap-4 justify-start transition-all duration-500 ease-out">
+          {books.map((book) => (
+            <div 
+              key={book.id}
+              className="w-[calc(50%-8px)] sm:w-[225px] sm:min-w-[225px] sm:max-w-[225px] transition-all ease-out opacity-100 scale-100 translate-y-0 hover:scale-[1.02] hover:shadow-lg duration-700"
+              style={{
+                transform: 'translateZ(0)', // Hardware acceleration
+                willChange: 'transform, opacity, box-shadow',
+                backfaceVisibility: 'hidden', // Prevent flickering
+                perspective: '1000px', // Enable 3D transforms
+                transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)' // Smooth repositioning
+              }}
+            >
+              <UnifiedBookCard
+                book={book}
+                cardType="library"
+                viewMode="grid"
+                onDetails={handleBookClick}
+                onSendToKindle={() => sendToKindle(book)}
+                showHotIndicator={true}
+              />
             </div>
-          ) : !books || books.length === 0 ? (
-            <div className="text-center py-12">
-              <TrendingUp className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-lg font-medium">No Top 10 Books Found</p>
-              <p className="text-muted-foreground">No books have been downloaded to devices yet. Start downloading books to see what's popular!</p>
-            </div>
-          ) : (
-            /* Swiper Carousel */
-            <div className="relative px-5">
-              <Swiper
-                modules={[Navigation, FreeMode]}
-                spaceBetween={16}
-                slidesPerView="auto"
-                freeMode={{
-                  enabled: true,
-                  sticky: false,
-                }}
-                navigation={{
-                  nextEl: '.swiper-button-next-hot',
-                  prevEl: '.swiper-button-prev-hot',
-                }}
-                watchOverflow={true}
-                className="hot-books-swiper"
-              >
-                {books.map((book) => (
-                  <SwiperSlide key={book.id} className="!w-[225px]">
-                    <UnifiedBookCard
-                      book={book}
-                      cardType="library"
-                      viewMode="grid"
-                      onDetails={handleBookClick}
-                      onSendToKindle={() => sendToKindle(book)}
-                      showHotIndicator={true}
-                    />
-                  </SwiperSlide>
-                ))}
-              </Swiper>
-              
-              {/* Custom Navigation Buttons */}
-              {books.length > 1 && (
-                <>
-                  <div className="swiper-button-prev-hot absolute left-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full shadow-lg bg-background/80 backdrop-blur-sm hover:bg-background/90 border border-border flex items-center justify-center cursor-pointer transition-colors">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </div>
-                  <div className="swiper-button-next-hot absolute right-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full shadow-lg bg-background/80 backdrop-blur-sm hover:bg-background/90 border border-border flex items-center justify-center cursor-pointer transition-colors">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          ))}
+        </div>
+      )}
 
       {/* Toast Notifications */}
       <ToastContainer />
@@ -354,4 +258,4 @@ export function HotBooks() {
   )
 }
 
-export default HotBooks
+export default Top10

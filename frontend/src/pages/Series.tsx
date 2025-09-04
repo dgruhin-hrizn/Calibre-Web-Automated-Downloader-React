@@ -627,19 +627,26 @@ function SeriesCarousel({ series, onBookDetails, onSendToKindle }: SeriesCarouse
       </div>
 
       {/* Swiper Carousel */}
-      <div className="relative px-1 sm:px-5">
+      <div className="relative px-[calc(50%-140px)] sm:px-5">
         <Swiper
           modules={[Navigation, FreeMode]}
           spaceBetween={16}
           slidesPerView="auto"
           freeMode={{
             enabled: true,
-            sticky: false,
+            sticky: true,
+            momentumRatio: 0.25,
+            momentumVelocityRatio: 0.25,
           }}
+          centeredSlides={true}
+          centeredSlidesBounds={true}
+          initialSlide={1}
+          roundLengths={true}
           navigation={{
             nextEl: '.swiper-button-next-custom',
             prevEl: '.swiper-button-prev-custom',
           }}
+          slidesPerGroup={1}
           watchOverflow={true}
           className="series-swiper"
         >
