@@ -22,6 +22,7 @@ interface InfiniteLibraryGridProps {
   loadMoreRef: React.RefObject<HTMLDivElement>
   // Book tracking
   registerBookRef?: (bookId: number, element: HTMLElement | null) => void
+  registerPageRef?: (page: number, element: HTMLElement | null) => void
 }
 
 export function InfiniteLibraryGrid({
@@ -38,7 +39,8 @@ export function InfiniteLibraryGrid({
   onLoadMore,
   deletingBooks = new Set(),
   loadMoreRef,
-  registerBookRef
+  registerBookRef,
+  registerPageRef
 }: InfiniteLibraryGridProps) {
   if (loading && books.length === 0) {
     return (
@@ -85,6 +87,7 @@ export function InfiniteLibraryGrid({
             markImageLoaded={markImageLoaded}
             deletingBooks={deletingBooks}
             registerBookRef={registerBookRef}
+            registerPageRef={registerPageRef}
           />
         ) : (
           <LibraryListView

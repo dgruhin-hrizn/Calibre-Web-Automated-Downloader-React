@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { BOOKS_PER_PAGE, PAGINATION_DETECTION } from '../constants/pagination'
 import { useInfiniteLibraryBooks, useLibraryStats, useCWAHealth, useLibraryCache } from './useLibraryQueries'
-import { useInfiniteScroll, useScrollMemory, useBookInView, useScrollToBook } from './useInfiniteScroll'
+import { useInfiniteScroll, useScrollMemory, usePageInView, useBookInView, useScrollToBook } from './useInfiniteScroll'
 import type { ViewMode, SortParam, LibraryBook } from '../types'
 
 interface UseInfiniteLibraryStateOptions {
@@ -63,9 +63,9 @@ export function useInfiniteLibraryState({
     sessionStorage.removeItem(scrollPositionKey)
   }, [searchQuery, sortParam])
   
-  // Disabled book tracking for simpler manual pagination
-  const bookInView = null
-  const registerBookRef = () => {} // No-op function
+  // Simple page tracking using page markers
+  const { currentPage: detectedPage, registerPageRef } = usePageInView(true)
+  const registerBookRef = () => {} // No-op function for compatibility
   const { scrollToBook, scrollToTop } = useScrollToBook()
 
   // Infinite scroll setup
@@ -102,13 +102,19 @@ export function useInfiniteLibraryState({
     }, { replace: false })
   }, [setSearchParams])
 
-  // Simple manual page tracking - only update page on manual navigation
-  // Don't auto-update based on scroll position to avoid the complexity
+  // Update URL when detected page changes (for manual scrolling)
   const updateCurrentPage = useCallback(() => {
-    // Disabled auto page updates - pages only change on manual clicks
-    // This eliminates the intersection observer complexity and edge cases
-    return
-  }, [])
+    // Only update if the detected page is different and valid
+    // Allow updates even during pendingPageNavigation for responsive URL updates
+    if (detectedPage !== currentPage && detectedPage <= totalPages && detectedPage >= 1) {
+      // Use replace: true for scroll-based updates to avoid cluttering browser history
+      setSearchParams(prev => {
+        const newParams = new URLSearchParams(prev)
+        newParams.set('page', detectedPage.toString())
+        return newParams
+      }, { replace: true })
+    }
+  }, [detectedPage, currentPage, totalPages, setSearchParams])
 
   // Navigation handlers that reset infinite scroll
   const handleSearchChange = useCallback((query: string) => {
@@ -160,7 +166,7 @@ export function useInfiniteLibraryState({
       mainElement.removeEventListener('scroll', throttledHandleScroll)
       clearTimeout(timeoutId)
     }
-  }, [scrollMemory, bookInView, enableScrollMemory])
+  }, [scrollMemory, enableScrollMemory])
 
   // Restore scroll position on mount or when data changes
   useEffect(() => {
@@ -185,9 +191,14 @@ export function useInfiniteLibraryState({
           
           
           setTimeout(() => {
-            scrollToBook(targetBook.id, scrollBehavior, targetPage)
+            scrollToBook(targetBook.id, scrollBehavior)
             setHasRestoredScroll(true)
-            setPendingPageNavigation(null) // Clear pending navigation
+            // Clear pending navigation after smooth scroll completes
+            if (isManualNavigation) {
+              setTimeout(() => setPendingPageNavigation(null), 1000)
+            } else {
+              setPendingPageNavigation(null)
+            }
           }, isManualNavigation ? 100 : 300)
         return
       }
@@ -212,7 +223,7 @@ export function useInfiniteLibraryState({
     }, 500) // Wait 500ms after changes
     
     return () => clearTimeout(timeoutId)
-  }, [bookInView, updateCurrentPage])
+  }, [updateCurrentPage])
 
   // Ref for scroll timeout
   // const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -237,18 +248,18 @@ export function useInfiniteLibraryState({
   }, [])
 
   const handleBookDeleted = useCallback((deletedBookId: number) => {
-    console.log('[handleBookDeleted] Starting delete animation for book:', deletedBookId)
+    // Starting delete animation
     
     // Add book to deleting set for animation
     setDeletingBooks(prev => {
       const newSet = new Set([...prev, deletedBookId])
-      console.log('[handleBookDeleted] Updated deletingBooks:', Array.from(newSet))
+      // Updated deletingBooks set
       return newSet
     })
     
     // Wait for animation to complete, then refetch and clean up
     setTimeout(() => {
-      console.log('[handleBookDeleted] Animation complete, refetching data for book:', deletedBookId)
+      // Animation complete, refetching data
       
       // Refetch data to get updated list without deleted book
       infiniteQuery.refetch()
@@ -258,7 +269,7 @@ export function useInfiniteLibraryState({
       setDeletingBooks(prev => {
         const newSet = new Set(prev)
         newSet.delete(deletedBookId)
-        console.log('[handleBookDeleted] Cleaned up deletingBooks after animation:', Array.from(newSet))
+        // Cleaned up deletingBooks after animation
         return newSet
       })
     }, 1000) // Wait for flip + fade animations to complete (500ms + 500ms)
@@ -272,9 +283,9 @@ export function useInfiniteLibraryState({
     setSelectedBook(updatedBook)
   }, [])
 
-  // Pagination-style navigation for compatibility
+  // Pagination-style navigation for page clicks
   const handlePageChange = useCallback((page: number) => {
-    const booksPerPage = 20
+    const booksPerPage = BOOKS_PER_PAGE
     const targetBookIndex = (page - 1) * booksPerPage
     const targetBook = books[targetBookIndex]
     
@@ -284,20 +295,20 @@ export function useInfiniteLibraryState({
     // Set pending navigation to track this is a manual page click
     setPendingPageNavigation(page)
     
-    // Update URL first
+    // Update URL first (use regular navigation, not replace, for page clicks)
     updateURLParams({ page })
     
     if (targetBook) {
-      // Book is already loaded, scroll to it immediately
+      // Book is already loaded, scroll to it immediately with smooth animation
       setTimeout(() => {
         scrollToBook(targetBook.id, 'smooth')
-        setPendingPageNavigation(null) // Clear pending navigation
+        // Clear pending navigation after smooth scroll animation completes
+        setTimeout(() => setPendingPageNavigation(null), 1200)
       }, 100)
     } else if (page <= totalPages) {
       // Need to load more pages to reach this page
       // The useEffect that handles loading will trigger, and when it completes,
       // the scroll restoration useEffect will scroll to the right position
-      // pendingPageNavigation will be used to determine scroll behavior
     }
   }, [books, totalPages, scrollToBook, updateURLParams])
 
@@ -365,8 +376,9 @@ export function useInfiniteLibraryState({
     isIntersecting,
     
     // Scroll management
-    bookInView,
+    bookInView: null, // Deprecated, kept for compatibility
     registerBookRef,
+    registerPageRef,
     scrollToBook,
     scrollToTop,
     scrollMemory,

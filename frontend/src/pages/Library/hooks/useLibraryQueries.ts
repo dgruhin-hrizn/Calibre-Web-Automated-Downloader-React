@@ -108,7 +108,7 @@ export function useLibraryBook(bookId: number, enabled: boolean = true) {
 /**
  * Hook for fetching library books with pagination and caching
  */
-export function useLibraryBooks({ page, search = '', sort = 'new', perPage = 18 }: LibraryBooksParams) {
+export function useLibraryBooks({ page, search = '', sort = 'new', perPage = 20 }: LibraryBooksParams) {
   return useQuery<LibraryBooksResponse>({
     queryKey: ['library', 'books', { page, search, sort, perPage }],
     queryFn: async () => {
@@ -177,7 +177,7 @@ export function useLibraryStats() {
 /**
  * Hook for infinite loading of library books
  */
-export function useInfiniteLibraryBooks({ search = '', sort = 'new', perPage = 18 }: Omit<LibraryBooksParams, 'page'>) {
+export function useInfiniteLibraryBooks({ search = '', sort = 'new', perPage = 20 }: Omit<LibraryBooksParams, 'page'>) {
   return useInfiniteQuery<LibraryBooksResponse>({
     queryKey: ['library', 'infinite', { search, sort, perPage }],
     queryFn: async (context) => {
@@ -219,7 +219,7 @@ export function useInfiniteLibraryBooks({ search = '', sort = 'new', perPage = 1
 export function usePrefetchLibraryBooks() {
   const queryClient = useQueryClient()
 
-  const prefetchPage = async ({ page, search = '', sort = 'new', perPage = 18 }: LibraryBooksParams) => {
+  const prefetchPage = async ({ page, search = '', sort = 'new', perPage = 20 }: LibraryBooksParams) => {
     await queryClient.prefetchQuery({
       queryKey: ['library', 'books', { page, search, sort, perPage }],
       queryFn: async () => {
@@ -376,7 +376,7 @@ export function useLibraryCache() {
     }
   }
 
-  const getCachedBooks = ({ page, search = '', sort = 'new', perPage = 18 }: LibraryBooksParams) => {
+  const getCachedBooks = ({ page, search = '', sort = 'new', perPage = 20 }: LibraryBooksParams) => {
     return queryClient.getQueryData<LibraryBooksResponse>(['library', 'books', { page, search, sort, perPage }])
   }
 

@@ -115,6 +115,110 @@ export function useScrollMemory(key: string) {
 }
 
 /**
+ * Simple hook for tracking which page is currently in view using page markers
+ */
+export function usePageInView(enabled: boolean = true) {
+  const [currentPage, setCurrentPage] = useState<number>(1)
+  const observerRef = useRef<IntersectionObserver | null>(null)
+  const pageRefs = useRef<Map<number, HTMLElement>>(new Map())
+
+  const registerPageRef = useCallback((pageNumber: number, element: HTMLElement | null) => {
+    if (element) {
+      pageRefs.current.set(pageNumber, element)
+      // Start observing immediately if observer exists
+      if (observerRef.current) {
+        observerRef.current.observe(element)
+      }
+    } else {
+      const oldElement = pageRefs.current.get(pageNumber)
+      if (oldElement && observerRef.current) {
+        observerRef.current.unobserve(oldElement)
+      }
+      pageRefs.current.delete(pageNumber)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!enabled) return
+
+    // Clean up previous observer
+    if (observerRef.current) {
+      observerRef.current.disconnect()
+    }
+
+    // Create new observer optimized for responsive page boundary detection
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        // Get all visible page markers with their positions
+        const visiblePages: Array<{page: number, top: number, bottom: number, isIntersecting: boolean}> = []
+        
+        entries.forEach((entry) => {
+          const pageNumber = parseInt(entry.target.getAttribute('data-page-number') || '0', 10)
+          if (pageNumber) {
+            const rect = entry.boundingClientRect
+            visiblePages.push({
+              page: pageNumber,
+              top: rect.top,
+              bottom: rect.bottom,
+              isIntersecting: entry.isIntersecting
+            })
+          }
+        })
+
+        if (visiblePages.length === 0) return
+
+        // Sort by page number
+        visiblePages.sort((a, b) => a.page - b.page)
+
+        let targetPage = 1
+
+        // Simple logic: use the page that's most visible
+        if (visiblePages.length > 0) {
+          // Sort by page number and find the best candidate
+          visiblePages.sort((a, b) => a.page - b.page)
+          
+          // Find the page marker closest to the top of the viewport
+          let bestPage = visiblePages[0]
+          let bestDistance = Math.abs(visiblePages[0].top)
+          
+          for (const pageInfo of visiblePages) {
+            const distance = Math.abs(pageInfo.top)
+            if (distance < bestDistance || (distance === bestDistance && pageInfo.page > bestPage.page)) {
+              bestPage = pageInfo
+              bestDistance = distance
+            }
+          }
+          
+          targetPage = bestPage.page
+        }
+        
+        // Update immediately for responsive feel
+        setCurrentPage(prev => prev !== targetPage ? targetPage : prev)
+      },
+      {
+        threshold: [0, 0.5, 1.0], // Simple thresholds
+        rootMargin: '100px 0px 100px 0px' // Moderate margin for detection
+      }
+    )
+
+    // Observe all current page elements
+    pageRefs.current.forEach((element) => {
+      observerRef.current?.observe(element)
+    })
+
+    return () => {
+      observerRef.current?.disconnect()
+    }
+  }, [enabled])
+
+
+  return {
+    currentPage,
+    registerPageRef
+  }
+}
+
+/**
  * Hook for tracking which book is currently in view
  */
 export function useBookInView(
@@ -369,3 +473,4 @@ export function useScrollToBook() {
     scrollToTop
   }
 }
+

@@ -176,7 +176,7 @@ class CalibreDBManager:
             logger.warning(f"Error getting download counts from app.db: {e}")
             return {}
     
-    def get_books(self, page: int = 1, per_page: int = 18, search: str = None, 
+    def get_books(self, page: int = 1, per_page: int = 20, search: str = None, 
                   sort: str = 'new') -> Dict[str, Any]:
         """Get books from Calibre library with pagination"""
         session = self.get_session()
@@ -379,7 +379,7 @@ class CalibreDBManager:
         finally:
             self.close_session(session)
     
-    def get_hot_books(self, page: int = 1, per_page: int = 18) -> Dict[str, Any]:
+    def get_hot_books(self, page: int = 1, per_page: int = 20) -> Dict[str, Any]:
         """Get hot books based on download counts from app.db"""
         session = self.get_session()
         try:
@@ -493,7 +493,7 @@ class CalibreDBManager:
         finally:
             self.close_session(session)
     
-    def get_random_books(self, limit: int = 18) -> Dict[str, Any]:
+    def get_random_books(self, limit: int = 20) -> Dict[str, Any]:
         """Get random books for discovery"""
         session = self.get_session()
         try:
@@ -571,7 +571,7 @@ class CalibreDBManager:
         finally:
             self.close_session(session)
     
-    def get_rated_books(self, page: int = 1, per_page: int = 18) -> Dict[str, Any]:
+    def get_rated_books(self, page: int = 1, per_page: int = 20) -> Dict[str, Any]:
         """Get highly rated books (rating > 4.5 stars)"""
         session = self.get_session()
         try:
@@ -708,7 +708,7 @@ class CalibreDBManager:
         finally:
             self.close_session(session)
     
-    def get_books_by_author(self, author_id: int, page: int = 1, per_page: int = 18) -> Dict[str, Any]:
+    def get_books_by_author(self, author_id: int, page: int = 1, per_page: int = 20) -> Dict[str, Any]:
         """Get books by specific author"""
         session = self.get_session()
         try:
@@ -866,7 +866,7 @@ class CalibreDBManager:
         finally:
             self.close_session(session)
     
-    def get_books_in_series(self, series_id: int, page: int = 1, per_page: int = 18) -> Dict[str, Any]:
+    def get_books_in_series(self, series_id: int, page: int = 1, per_page: int = 20) -> Dict[str, Any]:
         """Get books in specific series"""
         session = self.get_session()
         try:
@@ -1012,7 +1012,7 @@ class CalibreDBManager:
         finally:
             self.close_session(session)
     
-    def get_books_by_tag(self, tag_id: int, page: int = 1, per_page: int = 18) -> Dict[str, Any]:
+    def get_books_by_tag(self, tag_id: int, page: int = 1, per_page: int = 20) -> Dict[str, Any]:
         """Get books with specific tag"""
         session = self.get_session()
         try:

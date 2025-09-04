@@ -58,6 +58,7 @@ export function Library() {
     handleLoadMore,
     loadMoreRef,
     registerBookRef,
+    registerPageRef,
     scrollToTop
   } = useInfiniteLibraryState()
   
@@ -136,7 +137,7 @@ export function Library() {
       console.error('[Library] Error refetching book after metadata update:', error)
       
       // Fallback: invalidate caches so data refreshes on next navigation
-      console.log('[Library] Using fallback: invalidating caches')
+      // Using fallback: invalidating caches
       invalidateLibraryBooks()
       showToast({ type: 'warning', title: 'Metadata updated, display will refresh when you navigate back' })
     } finally {
@@ -225,10 +226,11 @@ export function Library() {
           deletingBooks={deletingBooks}
           loadMoreRef={loadMoreRef}
           registerBookRef={registerBookRef}
+          registerPageRef={registerPageRef}
         />
         
         {/* Scroll to Top Button - Adjusted for mobile footer */}
-        {books.length > 18 && (
+        {books.length > 20 && (
           <div className="fixed bottom-24 md:bottom-6 right-6 z-50">
             <Button
               onClick={scrollToTop}

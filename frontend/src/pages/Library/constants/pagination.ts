@@ -2,7 +2,7 @@
  * Pagination and scroll configuration constants
  */
 
-// Books per page configuration
+// Books per page configuration (must match backend setting)
 export const BOOKS_PER_PAGE = 20
 
 // Scroll positioning offsets (controls where the scroll stops)

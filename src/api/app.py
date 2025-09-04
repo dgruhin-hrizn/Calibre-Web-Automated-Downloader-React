@@ -1375,12 +1375,12 @@ def api_metadata_books():
         if 'offset' in request.args:
             # Frontend is using offset/limit style
             offset = int(request.args.get('offset', 0))
-            per_page = min(int(request.args.get('limit', 18)), 100)
+            per_page = min(int(request.args.get('limit', 20)), 100)
             page = (offset // per_page) + 1
         else:
             # Using page/per_page style
             page = int(request.args.get('page', 1))
-            per_page = min(int(request.args.get('per_page', 18)), 100)
+            per_page = min(int(request.args.get('per_page', 20)), 100)
             
         search = request.args.get('search', '').strip()
         sort_by = request.args.get('sort', 'timestamp')
@@ -1473,7 +1473,7 @@ def api_metadata_new_books():
         
         # Get pagination parameters
         page = int(request.args.get('page', 1))
-        per_page = min(int(request.args.get('per_page', 18)), 100)
+        per_page = min(int(request.args.get('per_page', 20)), 100)
         
         # Get new books sorted by timestamp desc
         result = db_manager.get_books(page=page, per_page=per_page, sort='new')
@@ -1499,7 +1499,7 @@ def api_metadata_discover_books():
             return jsonify({'error': 'Metadata database not available'}), 503
         
         # Get per_page parameter (no pagination for random books)
-        per_page = min(int(request.args.get('per_page', 18)), 100)
+        per_page = min(int(request.args.get('per_page', 20)), 100)
         
         # Get random books
         result = db_manager.get_random_books(limit=per_page)
@@ -1526,7 +1526,7 @@ def api_metadata_rated_books():
         
         # Get pagination parameters
         page = int(request.args.get('page', 1))
-        per_page = min(int(request.args.get('per_page', 18)), 100)
+        per_page = min(int(request.args.get('per_page', 20)), 100)
         
         # Get highly rated books (rating > 4.5 stars, which is 9/10 in Calibre)
         result = db_manager.get_rated_books(page=page, per_page=per_page)
@@ -1581,7 +1581,7 @@ def api_metadata_author_books(author_id):
         
         # Get pagination parameters
         page = int(request.args.get('page', 1))
-        per_page = min(int(request.args.get('per_page', 18)), 100)
+        per_page = min(int(request.args.get('per_page', 20)), 100)
         
         # Get books by author
         result = db_manager.get_books_by_author(author_id, page=page, per_page=per_page)
@@ -1637,7 +1637,7 @@ def api_metadata_series_books(series_id):
         
         # Get pagination parameters
         page = int(request.args.get('page', 1))
-        per_page = min(int(request.args.get('per_page', 18)), 100)
+        per_page = min(int(request.args.get('per_page', 20)), 100)
         
         # Get books in series
         result = db_manager.get_books_in_series(series_id, page=page, per_page=per_page)
@@ -1693,7 +1693,7 @@ def api_metadata_tag_books(tag_id):
         
         # Get pagination parameters
         page = int(request.args.get('page', 1))
-        per_page = min(int(request.args.get('per_page', 18)), 100)
+        per_page = min(int(request.args.get('per_page', 20)), 100)
         
         # Get books with tag
         result = db_manager.get_books_by_tag(tag_id, page=page, per_page=per_page)
@@ -2499,7 +2499,7 @@ def api_cwa_books():
             return jsonify({'error': 'CWA integration is disabled'}), 503
             
         page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 18, type=int)
+        per_page = request.args.get('per_page', 20, type=int)
         sort = request.args.get('sort', 'new')
         
         books = client.get_books(page=page, per_page=per_page, sort=sort)
