@@ -88,7 +88,7 @@ export function LibraryToolbar({
   }, [searchQuery])
 
   return (
-    <div className="library-toolbar sticky top-0 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/90 border-b border-border -mx-6 mb-8">
+    <div className="library-toolbar sticky top-0 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/90 border-b border-border -mx-6 mb-8 -mt-8">
       <div className="px-6 py-4">
         <div className="flex flex-col gap-4">
           {/* Top Row: Title and Admin Controls */}

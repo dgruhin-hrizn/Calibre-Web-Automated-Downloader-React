@@ -27,15 +27,15 @@ export function LibraryGridView({
   registerPageRef
 }: LibraryGridViewProps) {
   return (
-    <div className="relative">
-      <div className="grid gap-4 transition-all duration-500 ease-out grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 max-w-[1200px] mx-auto">
+    <div className="relative pt-10 sm:pt-0">
+      <div className="grid gap-x-4 gap-y-0 sm:gap-y-4 transition-all duration-500 ease-out grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 max-w-[1200px] mx-auto">
         {books.map((book, index) => {
           const pageNumber = Math.floor(index / BOOKS_PER_PAGE) + 1
           const isFirstBookOfPage = index % BOOKS_PER_PAGE === 0
           const isDeleting = deletingBooks.has(book.id)
 
           return (
-            <div key={book.id} className="relative">
+            <div key={book.id} className="relative -mt-12 sm:mt-0">
               {/* Simple page marker - only on first book of each page */}
               {isFirstBookOfPage && registerPageRef && (
                 <div

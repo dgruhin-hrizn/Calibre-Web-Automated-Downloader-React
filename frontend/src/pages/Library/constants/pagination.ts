@@ -8,7 +8,7 @@ export const BOOKS_PER_PAGE = 20
 // Scroll positioning offsets (controls where the scroll stops)
 export const SCROLL_OFFSETS = {
   DESKTOP: 15,   // Desktop scroll offset
-  MOBILE: -120   // Mobile scroll offset (adjusted for pagination-only footer)
+  MOBILE: 10      // Mobile scroll offset (using padding-top on grid container instead)
 }
 
 // Intersection Observer settings for pagination detection
