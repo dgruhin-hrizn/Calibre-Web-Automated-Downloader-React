@@ -120,7 +120,7 @@ export function LibraryToolbar({
             <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center flex-1">
               {/* Search */}
               <form onSubmit={handleSearch} className="flex gap-2 w-full sm:w-auto items-center">
-                <div className="relative flex-1 sm:w-80">
+                <div className="relative flex-1 sm:w-64 md:w-80">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                   <input
                     type="text"
@@ -187,7 +187,7 @@ export function LibraryToolbar({
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Portal>
                   <DropdownMenu.Content 
-                    className="min-w-[220px] bg-background border border-border rounded-md shadow-lg p-1 z-50"
+                    className="min-w-[180px] sm:min-w-[220px] bg-background border border-border rounded-md shadow-lg p-1 z-50"
                     align="end"
                     sideOffset={4}
                   >

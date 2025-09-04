@@ -47,7 +47,7 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
       <div
         className={cn(
           "fixed inset-y-0 left-0 z-50 bg-card border-r border-border transform transition-all duration-300 ease-in-out lg:static lg:inset-0 lg:h-screen overflow-x-hidden",
-          open ? "w-64 translate-x-0" : "w-0 -translate-x-full lg:w-20 lg:translate-x-0"
+          open ? "w-56 sm:w-64 translate-x-0" : "w-0 -translate-x-full lg:w-20 lg:translate-x-0"
         )}
       >
         <div className={cn("flex flex-col h-full", !open && "lg:overflow-hidden")}>

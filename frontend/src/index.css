@@ -60,6 +60,27 @@
   }
   body {
     @apply bg-background text-foreground;
+    overflow-x: hidden; /* Prevent horizontal scroll */
+    /* Prevent zoom on iOS Safari */
+    -webkit-text-size-adjust: 100%;
+    -ms-text-size-adjust: 100%;
+  }
+  html {
+    overflow-x: hidden; /* Prevent horizontal scroll at root level */
+    /* Prevent zoom on iOS Safari */
+    -webkit-text-size-adjust: 100%;
+    -ms-text-size-adjust: 100%;
+  }
+  
+  /* Prevent zoom on form inputs on iOS */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+  
+  /* Ensure touch targets are at least 44px for better mobile UX */
+  button, a, [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
   }
 }
 

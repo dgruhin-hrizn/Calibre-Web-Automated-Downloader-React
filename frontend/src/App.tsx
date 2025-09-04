@@ -53,7 +53,11 @@ if (typeof window !== 'undefined') {
 }
 
 function App() {
-  const [sidebarOpen, setSidebarOpen] = useState(true) // Start open on desktop
+  // Start sidebar open on desktop, closed on mobile
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    // Check if we're on mobile (screen width < 1024px)
+    return window.innerWidth >= 1024
+  })
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system')
   const [systemDark, setSystemDark] = useState(window.matchMedia('(prefers-color-scheme: dark)').matches)
 
@@ -64,6 +68,18 @@ function App() {
     
     mediaQuery.addEventListener('change', handleChange)
     return () => mediaQuery.removeEventListener('change', handleChange)
+  }, [])
+
+  // Listen for window resize to adjust sidebar behavior
+  useEffect(() => {
+    const handleResize = () => {
+      const isDesktop = window.innerWidth >= 1024
+      // Auto-open on desktop, auto-close on mobile
+      setSidebarOpen(isDesktop)
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
   }, [])
 
   // Determine if dark mode should be applied
@@ -84,7 +100,7 @@ function App() {
                   </div>
                   
                   {/* Main Content */}
-                  <div className="flex-1 flex flex-col min-w-0 h-full">
+                  <div className="flex-1 flex flex-col min-w-0 h-full overflow-x-hidden">
                     {/* Fixed Header */}
                     <div className="flex-shrink-0">
                       <Header 

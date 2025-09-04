@@ -47,13 +47,43 @@ app.config['PERMANENT_SESSION_LIFETIME'] = 86400  # 24 hours
 # In development, allow localhost origins for Vite dev server
 cors_origins = []
 if APP_ENV in ['development', 'dev']:
-    cors_origins = ['http://localhost:5173', 'http://127.0.0.1:5173']
+    cors_origins = [
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
+        # Add specific local network IPs as needed
+        'http://192.168.1.129:5173',
+        # You can add more IPs here for other devices
+    ]
 
-CORS(app, 
-     origins=cors_origins,
-     supports_credentials=True,
-     allow_headers=['Content-Type', 'Authorization'],
-     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
+if APP_ENV in ['development', 'dev']:
+    # Development: Allow local network origins with pattern matching
+    CORS(app, 
+         origins=cors_origins,
+         supports_credentials=True,
+         allow_headers=['Content-Type', 'Authorization'],
+         methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
+    
+    # Add a custom CORS handler for more flexibility
+    @app.after_request
+    def after_request(response):
+        origin = request.headers.get('Origin')
+        if origin:
+            # Check if origin is from local network
+            import re
+            if (origin.startswith('http://localhost:') or 
+                origin.startswith('http://127.0.0.1:') or
+                re.match(r'http://192\.168\.\d+\.\d+:\d+', origin) or
+                re.match(r'http://10\.\d+\.\d+\.\d+:\d+', origin) or
+                re.match(r'http://172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+:\d+', origin)):
+                
+                response.headers['Access-Control-Allow-Origin'] = origin
+                response.headers['Access-Control-Allow-Credentials'] = 'true'
+                response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+                response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+        return response
+else:
+    # Production: No CORS needed (same origin)
+    pass
 
 # Initialize Calibre DB manager for direct database access
 calibre_db_manager = None

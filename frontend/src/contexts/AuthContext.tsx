@@ -1,6 +1,30 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 
-const API_BASE_URL = import.meta.env.PROD ? '' : 'http://localhost:8084'
+// Dynamic API URL detection for local network access
+const getApiBaseUrl = () => {
+  if (import.meta.env.PROD) {
+    return '' // Production: same origin
+  }
+  
+  // Development: detect if we're accessing from local network
+  const currentHost = window.location.hostname
+  
+  if (currentHost === 'localhost' || currentHost === '127.0.0.1') {
+    return 'http://localhost:8084'
+  }
+  
+  // If accessing from local network IP, use that IP for API calls
+  if (currentHost.match(/^192\.168\.\d+\.\d+$/) || 
+      currentHost.match(/^10\.\d+\.\d+\.\d+$/) || 
+      currentHost.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+$/)) {
+    return `http://${currentHost}:8084`
+  }
+  
+  // Fallback to localhost
+  return 'http://localhost:8084'
+}
+
+const API_BASE_URL = getApiBaseUrl()
 
 interface CachedUserInfo {
   authenticated: boolean
