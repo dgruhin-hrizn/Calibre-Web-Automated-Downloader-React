@@ -627,7 +627,7 @@ function SeriesCarousel({ series, onBookDetails, onSendToKindle }: SeriesCarouse
       </div>
 
       {/* Swiper Carousel */}
-      <div className="relative px-10">
+      <div className="relative px-1 sm:px-5">
         <Swiper
           modules={[Navigation, FreeMode]}
           spaceBetween={16}

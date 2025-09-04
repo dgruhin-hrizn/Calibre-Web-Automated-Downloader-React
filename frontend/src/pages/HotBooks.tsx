@@ -3,8 +3,7 @@ import { TrendingUp } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Swiper, SwiperSlide } from 'swiper/react'
 import { Navigation, FreeMode } from 'swiper/modules'
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
-import { Badge } from '../components/ui/badge'
+import { Card, CardContent } from '../components/ui/card'
 import { UnifiedBookCard, type UnifiedBook } from '../components/UnifiedBookCard'
 
 import { useToast } from '../hooks/useToast'
@@ -299,7 +298,7 @@ export function HotBooks() {
             </div>
           ) : (
             /* Swiper Carousel */
-            <div className="relative px-10">
+            <div className="relative px-5">
               <Swiper
                 modules={[Navigation, FreeMode]}
                 spaceBetween={16}
