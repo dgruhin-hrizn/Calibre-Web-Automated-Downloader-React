@@ -45,7 +45,8 @@ export function SearchForm({
             className="search-page-input w-full pl-10 pr-4 py-3 text-sm bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
-        <Button onClick={() => setShowAdvanced(!showAdvanced)} variant="outline">
+        {/* Filters button hidden to make search bar bigger */}
+        <Button onClick={() => setShowAdvanced(!showAdvanced)} variant="outline" className="hidden">
           <Filter className="w-4 h-4 mr-2" />
           Filters
         </Button>
