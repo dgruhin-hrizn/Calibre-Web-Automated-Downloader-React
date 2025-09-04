@@ -1,7 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
 import { 
-  Home, 
-  Search, 
   Download, 
   Settings,
   Library,
@@ -9,7 +7,8 @@ import {
   BookOpen,
   Users,
   X,
-  Plus
+  Plus,
+  BarChart3
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useAuth } from '../contexts/AuthContext'
@@ -21,12 +20,12 @@ interface SidebarProps {
 }
 
 const navigation = [
-  { name: 'Dashboard', href: '/', icon: Home },
-  { name: 'Library', href: '/library', icon: Library },
+  { name: 'Library', href: '/', icon: Library },
   { name: 'Series', href: '/series', icon: BookOpen },
   { name: 'Top 10 Books', href: '/hot', icon: TrendingUp },
   { name: 'Add Books', href: '/search', icon: Plus },
   { name: 'Downloads', href: '/downloads', icon: Download },
+  { name: 'Stats', href: '/stats', icon: BarChart3 },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 

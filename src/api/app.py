@@ -23,6 +23,7 @@ from ..integrations.cwa.settings import cwa_settings
 from ..integrations.cwa.proxy import CWAProxy, create_cwa_proxy_routes, create_opds_routes
 from ..integrations.calibre.db_manager import CalibreDBManager
 from ..infrastructure.downloads_db import DownloadsDBManager
+from ..infrastructure.uploads_db import UploadsDBManager
 from ..utils.rate_limiter import get_rate_limiter_stats
 
 from ..core.models import SearchFilters
@@ -162,6 +163,22 @@ def get_downloads_db_manager():
             logger.error(f"Failed to initialize downloads database: {e}")
             return None
     return downloads_db_manager
+
+# Global uploads DB manager instance
+uploads_db_manager = None
+
+def get_uploads_db_manager():
+    """Get or create Uploads DB manager instance"""
+    global uploads_db_manager
+    if uploads_db_manager is None:
+        try:
+            uploads_db_path = DOWNLOADS_DB_PATH.parent / "uploads.db"
+            uploads_db_manager = UploadsDBManager(uploads_db_path)
+            logger.info(f"Uploads database connected: {uploads_db_path}")
+        except Exception as e:
+            logger.error(f"Failed to initialize uploads database: {e}")
+            return None
+    return uploads_db_manager
 
 # Initialize with current settings
 cwa_client = get_cwa_client()
@@ -2621,7 +2638,9 @@ def api_cwa_library_send_to_kindle(book_id):
 @app.route('/api/ingest/upload', methods=['POST'])
 @login_required
 def api_ingest_upload():
-    """Upload book files to the ingest directory."""
+    """Upload book files to the ingest directory with history tracking."""
+    import uuid
+    
     try:
         if 'books' not in request.files:
             return jsonify({'error': 'No files provided'}), 400
@@ -2629,6 +2648,17 @@ def api_ingest_upload():
         files = request.files.getlist('books')
         if not files:
             return jsonify({'error': 'No files provided'}), 400
+        
+        # Get current user
+        username = session.get('username', 'anonymous')
+        
+        # Generate session ID for this batch upload
+        session_id = str(uuid.uuid4())
+        
+        # Get uploads database manager
+        uploads_db = get_uploads_db_manager()
+        if not uploads_db:
+            logger.error("Uploads database not available")
         
         # Use the configured ingest directory from environment
         ingest_dir = str(INGEST_DIR)
@@ -2639,17 +2669,48 @@ def api_ingest_upload():
         
         uploaded_files = []
         errors = []
+        upload_records = []
         
         for file in files:
             if file.filename == '':
                 continue
-                
+            
+            # Create upload record first
+            upload_id = None
+            if uploads_db:
+                try:
+                    # Get file info
+                    file.seek(0, 2)  # Seek to end
+                    file_size = file.tell()
+                    file.seek(0)  # Reset to beginning
+                    
+                    file_ext = os.path.splitext(file.filename)[1].lower()
+                    
+                    upload_id = uploads_db.create_upload_record(
+                        username=username,
+                        filename=file.filename,
+                        original_filename=file.filename,
+                        file_size=file_size,
+                        file_type=file_ext,
+                        session_id=session_id
+                    )
+                    upload_records.append({
+                        'id': upload_id,
+                        'filename': file.filename,
+                        'status': 'uploading'
+                    })
+                except Exception as e:
+                    logger.error(f"Failed to create upload record for {file.filename}: {e}")
+            
             # Validate file extension
             allowed_extensions = {'.epub', '.pdf', '.mobi', '.azw', '.azw3'}
             file_ext = os.path.splitext(file.filename)[1].lower()
             
             if file_ext not in allowed_extensions:
-                errors.append(f'{file.filename}: Unsupported file type')
+                error_msg = f'{file.filename}: Unsupported file type'
+                errors.append(error_msg)
+                if uploads_db and upload_id:
+                    uploads_db.update_upload_status(upload_id, 'failed', error_msg)
                 continue
             
             try:
@@ -2658,16 +2719,36 @@ def api_ingest_upload():
                 file.save(file_path)
                 uploaded_files.append(file.filename)
                 logger.info(f"Uploaded book file to ingest: {file.filename}")
+                
+                # Update upload record as completed
+                if uploads_db and upload_id:
+                    uploads_db.update_upload_status(upload_id, 'completed')
+                    # Update record status
+                    for record in upload_records:
+                        if record['id'] == upload_id:
+                            record['status'] = 'completed'
+                
             except Exception as e:
+                error_msg = f'{file.filename}: Failed to save file'
                 logger.error(f"Failed to save file {file.filename}: {e}")
-                errors.append(f'{file.filename}: Failed to save file')
+                errors.append(error_msg)
+                
+                # Update upload record as failed
+                if uploads_db and upload_id:
+                    uploads_db.update_upload_status(upload_id, 'failed', str(e))
+                    # Update record status
+                    for record in upload_records:
+                        if record['id'] == upload_id:
+                            record['status'] = 'failed'
         
         if not uploaded_files and errors:
             return jsonify({'error': 'No files were uploaded', 'details': errors}), 400
         
         result = {
             'message': f'Successfully uploaded {len(uploaded_files)} file(s)',
-            'uploaded': uploaded_files
+            'uploaded': uploaded_files,
+            'session_id': session_id,
+            'upload_records': upload_records
         }
         
         if errors:
@@ -2677,6 +2758,59 @@ def api_ingest_upload():
         
     except Exception as e:
         logger.error(f"Error in ingest upload: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/api/uploads/history', methods=['GET'])
+@login_required
+def api_upload_history():
+    """Get upload history for the current user."""
+    try:
+        username = session.get('username', 'anonymous')
+        limit = request.args.get('limit', 50, type=int)
+        
+        uploads_db = get_uploads_db_manager()
+        if not uploads_db:
+            return jsonify({'error': 'Uploads database not available'}), 503
+        
+        uploads = uploads_db.get_user_uploads(username, limit)
+        return jsonify({'uploads': uploads})
+        
+    except Exception as e:
+        logger.error(f"Error getting upload history: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/api/uploads/session/<session_id>', methods=['GET'])
+@login_required
+def api_upload_session(session_id):
+    """Get upload details for a specific session."""
+    try:
+        uploads_db = get_uploads_db_manager()
+        if not uploads_db:
+            return jsonify({'error': 'Uploads database not available'}), 503
+        
+        uploads = uploads_db.get_session_uploads(session_id)
+        return jsonify({'uploads': uploads, 'session_id': session_id})
+        
+    except Exception as e:
+        logger.error(f"Error getting session uploads: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/api/uploads/stats', methods=['GET'])
+@login_required
+def api_upload_stats():
+    """Get upload statistics for the current user."""
+    try:
+        username = session.get('username', 'anonymous')
+        
+        uploads_db = get_uploads_db_manager()
+        if not uploads_db:
+            return jsonify({'error': 'Uploads database not available'}), 503
+        
+        stats = uploads_db.get_upload_stats(username)
+        return jsonify(stats)
+        
+    except Exception as e:
+        logger.error(f"Error getting upload stats: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
 logger.log_resource_usage()

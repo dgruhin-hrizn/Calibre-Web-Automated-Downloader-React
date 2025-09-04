@@ -8,7 +8,7 @@ import { Header } from './components/Header'
 // import { QueueWidget } from './components/QueueWidget' // Disabled - using HeaderQueueWidget instead
 import { QueueNotifications } from './components/QueueNotifications'
 import { DragDropProvider } from './components/DragDropProvider'
-import { Dashboard } from './pages/Dashboard'
+import { Stats } from './pages/Stats'
 import { Search } from './pages/Search'
 import { Downloads } from './pages/Downloads'
 import { Settings } from './pages/Settings'
@@ -98,7 +98,8 @@ function App() {
                     <main className="flex-1 overflow-auto">
                       <div className="w-full px-6 py-8">
                         <Routes>
-                          <Route path="/" element={<Dashboard />} />
+                          <Route path="/" element={<Library />} />
+                          <Route path="/stats" element={<Stats />} />
                           <Route path="/search" element={<Search />} />
                           <Route path="/library" element={<Library />} />
                           <Route path="/series" element={<SeriesOptimized />} />

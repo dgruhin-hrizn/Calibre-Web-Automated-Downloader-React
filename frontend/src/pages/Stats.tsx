@@ -8,7 +8,7 @@ import { CircularProgress } from '../components/ui/CircularProgress'
 import { useDownloadStatus, useUserDownloadHistory } from '../hooks/useDownloads'
 import { formatDate } from '../lib/utils'
 
-export function Dashboard() {
+export function Stats() {
   const { data: statusData, isLoading, error } = useDownloadStatus()
   const { data: userHistory } = useUserDownloadHistory(undefined, 20, 0) // Get recent user history
 
@@ -148,7 +148,7 @@ export function Dashboard() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Dashboard</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Stats</h1>
         <p className="text-muted-foreground">
           Overview of your book download activity
         </p>

@@ -10,6 +10,7 @@ import { useToast } from '../../hooks/useToast'
 import { BookUpload } from './components/BookUpload'
 import { SearchForm } from './components/SearchForm'
 import { SearchResults } from './components/SearchResults'
+import { UploadHistory } from './components/UploadHistory'
 
 export function Search() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -21,6 +22,7 @@ export function Search() {
   const [selectedBook, setSelectedBook] = useState<any | null>(null)
   const isUpdatingFromUrl = useRef(false)
   const { ToastContainer } = useToast()
+  const [refreshHistoryTrigger, setRefreshHistoryTrigger] = useState(0)
   
   // Create search params object for executed searches only
   const [executedSearchParams, setExecutedSearchParams] = useState<any>(null)
@@ -183,7 +185,10 @@ export function Search() {
         </Tabs.List>
 
         <Tabs.Content value="upload" className="mt-6 space-y-4">
-          <BookUpload />
+          <BookUpload 
+            onHistoryUpdate={() => setRefreshHistoryTrigger(prev => prev + 1)}
+          />
+          <UploadHistory key={refreshHistoryTrigger} />
         </Tabs.Content>
 
         <Tabs.Content value="search" className="mt-6 space-y-4">

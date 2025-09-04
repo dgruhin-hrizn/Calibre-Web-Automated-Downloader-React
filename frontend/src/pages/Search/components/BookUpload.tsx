@@ -2,16 +2,19 @@ import { useState, useRef } from 'react'
 import { Upload, FileText, Loader2 } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { useToast } from '../../../hooks/useToast'
+import { useGlobalLibraryCache } from '../../../hooks/useGlobalLibraryCache'
 
 interface BookUploadProps {
   onUploadComplete?: () => void
+  onHistoryUpdate?: () => void
 }
 
-export function BookUpload({ onUploadComplete }: BookUploadProps) {
+export function BookUpload({ onUploadComplete, onHistoryUpdate }: BookUploadProps) {
   const [isDragOver, setIsDragOver] = useState(false)
   const [uploadingFiles, setUploadingFiles] = useState<string[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { showToast } = useToast()
+  const { invalidateAfterUpload } = useGlobalLibraryCache()
 
   // Drag and drop handlers
   const handleDragOver = (e: React.DragEvent) => {
@@ -84,10 +87,15 @@ export function BookUpload({ onUploadComplete }: BookUploadProps) {
         showToast({
           type: 'success',
           title: `Successfully uploaded ${uploadedFiles.length} book(s)!`,
-          message: fileList + warningList,
+          message: fileList + warningList + '\n\nLibrary cache refreshed - new books will appear on next visit.',
           duration: 6000
         })
+        
+        // Invalidate library cache so new books appear when user visits library
+        invalidateAfterUpload()
+        
         onUploadComplete?.()
+        onHistoryUpdate?.()
       } else {
         const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.error || 'Upload failed')
