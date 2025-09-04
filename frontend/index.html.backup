@@ -15,9 +15,10 @@
     
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
+    <meta property="og:url" content="/" />
     <meta property="og:title" content="Inkdrop - Automated Book Downloader & Library Manager" />
     <meta property="og:description" content="Your digital library companion. Automatically download and manage books with Inkdrop - the intelligent book downloader and library management system." />
-    <meta property="og:image" content="./droplet.png" />
+    <meta property="og:image" content="/droplet.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="Inkdrop - Digital Library Manager" />
@@ -26,9 +27,10 @@
     
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="/" />
     <meta property="twitter:title" content="Inkdrop - Automated Book Downloader & Library Manager" />
     <meta property="twitter:description" content="Your digital library companion. Automatically download and manage books with Inkdrop - the intelligent book downloader and library management system." />
-    <meta property="twitter:image" content="./droplet.png" />
+    <meta property="twitter:image" content="/droplet.png" />
     <meta property="twitter:image:alt" content="Inkdrop - Digital Library Manager" />
     
     <!-- Additional Meta Tags -->
@@ -37,7 +39,10 @@
     <meta name="apple-mobile-web-app-title" content="Inkdrop" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <link rel="apple-touch-icon" href="./droplet.png" />
+    <link rel="apple-touch-icon" href="/droplet.png" />
+    
+    <!-- Canonical URL -->
+    <link rel="canonical" href="/" />
   </head>
   <body>
     <div id="root"></div>

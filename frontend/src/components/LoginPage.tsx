@@ -3,6 +3,7 @@ import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { Button } from './ui/Button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card'
 import { cn } from '../lib/utils'
+import { APP_VERSION } from '../version'
 
 interface LoginPageProps {
   onLogin: (username: string, password: string) => Promise<boolean>
@@ -47,25 +48,17 @@ export function LoginPage({ onLogin, isLoading = false, error }: LoginPageProps)
       <div className="w-full max-w-md">
         {/* Logo and Title */}
         <div className="text-center mb-6 sm:mb-8">
-          <div className="flex items-center justify-center space-x-2 mb-4 sm:mb-6">
-            <img src="/droplet.png" alt="Inkdrop Logo" className="w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0" />
-            <span className="text-3xl sm:text-4xl font-bold text-foreground">Inkdrop</span>
+          <div className="flex items-center justify-center -space-x-3 mb-4 sm:mb-6">
+            <img src="/droplet.png" alt="Inkdrop Logo" className="w-24 h-24 sm:w-32 sm:h-32 flex-shrink-0" />
+            <span className="text-5xl sm:text-6xl font-bold text-foreground">Inkdrop</span>
           </div>
-          <h1 className="text-xl sm:text-2xl font-medium tracking-tight text-foreground mb-2">
-            Welcome to your digital library
-          </h1>
-          <p className="text-sm sm:text-base text-muted-foreground">
-            Your automated book downloader and library manager
-          </p>
         </div>
 
         {/* Login Form */}
         <Card className="shadow-lg border-0 sm:border">
           <CardHeader className="space-y-1 pb-4 sm:pb-6">
             <CardTitle className="text-xl sm:text-2xl text-center">Sign in</CardTitle>
-            <CardDescription className="text-center text-sm sm:text-base">
-              Enter your credentials to access your library
-            </CardDescription>
+            
           </CardHeader>
           <CardContent className="pt-0">
             <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-4">
@@ -160,9 +153,9 @@ export function LoginPage({ onLogin, isLoading = false, error }: LoginPageProps)
         </Card>
 
         {/* Footer */}
-        <div className="text-center mt-4 sm:mt-6">
+        <div className="text-center mt-8 sm:mt-8">
           <p className="text-xs sm:text-sm text-muted-foreground px-2">
-            Inkdrop - Automated book downloader and library manager
+            Inkdrop v{APP_VERSION}
           </p>
         </div>
       </div>
