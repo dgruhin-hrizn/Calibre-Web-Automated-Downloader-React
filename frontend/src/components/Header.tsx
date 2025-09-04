@@ -43,7 +43,7 @@ export function Header({ onMenuClick, theme, onThemeChange, sidebarOpen = false 
           </Button>
           
           {/* Mobile Logo - Only visible on small screens */}
-          <div className="flex items-center space-x-2 sm:hidden">
+          <div className="flex items-center -space-x-0 sm:hidden">
             <img src="/droplet.png" alt="Inkdrop Logo" className="w-6 h-6 flex-shrink-0" />
             <span className="text-lg font-bold text-foreground">Inkdrop</span>
           </div>
