@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react'
-import { Download, AlertCircle, Activity, BarChart3, Clock, CheckCircle, RotateCcw } from 'lucide-react'
+import { useState, useCallback, useRef, useEffect } from 'react'
+import { Download, AlertCircle, Activity, BarChart3, Clock, CheckCircle, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react'
 
 
 import { DraggableQueueItem } from '../components/DraggableQueueItem'
@@ -18,6 +18,11 @@ export function Downloads() {
   const [currentFilter, setCurrentFilter] = useState<'all' | 'downloading' | 'queued' | 'completed' | 'failed'>('all')
   const [selectedTab, setSelectedTab] = useState('queue')
   const [draggedItems, setDraggedItems] = useState<any[]>([]) // Local state for drag operations
+  
+  // Tab scroll state
+  const tabScrollRef = useRef<HTMLDivElement>(null)
+  const [canScrollLeft, setCanScrollLeft] = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(false)
 
   // Process data for rendering (safe to do before early returns)
   const downloads = {
@@ -62,6 +67,34 @@ export function Downloads() {
         return 0
     }
   })
+
+  // Tab scroll functions
+  const checkScrollButtons = useCallback(() => {
+    if (tabScrollRef.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = tabScrollRef.current
+      setCanScrollLeft(scrollLeft > 0)
+      setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 1)
+    }
+  }, [])
+
+  const scrollLeft = () => {
+    if (tabScrollRef.current) {
+      tabScrollRef.current.scrollBy({ left: -200, behavior: 'smooth' })
+    }
+  }
+
+  const scrollRight = () => {
+    if (tabScrollRef.current) {
+      tabScrollRef.current.scrollBy({ left: 200, behavior: 'smooth' })
+    }
+  }
+
+  useEffect(() => {
+    checkScrollButtons()
+    const handleResize = () => checkScrollButtons()
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [checkScrollButtons])
 
   // Drag & Drop handler - moved to top level with other hooks
   const moveItem = useCallback((dragIndex: number, hoverIndex: number) => {
@@ -130,8 +163,8 @@ export function Downloads() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Download Queue</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Download Queue</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">
             Manage your download queue and monitor progress
           </p>
         </div>
@@ -150,82 +183,112 @@ export function Downloads() {
       />
 
       <Tabs.Root value={selectedTab} onValueChange={setSelectedTab} className="space-y-6">
-        <Tabs.List className="inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground">
-          <Tabs.Trigger 
-            value="queue" 
-            className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+        <div className="relative">
+          {/* Left scroll arrow */}
+          {canScrollLeft && (
+            <button
+              onClick={scrollLeft}
+              className="absolute left-0 top-1/2 -translate-y-1/2 z-10 h-8 w-8 rounded-full bg-background border border-border shadow-sm flex items-center justify-center hover:bg-accent transition-colors"
+              aria-label="Scroll tabs left"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+          )}
+          
+          {/* Right scroll arrow */}
+          {canScrollRight && (
+            <button
+              onClick={scrollRight}
+              className="absolute right-0 top-1/2 -translate-y-1/2 z-10 h-8 w-8 rounded-full bg-background border border-border shadow-sm flex items-center justify-center hover:bg-accent transition-colors"
+              aria-label="Scroll tabs right"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          )}
+          
+          <div 
+            ref={tabScrollRef}
+            className="overflow-x-auto scrollbar-hide"
+            onScroll={checkScrollButtons}
           >
-            <Activity className="h-4 w-4 mr-2" />
-            Queue ({downloads.active.length + downloads.processing.length + downloads.waiting.length + downloads.queued.length})
-          </Tabs.Trigger>
-          <Tabs.Trigger 
-            value="completed"
-            className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
-          >
-            <CheckCircle className="h-4 w-4 mr-2" />
-            Completed ({userHistory?.filter((item: any) => item.status === 'completed').length || 0})
-          </Tabs.Trigger>
-          <Tabs.Trigger 
-            value="failed"
-            className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
-          >
-            <AlertCircle className="h-4 w-4 mr-2" />
-            Failed ({userHistory?.filter((item: any) => item.status === 'error').length || 0})
-          </Tabs.Trigger>
-          <Tabs.Trigger 
-            value="history"
-            className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
-          >
-            <Clock className="h-4 w-4 mr-2" />
-            History ({userHistory?.length || 0})
-          </Tabs.Trigger>
-          <Tabs.Trigger 
-            value="analytics"
-            className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
-          >
-            <BarChart3 className="h-4 w-4 mr-2" />
-            Analytics
-          </Tabs.Trigger>
-        </Tabs.List>
+            <Tabs.List className="inline-flex h-10 items-center justify-start rounded-md bg-muted p-1 text-muted-foreground min-w-max">
+              <Tabs.Trigger 
+                value="queue" 
+                className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+              >
+                <Activity className="h-4 w-4 mr-2" />
+                Queue ({downloads.active.length + downloads.processing.length + downloads.waiting.length + downloads.queued.length})
+              </Tabs.Trigger>
+              <Tabs.Trigger 
+                value="completed"
+                className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+              >
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Completed ({userHistory?.filter((item: any) => item.status === 'completed').length || 0})
+              </Tabs.Trigger>
+              <Tabs.Trigger 
+                value="failed"
+                className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+              >
+                <AlertCircle className="h-4 w-4 mr-2" />
+                Failed ({userHistory?.filter((item: any) => item.status === 'error').length || 0})
+              </Tabs.Trigger>
+              <Tabs.Trigger 
+                value="history"
+                className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+              >
+                <Clock className="h-4 w-4 mr-2" />
+                History ({userHistory?.length || 0})
+              </Tabs.Trigger>
+              <Tabs.Trigger 
+                value="analytics"
+                className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+              >
+                <BarChart3 className="h-4 w-4 mr-2" />
+                Analytics
+              </Tabs.Trigger>
+            </Tabs.List>
+          </div>
+        </div>
 
         {/* Queue Tab - Active Downloads and Queue */}
         <Tabs.Content value="queue" className="space-y-6">
           {sortedItems.length > 0 ? (
             <div className="space-y-4">
               {/* Queue Flow Visualization */}
-              <div className="bg-muted/30 rounded-lg p-4 border">
-                <div className="flex items-center justify-center space-x-4 text-sm">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                    <span>Downloading ({downloads.active.length})</span>
+              <div className="bg-muted/30 rounded-lg p-3 sm:p-4 border">
+                <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-4 text-xs sm:text-sm">
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-green-500"></div>
+                    <span className="whitespace-nowrap">Downloading ({downloads.active.length})</span>
                   </div>
                   {downloads.processing.length > 0 && (
                     <>
-                      <div className="text-muted-foreground">→</div>
-                      <div className="flex items-center space-x-2">
-                        <div className="w-3 h-3 rounded-full bg-purple-500 animate-spin"></div>
-                        <span>Processing ({downloads.processing.length})</span>
+                      <div className="hidden sm:block text-muted-foreground">→</div>
+                      <div className="flex items-center gap-1 sm:gap-2">
+                        <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-purple-500 animate-spin"></div>
+                        <span className="whitespace-nowrap">Processing ({downloads.processing.length})</span>
                       </div>
                     </>
                   )}
                   {downloads.waiting.length > 0 && (
                     <>
-                      <div className="text-muted-foreground">→</div>
-                      <div className="flex items-center space-x-2">
-                        <div className="w-3 h-3 rounded-full bg-blue-500 animate-pulse"></div>
-                        <span>Waiting ({downloads.waiting.length})</span>
+                      <div className="hidden sm:block text-muted-foreground">→</div>
+                      <div className="flex items-center gap-1 sm:gap-2">
+                        <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-blue-500 animate-pulse"></div>
+                        <span className="whitespace-nowrap">Waiting ({downloads.waiting.length})</span>
                       </div>
                     </>
                   )}
-                  <div className="text-muted-foreground">→</div>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-3 h-3 rounded-full bg-orange-500"></div>
-                    <span>Queued ({downloads.queued.length})</span>
+                  <div className="hidden sm:block text-muted-foreground">→</div>
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-orange-500"></div>
+                    <span className="whitespace-nowrap">Queued ({downloads.queued.length})</span>
                   </div>
-                  <div className="text-muted-foreground">→</div>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-3 h-3 rounded-full bg-teal-500"></div>
-                    <span>Complete</span>
+                  <div className="hidden sm:block text-muted-foreground">→</div>
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-teal-500"></div>
+                    <span className="whitespace-nowrap">Complete</span>
                   </div>
                 </div>
               </div>
@@ -262,50 +325,52 @@ export function Downloads() {
         {/* Completed Downloads */}
         <Tabs.Content value="completed" className="space-y-4">
           {userHistory?.filter((item: any) => item.status === 'completed').map((historyItem: any) => (
-            <div key={`${historyItem.id}-${historyItem.created_at}`} className="flex items-center gap-4 p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
-              <div className="relative flex-shrink-0">
-                <div className="w-16 h-20 bg-muted rounded-md flex items-center justify-center overflow-hidden">
-                  {historyItem.cover_url ? (
-                    <img 
-                      src={historyItem.cover_url} 
-                      alt={historyItem.book_title}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.style.display = 'none';
-                        target.nextElementSibling!.classList.remove('hidden');
-                      }}
-                    />
-                  ) : (
-                    <div className="text-muted-foreground text-xs">No Cover</div>
-                  )}
-                  <div className="hidden absolute inset-0 flex items-center justify-center text-muted-foreground text-xs">
-                    No Cover
+            <div key={`${historyItem.id}-${historyItem.created_at}`} className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+              <div className="flex items-start sm:items-center gap-3 sm:gap-4 flex-1">
+                <div className="relative flex-shrink-0">
+                  <div className="w-12 h-16 sm:w-16 sm:h-20 bg-muted rounded-md flex items-center justify-center overflow-hidden">
+                    {historyItem.cover_url ? (
+                      <img 
+                        src={historyItem.cover_url} 
+                        alt={historyItem.book_title}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          target.nextElementSibling!.classList.remove('hidden');
+                        }}
+                      />
+                    ) : (
+                      <div className="text-muted-foreground text-xs">No Cover</div>
+                    )}
+                    <div className="hidden absolute inset-0 flex items-center justify-center text-muted-foreground text-xs">
+                      No Cover
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex-1 min-w-0 space-y-1">
+                  <h4 className="font-medium text-sm line-clamp-1">{historyItem.book_title || 'Unknown Title'}</h4>
+                  <p className="text-sm text-muted-foreground line-clamp-1">
+                    by {historyItem.book_author || 'Unknown Author'}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs text-muted-foreground">
+                    <span>{new Date(historyItem.completed_at || historyItem.created_at).toLocaleDateString()}</span>
+                    {historyItem.book_format && (
+                      <span className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">
+                        {historyItem.book_format.toUpperCase()}
+                      </span>
+                    )}
+                    {historyItem.file_size && (
+                      <span>{(historyItem.file_size / (1024 * 1024)).toFixed(1)} MB</span>
+                    )}
                   </div>
                 </div>
               </div>
               
-              <div className="flex-1 min-w-0 space-y-1">
-                <h4 className="font-medium text-sm line-clamp-1">{historyItem.book_title || 'Unknown Title'}</h4>
-                <p className="text-sm text-muted-foreground line-clamp-1">
-                  by {historyItem.book_author || 'Unknown Author'}
-                </p>
-                <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                  <span>{new Date(historyItem.completed_at || historyItem.created_at).toLocaleDateString()}</span>
-                  {historyItem.book_format && (
-                    <span className="px-2 py-1 bg-muted rounded-md font-mono">
-                      {historyItem.book_format.toUpperCase()}
-                    </span>
-                  )}
-                  {historyItem.file_size && (
-                    <span>{(historyItem.file_size / (1024 * 1024)).toFixed(1)} MB</span>
-                  )}
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-5 h-5 text-green-500" />
-                <span className="text-sm text-green-600 dark:text-green-400 font-medium">Completed</span>
+              <div className="flex items-center justify-start sm:justify-end gap-1 sm:gap-2 flex-shrink-0">
+                <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />
+                <span className="text-xs sm:text-sm text-green-600 dark:text-green-400 font-medium">Completed</span>
               </div>
             </div>
           )) || []}
@@ -320,65 +385,56 @@ export function Downloads() {
         {/* Failed Downloads */}
         <Tabs.Content value="failed" className="space-y-4">
           {userHistory?.filter((item: any) => item.status === 'error').map((historyItem: any) => (
-            <div key={`${historyItem.id}-${historyItem.created_at}`} className="flex items-center gap-4 p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
-              <div className="relative flex-shrink-0">
-                <div className="w-16 h-20 bg-muted rounded-md flex items-center justify-center overflow-hidden">
-                  {historyItem.cover_url ? (
-                    <img 
-                      src={historyItem.cover_url} 
-                      alt={historyItem.book_title}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.style.display = 'none';
-                        target.nextElementSibling!.classList.remove('hidden');
-                      }}
-                    />
-                  ) : (
-                    <div className="text-muted-foreground text-xs">No Cover</div>
-                  )}
-                  <div className="hidden absolute inset-0 flex items-center justify-center text-muted-foreground text-xs">
-                    No Cover
+            <div key={`${historyItem.id}-${historyItem.created_at}`} className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+              <div className="flex items-start sm:items-center gap-3 sm:gap-4 flex-1">
+                <div className="relative flex-shrink-0">
+                  <div className="w-12 h-16 sm:w-16 sm:h-20 bg-muted rounded-md flex items-center justify-center overflow-hidden">
+                    {historyItem.cover_url ? (
+                      <img 
+                        src={historyItem.cover_url} 
+                        alt={historyItem.book_title}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          target.nextElementSibling!.classList.remove('hidden');
+                        }}
+                      />
+                    ) : (
+                      <div className="text-muted-foreground text-xs">No Cover</div>
+                    )}
+                    <div className="hidden absolute inset-0 flex items-center justify-center text-muted-foreground text-xs">
+                      No Cover
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex-1 min-w-0 space-y-1">
+                  <h4 className="font-medium text-sm line-clamp-1">{historyItem.book_title || 'Unknown Title'}</h4>
+                  <p className="text-sm text-muted-foreground line-clamp-1">
+                    by {historyItem.book_author || 'Unknown Author'}
+                  </p>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-xs text-muted-foreground">
+                    <span>{new Date(historyItem.created_at).toLocaleDateString()}</span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {historyItem.book_format && (
+                        <span className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">
+                          {historyItem.book_format.toUpperCase()}
+                        </span>
+                      )}
+                      {historyItem.error_message && (
+                        <span className="px-1.5 py-0.5 bg-destructive/10 text-destructive rounded text-xs line-clamp-1" title={historyItem.error_message}>
+                          {historyItem.error_message}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
               
-              <div className="flex-1 min-w-0 space-y-1">
-                <h4 className="font-medium text-sm line-clamp-1">{historyItem.book_title || 'Unknown Title'}</h4>
-                <p className="text-sm text-muted-foreground line-clamp-1">
-                  by {historyItem.book_author || 'Unknown Author'}
-                </p>
-                <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                  <span>{new Date(historyItem.created_at).toLocaleDateString()}</span>
-                  {historyItem.book_format && (
-                    <span className="px-2 py-1 bg-muted rounded-md font-mono">
-                      {historyItem.book_format.toUpperCase()}
-                    </span>
-                  )}
-                  {historyItem.error_message && (
-                    <span className="px-2 py-1 bg-destructive/10 text-destructive rounded-md text-xs">
-                      {historyItem.error_message}
-                    </span>
-                  )}
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <AlertCircle className="w-5 h-5 text-destructive" />
-                  <span className="text-sm text-destructive font-medium">Failed</span>
-                </div>
-                <button
-                  onClick={() => {
-                    // Navigate to search with this book's title
-                    window.location.href = `/search?query=${encodeURIComponent(historyItem.book_title || '')}`
-                  }}
-                  className="px-2 py-1 text-xs bg-destructive/10 text-destructive hover:bg-destructive/20 rounded-md border border-destructive/30"
-                  title="Search for this book again"
-                >
-                  <RotateCcw className="w-3 h-3 mr-1 inline" />
-                  Retry
-                </button>
+              <div className="flex items-center justify-start sm:justify-end gap-1 sm:gap-2 flex-shrink-0">
+                <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-destructive" />
+                <span className="text-xs sm:text-sm text-destructive font-medium">Failed</span>
               </div>
             </div>
           )) || []}

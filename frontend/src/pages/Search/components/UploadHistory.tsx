@@ -155,17 +155,17 @@ export function UploadHistory({ onRefresh }: UploadHistoryProps) {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <CardTitle className="flex items-center gap-2">
             <FileText className="w-5 h-5" />
             Upload History
           </CardTitle>
-          <Button onClick={fetchUploadHistory} variant="outline" size="sm">
+          <Button onClick={fetchUploadHistory} variant="outline" size="sm" className="self-start sm:self-auto">
             Refresh
           </Button>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-3 sm:px-6">
         {uploads.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
@@ -177,34 +177,36 @@ export function UploadHistory({ onRefresh }: UploadHistoryProps) {
             {uploads.map((upload) => (
               <div
                 key={upload.id}
-                className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-muted/50 transition-colors"
+                className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 border border-border rounded-lg hover:bg-muted/50 transition-colors gap-3"
               >
-                <div className="flex items-center gap-3 flex-1">
-                  {getStatusIcon(upload.status)}
+                <div className="flex items-start sm:items-center gap-3 flex-1 min-w-0">
+                  <div className="flex-shrink-0 mt-0.5 sm:mt-0">
+                    {getStatusIcon(upload.status)}
+                  </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <p className="font-medium text-sm truncate" title={upload.original_filename}>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2 sm:mb-1">
+                      <p className="font-medium text-sm break-words sm:truncate" title={upload.original_filename}>
                         {upload.original_filename}
                       </p>
                       <Badge 
                         variant="outline" 
-                        className={`text-xs ${getFileTypeColor(upload.file_type)}`}
+                        className={`text-xs self-start sm:self-auto flex-shrink-0 ${getFileTypeColor(upload.file_type)}`}
                       >
                         {upload.file_type.toUpperCase().replace('.', '')}
                       </Badge>
                     </div>
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                      <span>{upload.file_size_formatted}</span>
-                      <span>{formatDate(upload.started_at)}</span>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs text-muted-foreground">
+                      <span className="flex-shrink-0">{upload.file_size_formatted}</span>
+                      <span className="flex-shrink-0">{formatDate(upload.started_at)}</span>
                       {upload.error_message && (
-                        <span className="text-red-600 truncate" title={upload.error_message}>
+                        <span className="text-red-600 break-words sm:truncate" title={upload.error_message}>
                           {upload.error_message}
                         </span>
                       )}
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-start sm:justify-end gap-2 sm:flex-shrink-0">
                   {getStatusBadge(upload.status)}
                 </div>
               </div>

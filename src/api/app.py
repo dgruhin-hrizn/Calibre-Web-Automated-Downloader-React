@@ -314,10 +314,10 @@ except Exception as e:
     logger.error(f"Error initializing downloads database on startup: {e}")
 
 @app.route('/')
-@login_required
 def index():
     """
     Serve React frontend for the root route (Library page).
+    Note: No @login_required decorator - authentication is handled by React ProtectedRoute
     """
     return serve_react_app()
 
@@ -335,56 +335,48 @@ def serve_react_app():
     return "Frontend not built", 404
 
 # React page routes - each corresponds to a route in App.tsx
+# Note: No @login_required decorator - authentication is handled by React ProtectedRoute
 @app.route('/stats')
-@login_required
 def stats_page():
     """Serve React app for /stats page"""
     return serve_react_app()
 
 @app.route('/search')
-@login_required
 def search_page():
     """Serve React app for /search page"""
     return serve_react_app()
 
 @app.route('/library')
-@login_required
 def library_page():
     """Serve React app for /library page"""
     return serve_react_app()
 
 @app.route('/series')
-@login_required
 def series_page():
     """Serve React app for /series page"""
     return serve_react_app()
 
 @app.route('/hot')
-@login_required
 def hot_page():
     """Serve React app for /hot page"""
     return serve_react_app()
 
 @app.route('/downloads')
-@login_required
 def downloads_page():
     """Serve React app for /downloads page"""
     return serve_react_app()
 
 @app.route('/settings')
-@login_required
 def settings_page():
     """Serve React app for /settings page"""
     return serve_react_app()
 
 @app.route('/profile')
-@login_required
 def profile_page():
     """Serve React app for /profile page"""
     return serve_react_app()
 
 @app.route('/admin')
-@login_required
 def admin_page():
     """Serve React app for /admin page"""
     return serve_react_app()

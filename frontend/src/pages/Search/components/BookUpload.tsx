@@ -121,7 +121,7 @@ export function BookUpload({ onUploadComplete, onHistoryUpdate }: BookUploadProp
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+      className={`border-2 border-dashed rounded-lg p-4 sm:p-6 text-center transition-colors ${
         isDragOver
           ? 'border-primary bg-primary/5'
           : 'border-muted-foreground/25 hover:border-muted-foreground/50'
@@ -140,23 +140,23 @@ export function BookUpload({ onUploadComplete, onHistoryUpdate }: BookUploadProp
         <div className="space-y-3">
           <Loader2 className="w-6 h-6 mx-auto animate-spin text-primary" />
           <p className="font-medium">Uploading books...</p>
-          <div className="space-y-1">
+          <div className="space-y-1 max-h-32 overflow-y-auto">
             {uploadingFiles.map((fileName, index) => (
-              <p key={index} className="text-sm text-muted-foreground">
-                <FileText className="w-4 h-4 inline mr-2" />
-                {fileName}
+              <p key={index} className="text-sm text-muted-foreground flex items-center justify-center gap-2 break-words">
+                <FileText className="w-4 h-4 flex-shrink-0" />
+                <span className="truncate">{fileName}</span>
               </p>
             ))}
           </div>
         </div>
       ) : (
         <div className="space-y-3">
-          <Upload className="w-8 h-8 mx-auto text-muted-foreground" />
-          <div>
-            <p className="font-medium">
+          <Upload className="w-6 h-6 sm:w-8 sm:h-8 mx-auto text-muted-foreground" />
+          <div className="space-y-1">
+            <p className="font-medium text-sm sm:text-base">
               Drag and drop book files here
             </p>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-xs sm:text-sm text-muted-foreground px-2">
               Supports EPUB, PDF, MOBI, AZW, and AZW3 formats
             </p>
           </div>
@@ -165,6 +165,7 @@ export function BookUpload({ onUploadComplete, onHistoryUpdate }: BookUploadProp
             variant="outline"
             size="sm"
             onClick={() => fileInputRef.current?.click()}
+            className="mt-3"
           >
             <Upload className="w-4 h-4 mr-2" />
             Choose Files

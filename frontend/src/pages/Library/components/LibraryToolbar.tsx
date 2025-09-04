@@ -88,7 +88,7 @@ export function LibraryToolbar({
   }, [searchQuery])
 
   return (
-    <div className="sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/90 border-b border-border -mx-6 mb-8">
+    <div className="sticky top-0 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/90 border-b border-border -mx-6 mb-8">
       <div className="px-6 py-4">
         <div className="flex flex-col gap-4">
           {/* Top Row: Title and Admin Controls */}
@@ -213,8 +213,8 @@ export function LibraryToolbar({
                 </DropdownMenu.Portal>
               </DropdownMenu.Root>
 
-              {/* View Mode Toggle */}
-              <div className="flex items-center border rounded-md">
+              {/* View Mode Toggle - Hidden on mobile */}
+              <div className="hidden md:flex items-center border rounded-md">
                 <Button
                   variant={viewMode === 'grid' ? 'default' : 'ghost'}
                   size="sm"

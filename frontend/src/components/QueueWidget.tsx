@@ -41,7 +41,7 @@ export function QueueWidget() {
   const nextInQueue = queuedDownloads[0] // Next queued item
 
   return (
-    <div className="fixed top-20 right-6 z-40 w-80 bg-card border border-border rounded-lg shadow-lg">
+    <div className="fixed top-20 right-6 z-30 w-80 bg-card border border-border rounded-lg shadow-lg">
       <Collapsible.Root open={isOpen} onOpenChange={setIsOpen}>
         <Collapsible.Trigger asChild>
           <div className="p-4 cursor-pointer hover:bg-accent/50 transition-colors">

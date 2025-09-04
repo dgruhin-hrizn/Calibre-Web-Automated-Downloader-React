@@ -9,7 +9,7 @@ interface LibraryStatsProps {
 
 export function LibraryStats({ stats }: LibraryStatsProps) {
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
       <Card>
         <CardContent className="p-6">
           <div className="flex items-center justify-between">

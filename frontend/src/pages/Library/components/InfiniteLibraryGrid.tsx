@@ -60,7 +60,8 @@ export function InfiniteLibraryGrid({
   return (
     <div className="space-y-6">
       {/* Books Display */}
-      {viewMode === 'grid' ? (
+      <div className="block md:hidden">
+        {/* Mobile: Always show grid view */}
         <LibraryGridView
           books={books}
           onBookClick={onBookClick}
@@ -71,15 +72,30 @@ export function InfiniteLibraryGrid({
           deletingBooks={deletingBooks}
           registerBookRef={registerBookRef}
         />
-      ) : (
-        <LibraryListView
-          books={books}
-          onBookClick={onBookClick}
-          onSendToKindle={onSendToKindle}
-          deletingBooks={deletingBooks}
-          registerBookRef={registerBookRef}
-        />
-      )}
+      </div>
+      <div className="hidden md:block">
+        {/* Desktop: Respect viewMode setting */}
+        {viewMode === 'grid' ? (
+          <LibraryGridView
+            books={books}
+            onBookClick={onBookClick}
+            onDownload={onDownload}
+            onSendToKindle={onSendToKindle}
+            shouldLoadImage={shouldLoadImage}
+            markImageLoaded={markImageLoaded}
+            deletingBooks={deletingBooks}
+            registerBookRef={registerBookRef}
+          />
+        ) : (
+          <LibraryListView
+            books={books}
+            onBookClick={onBookClick}
+            onSendToKindle={onSendToKindle}
+            deletingBooks={deletingBooks}
+            registerBookRef={registerBookRef}
+          />
+        )}
+      </div>
 
       {/* Infinite Scroll Loading Area */}
       <div className="flex flex-col items-center space-y-4 py-8">

@@ -43,9 +43,14 @@ export function SkeletonGrid({ count = 12 }: { count?: number }) {
         <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-32 animate-pulse"></div>
         <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-16 animate-pulse"></div>
       </div>
-      <div className="grid gap-4 grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+      <div className="flex flex-wrap gap-4 justify-start">
         {Array.from({ length: count }, (_, i) => (
-          <SkeletonCard key={i} />
+          <div 
+            key={i}
+            className="w-[calc(50%-8px)] sm:w-[225px] sm:min-w-[225px] sm:max-w-[225px]"
+          >
+            <SkeletonCard />
+          </div>
         ))}
       </div>
     </div>

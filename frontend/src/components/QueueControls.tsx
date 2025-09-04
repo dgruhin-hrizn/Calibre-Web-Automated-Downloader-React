@@ -45,13 +45,13 @@ export function QueueControls({
 
 
   return (
-      <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-3 sm:p-4 bg-muted/30 rounded-lg border">
         {/* Queue Summary */}
-        <div className="flex items-center gap-6">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
           <div className="text-sm font-medium">
             Queue Status
           </div>
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
             {activeCount > 0 && (
               <div className="flex items-center gap-1">
                 <div className="w-2 h-2 rounded-full bg-green-500"></div>
@@ -83,16 +83,17 @@ export function QueueControls({
         </div>
 
         {/* Controls */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           {/* Sort Dropdown */}
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
-              <Button variant="outline" size="sm" className="h-8">
+              <Button variant="outline" size="sm" className="h-8 text-xs sm:text-sm">
                 {currentSort === 'priority' && <ArrowUp className="h-3 w-3 mr-1" />}
                 {currentSort === 'date' && <SortDesc className="h-3 w-3 mr-1" />}
                 {currentSort === 'title' && <SortAsc className="h-3 w-3 mr-1" />}
                 {currentSort === 'author' && <SortAsc className="h-3 w-3 mr-1" />}
-                Sort
+                <span className="hidden sm:inline">Sort</span>
+                <span className="sm:hidden">⇅</span>
               </Button>
             </DropdownMenu.Trigger>
             <DropdownMenu.Portal>
@@ -140,9 +141,10 @@ export function QueueControls({
           {/* Filter Dropdown */}
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
-              <Button variant="outline" size="sm" className="h-8">
+              <Button variant="outline" size="sm" className="h-8 text-xs sm:text-sm">
                 <Filter className="h-3 w-3 mr-1" />
-                Filter
+                <span className="hidden sm:inline">Filter</span>
+                <span className="sm:hidden">⚬</span>
               </Button>
             </DropdownMenu.Trigger>
             <DropdownMenu.Portal>
@@ -198,21 +200,23 @@ export function QueueControls({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8"
+                  className="h-8 text-xs sm:text-sm"
                   onClick={() => onPauseAll?.()}
                 >
                   <Pause className="h-3 w-3 mr-1" />
-                  Pause All
+                  <span className="hidden sm:inline">Pause All</span>
+                  <span className="sm:hidden">⏸</span>
                 </Button>
               ) : (
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8"
+                  className="h-8 text-xs sm:text-sm"
                   onClick={() => onResumeAll?.()}
                 >
                   <Play className="h-3 w-3 mr-1" />
-                  Resume All
+                  <span className="hidden sm:inline">Resume All</span>
+                  <span className="sm:hidden">▶</span>
                 </Button>
               )}
             </>

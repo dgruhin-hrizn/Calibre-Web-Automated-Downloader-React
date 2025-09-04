@@ -73,16 +73,16 @@ const Admin: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">User Administration</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">User Administration</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">
             Manage CWA users and their permissions
           </p>
         </div>
         <Button
           onClick={() => setIsCreateModalOpen(true)}
-          className="flex items-center gap-2"
+          className="flex items-center gap-2 self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
           Create User
@@ -98,8 +98,8 @@ const Admin: React.FC = () => {
         </Card>
       )}
 
-      {/* Users Table */}
-      <Card>
+      {/* Users Table - Desktop */}
+      <Card className="hidden md:block">
         <CardContent className="p-0">
           <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
             <table className="min-w-full divide-y divide-border">
@@ -177,9 +177,73 @@ const Admin: React.FC = () => {
               </tbody>
             </table>
           </div>
+        </CardContent>
+      </Card>
 
-          {users.length === 0 && !isLoading && (
-            <div className="text-center py-12">
+      {/* Users Cards - Mobile */}
+      <div className="md:hidden space-y-4">
+        {users.map((user) => (
+          <Card key={user.id} className="hover:bg-muted/50 transition-colors">
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center space-x-3">
+                  <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <Users className="h-6 w-6 text-primary" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-foreground truncate">
+                      {user.username}
+                    </div>
+                    <div className="text-xs text-muted-foreground truncate">
+                      {user.email}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-1 flex-shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleEditUser(user)}
+                    className="h-8 w-8 p-0"
+                    title="Edit User"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDeleteUser(user)}
+                    className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                    title="Delete User"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+              
+              {user.kindle_email && (
+                <div className="mb-3">
+                  <div className="text-xs text-muted-foreground">Kindle Email</div>
+                  <div className="text-sm text-foreground break-all">{user.kindle_email}</div>
+                </div>
+              )}
+              
+              <div>
+                <div className="text-xs text-muted-foreground mb-2">Permissions</div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {getPermissionIcons(user.permissions)}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Empty State */}
+      {users.length === 0 && !isLoading && (
+        <Card>
+          <CardContent className="p-12">
+            <div className="text-center">
               <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-medium text-foreground mb-2">No users found</h3>
               <p className="text-muted-foreground mb-4">Get started by creating your first user.</p>
@@ -191,9 +255,9 @@ const Admin: React.FC = () => {
                 Create User
               </Button>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       {/* User count */}
       {users.length > 0 && (

@@ -84,4 +84,12 @@
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
   }
+
+  .scrollbar-hide {
+    /* Hide scrollbar for Chrome, Safari and Opera */
+    -webkit-scrollbar: none;
+    /* Hide scrollbar for IE, Edge and Firefox */
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
