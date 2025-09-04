@@ -113,4 +113,15 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
+  /* Ensure smooth scrolling for the main container */
+  main {
+    scroll-behavior: smooth;
+    position: relative; /* Establish positioning context for child elements */
+  }
+
+  /* Improve scroll positioning for book elements */
+  [data-book-id] {
+    scroll-margin-top: 140px; /* Account for sticky toolbar */
+  }
 }

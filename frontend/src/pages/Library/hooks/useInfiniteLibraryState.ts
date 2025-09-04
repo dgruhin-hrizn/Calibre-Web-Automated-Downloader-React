@@ -46,13 +46,21 @@ export function useInfiniteLibraryState({
 
   // Calculate current logical page based on loaded books
   const totalBooks = infiniteQuery.data?.pages[0]?.total || 0
-  // const booksPerPage = 18
+  // const booksPerPage = 20
   const loadedPages = infiniteQuery.data?.pages.length || 0
   const totalPages = infiniteQuery.data?.pages[0]?.pages || 1
   const hasNextPage = infiniteQuery.hasNextPage
 
   // Scroll memory management
   const scrollMemory = useScrollMemory(`library-${searchQuery}-${sortParam}`)
+  
+  // Clear any existing scroll memory data on mount to prevent conflicts with page-based navigation
+  useEffect(() => {
+    const bookInViewKey = `book-in-view-library-${searchQuery}-${sortParam}`
+    const scrollPositionKey = `scroll-position-library-${searchQuery}-${sortParam}`
+    sessionStorage.removeItem(bookInViewKey)
+    sessionStorage.removeItem(scrollPositionKey)
+  }, [searchQuery, sortParam])
   
   // Book tracking
   const { bookInView, registerBookRef } = useBookInView(books, enableBookTracking)
@@ -113,7 +121,7 @@ export function useInfiniteLibraryState({
         return
       }
       
-      const booksPerPage = 18
+      const booksPerPage = 20
       const calculatedPage = Math.floor(bookIndex / booksPerPage) + 1
       // const positionInPage = bookIndex % booksPerPage
       
@@ -161,9 +169,12 @@ export function useInfiniteLibraryState({
   useEffect(() => {
     if (!enableScrollMemory) return
 
+    const mainElement = document.querySelector('main')
+    if (!mainElement) return
+
     const handleScroll = () => {
-      const scrollPosition = window.scrollY
-      scrollMemory.saveScrollPosition(scrollPosition, bookInView || undefined)
+      const scrollPosition = mainElement.scrollTop
+      scrollMemory.saveScrollPosition(scrollPosition) // Don't save book ID - only scroll position
     }
 
     // Throttle scroll events
@@ -173,9 +184,9 @@ export function useInfiniteLibraryState({
       timeoutId = setTimeout(handleScroll, 100)
     }
 
-    window.addEventListener('scroll', throttledHandleScroll, { passive: true })
+    mainElement.addEventListener('scroll', throttledHandleScroll, { passive: true })
     return () => {
-      window.removeEventListener('scroll', throttledHandleScroll)
+      mainElement.removeEventListener('scroll', throttledHandleScroll)
       clearTimeout(timeoutId)
     }
   }, [scrollMemory, bookInView, enableScrollMemory])
@@ -191,56 +202,31 @@ export function useInfiniteLibraryState({
     const isManualNavigation = pendingPageNavigation !== null
     const targetPage = isManualNavigation ? pendingPageNavigation : currentPage
     
-    // If we have a page in URL that's > 1, calculate where that page should start
-    if (targetPage > 1) {
-      // Only attempt scroll restoration if we have loaded enough pages
-      if (loadedPages >= targetPage) {
-        const booksPerPage = 18
-        const targetBookIndex = (targetPage - 1) * booksPerPage
-        const targetBook = books[targetBookIndex]
+    // Handle page navigation (including page 1)
+    if (targetPage >= 1 && loadedPages >= targetPage) {
+      const booksPerPage = 20
+      const targetBookIndex = (targetPage - 1) * booksPerPage
+      const targetBook = books[targetBookIndex]
+      
+      if (targetBook) {
+        // Choose scroll behavior based on navigation type
+        const scrollBehavior = isManualNavigation ? 'smooth' : 'auto'
         
-        if (targetBook) {
-          // Choose scroll behavior based on navigation type
-          const scrollBehavior = isManualNavigation ? 'smooth' : 'auto'
-
-          
-          setTimeout(() => {
-            scrollToBook(targetBook.id, scrollBehavior)
-            setHasRestoredScroll(true)
-            setPendingPageNavigation(null) // Clear pending navigation
-            
-            // Manual navigation completed
-          }, isManualNavigation ? 100 : 300)
-          return
-        }
-      } else {
-        // Still loading required pages, don't attempt scroll restoration yet
-
+        setTimeout(() => {
+          scrollToBook(targetBook.id, scrollBehavior, targetPage)
+          setHasRestoredScroll(true)
+          setPendingPageNavigation(null) // Clear pending navigation
+        }, isManualNavigation ? 100 : 300)
         return
       }
+    } else if (targetPage > loadedPages) {
+      // Still loading required pages, don't attempt scroll restoration yet
+      return
     }
     
-    // Fallback to saved scroll position/book (only for non-manual navigation)
-    if (!isManualNavigation) {
-      if (bookId && books.some(book => book.id === bookId)) {
-        // If we have a specific book ID, scroll to it
-        setTimeout(() => {
-          scrollToBook(bookId)
-          setHasRestoredScroll(true)
-        }, 100)
-      } else if (position > 0) {
-        // Otherwise restore scroll position
-        setTimeout(() => {
-          scrollMemory.restoreScrollPosition()
-          setHasRestoredScroll(true)
-        }, 100)
-      } else {
-        // No scroll restoration needed
-        setHasRestoredScroll(true)
-      }
-    } else {
-      // For manual navigation to page 1 or invalid pages
-      setHasRestoredScroll(true)
+    // No scroll restoration - use page-based navigation only
+    setHasRestoredScroll(true)
+    if (isManualNavigation) {
       setPendingPageNavigation(null)
     }
   }, [books.length, infiniteQuery.isLoading, infiniteQuery.isFetchingNextPage, scrollMemory, scrollToBook, enableScrollMemory, currentPage, loadedPages, hasRestoredScroll, pendingPageNavigation])
@@ -316,11 +302,9 @@ export function useInfiniteLibraryState({
 
   // Pagination-style navigation for compatibility
   const handlePageChange = useCallback((page: number) => {
-    const booksPerPage = 18
+    const booksPerPage = 20
     const targetBookIndex = (page - 1) * booksPerPage
     const targetBook = books[targetBookIndex]
-    
-
     
     // Reset scroll restoration flag to allow new scroll
     setHasRestoredScroll(false)
@@ -333,15 +317,12 @@ export function useInfiniteLibraryState({
     
     if (targetBook) {
       // Book is already loaded, scroll to it immediately
-
       setTimeout(() => {
         scrollToBook(targetBook.id, 'smooth')
         setPendingPageNavigation(null) // Clear pending navigation
       }, 100)
     } else if (page <= totalPages) {
       // Need to load more pages to reach this page
-
-      
       // The useEffect that handles loading will trigger, and when it completes,
       // the scroll restoration useEffect will scroll to the right position
       // pendingPageNavigation will be used to determine scroll behavior

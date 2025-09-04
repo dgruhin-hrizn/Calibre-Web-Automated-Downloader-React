@@ -10,9 +10,10 @@ interface HeaderProps {
   onMenuClick: () => void
   theme: 'light' | 'dark' | 'system'
   onThemeChange: (theme: 'light' | 'dark' | 'system') => void
+  sidebarOpen?: boolean
 }
 
-export function Header({ onMenuClick, theme, onThemeChange }: HeaderProps) {
+export function Header({ onMenuClick, theme, onThemeChange, sidebarOpen = false }: HeaderProps) {
   const navigate = useNavigate()
   const { logout, user } = useAuth()
 
@@ -25,7 +26,10 @@ export function Header({ onMenuClick, theme, onThemeChange }: HeaderProps) {
   const currentTheme = themeOptions.find(option => option.value === theme)
 
   return (
-    <header className="h-16 bg-card border-b border-border">
+    <header className={cn(
+      "fixed top-0 right-0 h-16 bg-card border-b border-border z-50 transition-all duration-300",
+      sidebarOpen ? "left-56 sm:left-64 lg:left-64" : "left-0 lg:left-20"
+    )}>
       <div className="flex items-center justify-between h-full px-4 sm:px-6">
         {/* Left section */}
         <div className="flex items-center space-x-3">

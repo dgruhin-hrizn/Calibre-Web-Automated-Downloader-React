@@ -9,7 +9,7 @@ interface UseInfiniteScrollOptions {
 }
 
 interface UseInfiniteScrollReturn {
-  targetRef: React.RefObject<HTMLDivElement>
+  targetRef: React.RefObject<HTMLDivElement | null>
   isIntersecting: boolean
 }
 
@@ -95,7 +95,12 @@ export function useScrollMemory(key: string) {
     if (position > 0) {
       // Use requestAnimationFrame to ensure DOM is ready
       requestAnimationFrame(() => {
-        window.scrollTo({ top: position, behavior: 'auto' })
+        const mainElement = document.querySelector('main')
+        if (mainElement) {
+          mainElement.scrollTo({ top: position, behavior: 'auto' })
+        } else {
+          window.scrollTo({ top: position, behavior: 'auto' })
+        }
       })
     }
   }, [getScrollPosition])
@@ -208,81 +213,94 @@ export function useBookInView(books: any[], enabled: boolean = true) {
  * Hook for smooth scroll to specific book
  */
 export function useScrollToBook() {
-  const scrollToBook = useCallback((bookId: number, behavior: 'smooth' | 'auto' = 'smooth') => {
-    const element = document.querySelector(`[data-book-id="${bookId}"]`)
-    if (element) {
-      // Check if this is a table row (list view)
-      const isTableRow = element.tagName.toLowerCase() === 'tr'
+  const scrollToBook = useCallback((bookId: number, behavior: 'smooth' | 'auto' = 'smooth', targetPage?: number) => {
+    
+    // Find all elements with this book ID and pick the one with dimensions
+    const allElements = document.querySelectorAll(`[data-book-id="${bookId}"]`)
+    let element: Element | null = null
+    
+    
+    for (const el of allElements) {
+      const rect = el.getBoundingClientRect()
+      const computedStyle = window.getComputedStyle(el)
       
-      if (isTableRow) {
-        // For table rows, use manual scroll calculation
-        const rect = element.getBoundingClientRect()
-        const scrollContainer = document.querySelector('main')
-        
-        if (scrollContainer) {
-          const toolbarOffset = 160 // Match the scrollMarginTop value
-          const targetScrollTop = scrollContainer.scrollTop + rect.top - toolbarOffset
-          
-          scrollContainer.scrollTo({
-            top: Math.max(0, targetScrollTop),
-            behavior: behavior
-          })
-        } else {
-          // Fallback to regular scrollIntoView
-          element.scrollIntoView({ 
-            behavior, 
-            block: 'start',
-            inline: 'nearest'
-          })
-        }
-      } else {
-        // For grid view, use regular scrollIntoView (scrollMarginTop works fine)
-        element.scrollIntoView({ 
-          behavior, 
-          block: 'start',
-          inline: 'nearest'
-        })
+      // Skip elements that are hidden or have no dimensions
+      if (rect.width > 0 && rect.height > 0 && computedStyle.display !== 'none' && computedStyle.visibility !== 'hidden') {
+        element = el
+        break
       }
+    }
+    
+    if (!element) {
+      return
+    }
+    
+    const scrollContainer = document.querySelector('main')
+    
+    if (!scrollContainer) {
+      // Fallback to regular scrollIntoView if main container not found
+      element?.scrollIntoView({ 
+        behavior, 
+        block: 'start',
+        inline: 'nearest'
+      })
+      return
+    }
+    
+    if (element) {
+      // Calculate scroll position using the element with proper dimensions
+      const containerRect = scrollContainer.getBoundingClientRect()
+      const elementRect = element.getBoundingClientRect()
+      const elementTop = elementRect.top - containerRect.top + scrollContainer.scrollTop
+      
+      // Dynamic offset based on target page and device:
+      // Check if we're on mobile (screen width < 768px, matching Tailwind's md breakpoint)
+      const isMobile = window.innerWidth < 768
+      
+      let toolbarOffset: number
+      if (targetPage === 1 || targetPage === undefined) {
+        // Page 1: More offset to ensure books aren't hidden under toolbar
+        toolbarOffset = isMobile ? 550 : 400
+      } else {
+        // Page 2+: Less offset to scroll far enough to trigger page detection
+        toolbarOffset = isMobile ? -750 : -275
+      }
+      console.log('scrollToBook:', { bookId, targetPage, toolbarOffset, elementTop, targetScrollTop: elementTop - toolbarOffset })
+      const targetScrollTop = elementTop - toolbarOffset
+      
+      scrollContainer.scrollTo({
+        top: Math.max(0, targetScrollTop),
+        behavior: behavior
+      })
     } else {
       // If element not found, try again after a short delay
       setTimeout(() => {
         const retryElement = document.querySelector(`[data-book-id="${bookId}"]`)
-        if (retryElement) {
-          const isTableRow = retryElement.tagName.toLowerCase() === 'tr'
-          
-          if (isTableRow) {
-            const rect = retryElement.getBoundingClientRect()
-            const scrollContainer = document.querySelector('main')
-            
-            if (scrollContainer) {
-              const toolbarOffset = 160
-              const targetScrollTop = scrollContainer.scrollTop + rect.top - toolbarOffset
-              
-              scrollContainer.scrollTo({
-                top: Math.max(0, targetScrollTop),
-                behavior: 'auto'
-              })
-            } else {
-              retryElement.scrollIntoView({ 
-                behavior: 'auto',
-                block: 'start',
-                inline: 'nearest'
-              })
-            }
+        if (retryElement && scrollContainer) {
+          const containerRect = scrollContainer.getBoundingClientRect()
+          const elementRect = retryElement.getBoundingClientRect()
+          const elementTop = elementRect.top - containerRect.top + scrollContainer.scrollTop
+          // Dynamic offset based on target page and device
+          const isMobile = window.innerWidth < 768
+          let toolbarOffset: number
+          if (targetPage === 1 || targetPage === undefined) {
+            toolbarOffset = isMobile ? 200 : 400
           } else {
-            retryElement.scrollIntoView({ 
-              behavior: 'auto',
-              block: 'start',
-              inline: 'nearest'
-            })
+            toolbarOffset = isMobile ? -100 : -275
           }
+          const targetScrollTop = elementTop - toolbarOffset
+          
+          scrollContainer.scrollTo({
+            top: Math.max(0, targetScrollTop),
+            behavior: 'auto'
+          })
         }
       }, 300)
     }
   }, [])
 
   const scrollToTop = useCallback(() => {
-    // First try to find the main scrollable container
+    // The main scrollable container is the <main> element
     const mainElement = document.querySelector('main')
     if (mainElement) {
       mainElement.scrollTo({ top: 0, behavior: 'smooth' })

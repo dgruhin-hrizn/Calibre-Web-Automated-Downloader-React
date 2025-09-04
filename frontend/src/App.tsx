@@ -101,18 +101,17 @@ function App() {
                   
                   {/* Main Content */}
                   <div className="flex-1 flex flex-col min-w-0 h-full overflow-x-hidden">
-                    {/* Fixed Header */}
-                    <div className="flex-shrink-0">
-                      <Header 
-                        onMenuClick={() => setSidebarOpen(!sidebarOpen)}
-                        theme={theme}
-                        onThemeChange={setTheme}
-                      />
-                    </div>
+                    {/* Fixed Header - Now positioned fixed */}
+                    <Header 
+                      onMenuClick={() => setSidebarOpen(!sidebarOpen)}
+                      theme={theme}
+                      onThemeChange={setTheme}
+                      sidebarOpen={sidebarOpen}
+                    />
                     
-                    {/* Scrollable Main Content Area */}
-                    <main className="flex-1 overflow-auto">
-                      <div className="w-full px-6 py-8">
+                    {/* Scrollable Main Content Area - Add top padding for fixed header */}
+                    <main className="flex-1 overflow-auto pt-16">
+                      <div className="w-full px-6 py-8 pb-24 sm:pb-8">
                         <Routes>
                           <Route path="/" element={<Library />} />
                           <Route path="/stats" element={<Stats />} />
