@@ -9,6 +9,7 @@ import {
   LibraryStats
 } from './components'
 import { LibraryToolbar } from './components/LibraryToolbar'
+import { LibraryMobileFooter } from './components/LibraryMobileFooter'
 import { InfiniteLibraryGrid } from './components/InfiniteLibraryGrid'
 import { LibraryBookModal } from './components/LibraryBookModal'
 
@@ -233,9 +234,9 @@ export function Library() {
           registerBookRef={registerBookRef}
         />
         
-        {/* Scroll to Top Button */}
+        {/* Scroll to Top Button - Adjusted for mobile footer */}
         {books.length > 18 && (
-          <div className="fixed bottom-6 right-6 z-50">
+          <div className="fixed bottom-24 md:bottom-6 right-6 z-50">
             <Button
               onClick={scrollToTop}
               variant="outline"
@@ -247,6 +248,9 @@ export function Library() {
             </Button>
           </div>
         )}
+        
+        {/* Mobile-only bottom padding to account for fixed footer */}
+        <div className="h-20 md:hidden" />
       </div>
 
       {/* Library Book Details Modal */}
@@ -283,6 +287,16 @@ export function Library() {
           isRefreshing={isRefreshingMetadata}
         />
       )}
+      
+      {/* Mobile Footer with Sort and Pagination */}
+      <LibraryMobileFooter
+        sortParam={sortParam}
+        onSortChange={handleSortChange}
+        loading={isLoading}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={handlePageChange}
+      />
       
       {/* Toast Notifications */}
       <ToastContainer />

@@ -165,8 +165,8 @@ export function LibraryToolbar({
               </form>
             </div>
 
-            {/* Right Side: Sort, View Mode, and Pagination */}
-            <div className="flex items-center gap-4">
+            {/* Right Side: Sort, View Mode, and Pagination - Hidden on mobile */}
+            <div className="hidden md:flex items-center gap-4">
               {/* Sort Dropdown */}
               <DropdownMenu.Root>
                 <DropdownMenu.Trigger asChild>

@@ -43,32 +43,32 @@ export function LoginPage({ onLogin, isLoading = false, error }: LoginPageProps)
   const displayError = error || localError
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-md">
         {/* Logo and Title */}
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center space-x-2 mb-6">
-            <img src="/droplet.png" alt="Inkdrop Logo" className="w-12 h-12 flex-shrink-0" />
-            <span className="text-4xl font-bold text-foreground">Inkdrop</span>
+        <div className="text-center mb-6 sm:mb-8">
+          <div className="flex items-center justify-center space-x-2 mb-4 sm:mb-6">
+            <img src="/droplet.png" alt="Inkdrop Logo" className="w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0" />
+            <span className="text-3xl sm:text-4xl font-bold text-foreground">Inkdrop</span>
           </div>
-          <h1 className="text-2xl font-medium tracking-tight text-foreground mb-2">
+          <h1 className="text-xl sm:text-2xl font-medium tracking-tight text-foreground mb-2">
             Welcome to your digital library
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-sm sm:text-base text-muted-foreground">
             Your automated book downloader and library manager
           </p>
         </div>
 
         {/* Login Form */}
-        <Card className="shadow-lg">
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl text-center">Sign in</CardTitle>
-            <CardDescription className="text-center">
+        <Card className="shadow-lg border-0 sm:border">
+          <CardHeader className="space-y-1 pb-4 sm:pb-6">
+            <CardTitle className="text-xl sm:text-2xl text-center">Sign in</CardTitle>
+            <CardDescription className="text-center text-sm sm:text-base">
               Enter your credentials to access your library
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
+          <CardContent className="pt-0">
+            <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-4">
               {/* Username Field */}
               <div className="space-y-2">
                 <label htmlFor="username" className="text-sm font-medium text-foreground">
@@ -80,7 +80,7 @@ export function LoginPage({ onLogin, isLoading = false, error }: LoginPageProps)
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className={cn(
-                    "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm",
+                    "flex h-12 sm:h-10 w-full rounded-md border border-input bg-background px-4 sm:px-3 py-3 sm:py-2 text-base sm:text-sm",
                     "ring-offset-background placeholder:text-muted-foreground",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                     "disabled:cursor-not-allowed disabled:opacity-50",
@@ -105,7 +105,7 @@ export function LoginPage({ onLogin, isLoading = false, error }: LoginPageProps)
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className={cn(
-                      "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm",
+                      "flex h-12 sm:h-10 w-full rounded-md border border-input bg-background px-4 sm:px-3 py-3 sm:py-2 pr-12 sm:pr-10 text-base sm:text-sm",
                       "ring-offset-background placeholder:text-muted-foreground",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                       "disabled:cursor-not-allowed disabled:opacity-50",
@@ -119,14 +119,14 @@ export function LoginPage({ onLogin, isLoading = false, error }: LoginPageProps)
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                    className="absolute right-0 top-0 h-full w-12 sm:w-10 px-0 hover:bg-transparent touch-manipulation"
                     onClick={() => setShowPassword(!showPassword)}
                     disabled={isLoading}
                   >
                     {showPassword ? (
-                      <EyeOff className="h-4 w-4 text-muted-foreground" />
+                      <EyeOff className="h-5 w-5 sm:h-4 sm:w-4 text-muted-foreground" />
                     ) : (
-                      <Eye className="h-4 w-4 text-muted-foreground" />
+                      <Eye className="h-5 w-5 sm:h-4 sm:w-4 text-muted-foreground" />
                     )}
                   </Button>
                 </div>
@@ -142,13 +142,13 @@ export function LoginPage({ onLogin, isLoading = false, error }: LoginPageProps)
               {/* Submit Button */}
               <Button
                 type="submit"
-                className="w-full"
+                className="w-full h-12 sm:h-10 text-base sm:text-sm font-medium touch-manipulation"
                 size="lg"
                 disabled={isLoading || !username.trim() || !password.trim()}
               >
                 {isLoading ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="mr-2 h-5 w-5 sm:h-4 sm:w-4 animate-spin" />
                     Signing in...
                   </>
                 ) : (
@@ -160,8 +160,8 @@ export function LoginPage({ onLogin, isLoading = false, error }: LoginPageProps)
         </Card>
 
         {/* Footer */}
-        <div className="text-center mt-6">
-          <p className="text-xs text-muted-foreground">
+        <div className="text-center mt-4 sm:mt-6">
+          <p className="text-xs sm:text-sm text-muted-foreground px-2">
             Inkdrop - Automated book downloader and library manager
           </p>
         </div>

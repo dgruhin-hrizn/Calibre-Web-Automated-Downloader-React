@@ -14,7 +14,7 @@ import { Downloads } from './pages/Downloads'
 import { Settings } from './pages/Settings'
 import Library from './pages/Library'
 import HotBooks from './pages/HotBooks'
-import SeriesOptimized from './pages/SeriesOptimized'
+import Series from './pages/Series'
 import Admin from './pages/Admin'
 import UserProfile from './pages/UserProfile'
 
@@ -118,7 +118,7 @@ function App() {
                           <Route path="/stats" element={<Stats />} />
                           <Route path="/search" element={<Search />} />
                           <Route path="/library" element={<Library />} />
-                          <Route path="/series" element={<SeriesOptimized />} />
+                          <Route path="/series" element={<Series />} />
                           <Route path="/hot" element={<HotBooks />} />
                           <Route path="/downloads" element={<Downloads />} />
                           <Route path="/settings" element={<Settings />} />
