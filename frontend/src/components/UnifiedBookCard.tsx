@@ -385,8 +385,12 @@ export function UnifiedBookCard({
             {canLoadImage ? (
               <>
                 {!imageLoaded && !imageError && (
-                  <div className="w-full h-full flex items-center justify-center">
+                  <div className="w-full h-full relative">
                     <div className="animate-pulse bg-muted-foreground/20 w-full h-full" />
+                    {/* Centered spinner */}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                    </div>
                   </div>
                 )}
                 <CachedImage 
@@ -404,8 +408,12 @@ export function UnifiedBookCard({
                 )}
               </>
             ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <Book className={`${iconSize} text-muted-foreground`} />
+              <div className="w-full h-full relative">
+                <div className="animate-pulse bg-muted-foreground/20 w-full h-full" />
+                {/* Centered spinner */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                </div>
               </div>
             )}
             {isNewBook && (
