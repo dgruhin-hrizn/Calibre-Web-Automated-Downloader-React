@@ -43,7 +43,7 @@ export function LoginPage({ onLogin, isLoading = false, error }: LoginPageProps)
   const displayError = error || localError
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4 sm:p-6">
+    <div className="min-h-screen bg-background flex items-start sm:items-center justify-center p-4 sm:p-6 pt-8 sm:pt-6">
       <div className="w-full max-w-md">
         {/* Logo and Title */}
         <div className="text-center mb-6 sm:mb-8">
