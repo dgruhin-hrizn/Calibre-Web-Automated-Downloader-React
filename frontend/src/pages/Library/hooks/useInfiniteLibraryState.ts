@@ -104,8 +104,12 @@ export function useInfiniteLibraryState({
 
   // Update URL when detected page changes (for manual scrolling)
   const updateCurrentPage = useCallback(() => {
+    // Don't update URL during pending page navigation to avoid conflicts
+    if (pendingPageNavigation !== null) {
+      return
+    }
+    
     // Only update if the detected page is different and valid
-    // Allow updates even during pendingPageNavigation for responsive URL updates
     if (detectedPage !== currentPage && detectedPage <= totalPages && detectedPage >= 1) {
       // Use replace: true for scroll-based updates to avoid cluttering browser history
       setSearchParams(prev => {
@@ -114,7 +118,7 @@ export function useInfiniteLibraryState({
         return newParams
       }, { replace: true })
     }
-  }, [detectedPage, currentPage, totalPages, setSearchParams])
+  }, [detectedPage, currentPage, totalPages, setSearchParams, pendingPageNavigation])
 
   // Navigation handlers that reset infinite scroll
   const handleSearchChange = useCallback((query: string) => {

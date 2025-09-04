@@ -73,6 +73,7 @@ export function InfiniteLibraryGrid({
           markImageLoaded={markImageLoaded}
           deletingBooks={deletingBooks}
           registerBookRef={registerBookRef}
+          registerPageRef={registerPageRef}
         />
       </div>
       <div className="hidden md:block">
