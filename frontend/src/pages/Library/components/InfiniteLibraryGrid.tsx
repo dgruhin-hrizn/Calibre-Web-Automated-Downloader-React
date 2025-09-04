@@ -58,7 +58,7 @@ export function InfiniteLibraryGrid({
   }
 
   return (
-    <div className="space-y-6">
+    <div>
       {/* Books Display */}
       <div className="block md:hidden">
         {/* Mobile: Always show grid view */}
@@ -98,7 +98,7 @@ export function InfiniteLibraryGrid({
       </div>
 
       {/* Infinite Scroll Loading Area */}
-      <div className="flex flex-col items-center space-y-4 py-8">
+      <div className="flex flex-col items-center space-y-4 py-8 mt-6">
         {/* Intersection Observer Target */}
         <div ref={loadMoreRef} className="h-4" />
         

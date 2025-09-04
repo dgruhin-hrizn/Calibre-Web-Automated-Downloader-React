@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { SCROLL_OFFSETS, PAGINATION_DETECTION, MOBILE_BREAKPOINT, SELECTORS } from '../constants/pagination'
 
 interface UseInfiniteScrollOptions {
   hasNextPage?: boolean
@@ -116,7 +117,32 @@ export function useScrollMemory(key: string) {
 /**
  * Hook for tracking which book is currently in view
  */
-export function useBookInView(books: any[], enabled: boolean = true) {
+export function useBookInView(
+  books: any[], 
+  enabled: boolean = true,
+  options: {
+    visibilityThreshold?: number
+    rootMargin?: string
+  } = {}
+) {
+  // Calculate dynamic root margin based on toolbar position
+  const calculateRootMargin = () => {
+    const header = document.querySelector(SELECTORS.HEADER)
+    const toolbar = document.querySelector(SELECTORS.LIBRARY_TOOLBAR)
+    
+    const headerHeight = header?.getBoundingClientRect().height || 64
+    const toolbarHeight = toolbar?.getBoundingClientRect().height || 140
+    const totalFixedHeight = headerHeight + toolbarHeight
+    
+    // Set root margin so detection triggers when books hit the bottom of the toolbar
+    return `0px 0px -${totalFixedHeight}px 0px`
+  }
+  
+  const { 
+    visibilityThreshold = PAGINATION_DETECTION.VISIBILITY_THRESHOLD, 
+    rootMargin = options.rootMargin || calculateRootMargin()
+  } = options
+  
   const [bookInView, setBookInView] = useState<number | null>(null)
   const observerRef = useRef<IntersectionObserver | null>(null)
   const bookRefs = useRef<Map<number, HTMLElement>>(new Map())
@@ -158,8 +184,8 @@ export function useBookInView(books: any[], enabled: boolean = true) {
           }
         })
 
-        // Only update if we have a reasonable intersection (at least 30% visible for more responsive detection)
-        if (topBookId && maxRatio > 0.3) {
+        // Only update if we have a reasonable intersection
+        if (topBookId && maxRatio > visibilityThreshold) {
           // Only update if it's a different book to prevent rapid switching
           setBookInView(prev => {
             if (prev !== topBookId) {
@@ -170,8 +196,8 @@ export function useBookInView(books: any[], enabled: boolean = true) {
         }
       },
       {
-        threshold: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
-        rootMargin: '0px 0px -20% 0px' // More aggressive detection - trigger when book is higher in viewport
+        threshold: [0, 0.1, 0.25, 0.5, 0.75, 1.0], // Multiple thresholds for better detection
+        rootMargin // Configurable margin for detection
       }
     )
 
@@ -210,29 +236,22 @@ export function useBookInView(books: any[], enabled: boolean = true) {
 }
 
 /**
- * Calculate scroll offset based on page and device type
+ * Calculate scroll offset based on device type and toolbar height
  */
-function calculateScrollOffset(targetPage?: number) {
+function calculateScrollOffset() {
   // Calculate dynamic offset based on actual DOM elements
-  const header = document.querySelector('header')
-  const toolbar = document.querySelector('[class*="sticky"]') // Find the sticky toolbar
+  const header = document.querySelector(SELECTORS.HEADER)
+  const toolbar = document.querySelector(SELECTORS.LIBRARY_TOOLBAR)
   
   const headerHeight = header?.getBoundingClientRect().height || 64 // fallback to 64px
   const toolbarHeight = toolbar?.getBoundingClientRect().height || 140 // fallback to 140px
   const totalFixedHeight = headerHeight + toolbarHeight
   
-  // Check if we're on mobile (screen width < 768px, matching Tailwind's md breakpoint)
-  const isMobile = window.innerWidth < 768
+  // Check if we're on mobile
+  const isMobile = window.innerWidth < MOBILE_BREAKPOINT
   
-  // Different offsets for desktop vs mobile
-  let paddingOffset: number
-  if (targetPage === 1 || targetPage === undefined) {
-    // Page 1: More padding so books aren't right against toolbar
-    paddingOffset = isMobile ? 70 : 70  // Mobile: 20px, Desktop: 70px
-  } else {
-    // Page 2+: Less padding to scroll deeper and trigger page detection
-    paddingOffset = isMobile ? -150 : 10  // Mobile: -20px, Desktop: 10px
-  }
+  // Different offsets for desktop vs mobile using constants
+  const paddingOffset = isMobile ? SCROLL_OFFSETS.MOBILE : SCROLL_OFFSETS.DESKTOP
   
   const toolbarOffset = totalFixedHeight + paddingOffset
   
@@ -250,7 +269,7 @@ function calculateScrollOffset(targetPage?: number) {
  * Hook for smooth scroll to specific book
  */
 export function useScrollToBook() {
-  const scrollToBook = useCallback((bookId: number, behavior: 'smooth' | 'auto' = 'smooth', targetPage?: number) => {
+  const scrollToBook = useCallback((bookId: number, behavior: 'smooth' | 'auto' = 'smooth') => {
     
     // Find all elements with this book ID and pick the one with dimensions
     const allElements = document.querySelectorAll(`[data-book-id="${bookId}"]`)
@@ -291,7 +310,7 @@ export function useScrollToBook() {
       const elementTop = elementRect.top - containerRect.top + scrollContainer.scrollTop
       
       // Calculate scroll offset using centralized function
-      const { headerHeight, toolbarHeight, totalFixedHeight, isMobile, paddingOffset, toolbarOffset } = calculateScrollOffset(targetPage)
+      const { toolbarOffset } = calculateScrollOffset()
       
       const targetScrollTop = elementTop - toolbarOffset
       
@@ -299,6 +318,20 @@ export function useScrollToBook() {
         top: Math.max(0, targetScrollTop),
         behavior: behavior
       })
+      
+      // Force immediate intersection check after scroll completes
+      if (behavior === 'smooth') {
+        // For smooth scrolling, wait a bit for it to complete
+        setTimeout(() => {
+          // Trigger a scroll event to force intersection observer to re-evaluate
+          scrollContainer.dispatchEvent(new Event('scroll'))
+        }, 500)
+      } else {
+        // For auto scrolling, trigger immediately
+        setTimeout(() => {
+          scrollContainer.dispatchEvent(new Event('scroll'))
+        }, 50)
+      }
     } else {
       // If element not found, try again after a short delay
       setTimeout(() => {
@@ -308,7 +341,7 @@ export function useScrollToBook() {
           const elementRect = retryElement.getBoundingClientRect()
           const elementTop = elementRect.top - containerRect.top + scrollContainer.scrollTop
           // Calculate scroll offset using centralized function
-          const { toolbarOffset } = calculateScrollOffset(targetPage)
+          const { toolbarOffset } = calculateScrollOffset()
           const targetScrollTop = elementTop - toolbarOffset
           
           scrollContainer.scrollTo({

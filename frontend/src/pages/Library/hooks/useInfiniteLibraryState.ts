@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { BOOKS_PER_PAGE, PAGINATION_DETECTION } from '../constants/pagination'
 import { useInfiniteLibraryBooks, useLibraryStats, useCWAHealth, useLibraryCache } from './useLibraryQueries'
 import { useInfiniteScroll, useScrollMemory, useBookInView, useScrollToBook } from './useInfiniteScroll'
 import type { ViewMode, SortParam, LibraryBook } from '../types'
@@ -62,8 +63,9 @@ export function useInfiniteLibraryState({
     sessionStorage.removeItem(scrollPositionKey)
   }, [searchQuery, sortParam])
   
-  // Book tracking
-  const { bookInView, registerBookRef } = useBookInView(books, enableBookTracking)
+  // Disabled book tracking for simpler manual pagination
+  const bookInView = null
+  const registerBookRef = () => {} // No-op function
   const { scrollToBook, scrollToTop } = useScrollToBook()
 
   // Infinite scroll setup
@@ -100,29 +102,13 @@ export function useInfiniteLibraryState({
     }, { replace: false })
   }, [setSearchParams])
 
-  // Update the page parameter based on which book is actually in view
+  // Simple manual page tracking - only update page on manual navigation
+  // Don't auto-update based on scroll position to avoid the complexity
   const updateCurrentPage = useCallback(() => {
-    if (books.length === 0) {
-      return
-    }
-    
-    // If we have a book in view, calculate page based on that (ignore scroll position)
-    if (bookInView) {
-      const bookIndex = books.findIndex(book => book.id === bookInView)
-      
-      if (bookIndex === -1) {
-        return
-      }
-      
-      const booksPerPage = 20
-      const calculatedPage = Math.floor(bookIndex / booksPerPage) + 1
-      
-      // Simplified logic - just update if page is different
-      if (calculatedPage !== currentPage && calculatedPage > 0 && calculatedPage <= totalPages) {
-        updateURLParams({ page: calculatedPage })
-      }
-    }
-  }, [bookInView, books, currentPage, totalPages, updateURLParams])
+    // Disabled auto page updates - pages only change on manual clicks
+    // This eliminates the intersection observer complexity and edge cases
+    return
+  }, [])
 
   // Navigation handlers that reset infinite scroll
   const handleSearchChange = useCallback((query: string) => {
@@ -189,7 +175,7 @@ export function useInfiniteLibraryState({
     
     // Handle page navigation (including page 1)
     if (targetPage >= 1 && loadedPages >= targetPage) {
-      const booksPerPage = 20
+      const booksPerPage = BOOKS_PER_PAGE
       const targetBookIndex = (targetPage - 1) * booksPerPage
       const targetBook = books[targetBookIndex]
       
