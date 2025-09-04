@@ -337,6 +337,142 @@ class CWADBManager:
         except Exception as e:
             logger.error(f"Error getting permissions for {username}: {e}")
             return {}
+    
+    def get_user_downloads(self, username: str = None, limit: int = 100) -> List[Dict[str, Any]]:
+        """Get download history from CWA downloads table"""
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                
+                if username:
+                    # Get downloads for specific user
+                    cursor.execute("""
+                        SELECT d.id, d.book_id, d.user_id, u.name as username
+                        FROM downloads d
+                        JOIN user u ON d.user_id = u.id
+                        WHERE u.name = ? AND u.name != 'Guest'
+                        ORDER BY d.id DESC
+                        LIMIT ?
+                    """, (username, limit))
+                else:
+                    # Get all downloads
+                    cursor.execute("""
+                        SELECT d.id, d.book_id, d.user_id, u.name as username
+                        FROM downloads d
+                        JOIN user u ON d.user_id = u.id
+                        WHERE u.name != 'Guest'
+                        ORDER BY d.id DESC
+                        LIMIT ?
+                    """, (limit,))
+                
+                rows = cursor.fetchall()
+                
+                downloads = []
+                for row in rows:
+                    downloads.append({
+                        'id': row['id'],
+                        'book_id': row['book_id'],
+                        'user_id': row['user_id'],
+                        'username': row['username']
+                    })
+                
+                return downloads
+                
+        except Exception as e:
+            logger.error(f"Error getting downloads: {e}")
+            return []
+    
+    def get_download_stats(self) -> Dict[str, Any]:
+        """Get download statistics by user"""
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Get download counts by user
+                cursor.execute("""
+                    SELECT u.name as username, COUNT(d.id) as download_count
+                    FROM user u
+                    LEFT JOIN downloads d ON u.id = d.user_id
+                    WHERE u.name != 'Guest'
+                    GROUP BY u.id, u.name
+                    ORDER BY download_count DESC
+                """)
+                
+                user_stats = []
+                total_downloads = 0
+                
+                for row in cursor.fetchall():
+                    count = row['download_count']
+                    user_stats.append({
+                        'username': row['username'],
+                        'download_count': count
+                    })
+                    total_downloads += count
+                
+                # Get most downloaded books (matches CWA reference implementation)
+                cursor.execute("""
+                    SELECT d.book_id, COUNT(d.book_id) as download_count
+                    FROM downloads d
+                    GROUP BY d.book_id
+                    ORDER BY COUNT(d.book_id) DESC
+                    LIMIT 10
+                """)
+                
+                popular_books = []
+                for row in cursor.fetchall():
+                    popular_books.append({
+                        'book_id': row['book_id'],
+                        'download_count': row['download_count']
+                    })
+                
+                return {
+                    'total_downloads': total_downloads,
+                    'user_stats': user_stats,
+                    'popular_books': popular_books
+                }
+                
+        except Exception as e:
+            logger.error(f"Error getting download stats: {e}")
+            return {
+                'total_downloads': 0,
+                'user_stats': [],
+                'popular_books': []
+            }
+    
+    def get_hot_books(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Get most downloaded books for Hot Books page - matches CWA reference implementation"""
+        try:
+            # Use the CWA user database (/config/app.db) which contains the downloads table
+            from ..infrastructure.env import CWA_USER_DB_PATH
+            import sqlite3
+            
+            with sqlite3.connect(CWA_USER_DB_PATH, timeout=30) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                # This matches the CWA reference query in cps/web.py render_hot_books()
+                # Query: ub.session.query(ub.Downloads.book_id).group_by(ub.Downloads.book_id).order_by(func.count(ub.Downloads.book_id).desc())
+                cursor.execute("""
+                    SELECT book_id, COUNT(book_id) as download_count
+                    FROM downloads
+                    GROUP BY book_id
+                    ORDER BY COUNT(book_id) DESC
+                    LIMIT ?
+                """, (limit,))
+                
+                hot_books = []
+                for row in cursor.fetchall():
+                    hot_books.append({
+                        'book_id': row['book_id'],
+                        'download_count': row['download_count']
+                    })
+                
+                logger.info(f"Found {len(hot_books)} hot books from CWA user database (matches original CWA)")
+                return hot_books
+                
+        except Exception as e:
+            logger.error(f"Error getting hot books from user database: {e}")
+            return []
 
 
 # Global instance

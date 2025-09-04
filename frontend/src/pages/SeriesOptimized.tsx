@@ -5,7 +5,7 @@ import { Swiper, SwiperSlide } from 'swiper/react'
 import { Navigation, FreeMode } from 'swiper/modules'
 import { UnifiedBookCard, type UnifiedBook } from '../components/UnifiedBookCard'
 import { Input } from '../components/ui/input'
-import { Card, CardContent } from '../components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { useToast } from '../hooks/useToast'
 import { useInfiniteScroll } from './Library/hooks/useInfiniteScroll'
@@ -415,113 +415,118 @@ export function SeriesOptimized() {
   // Loading state
   if (loading && seriesPages.length === 0) {
     return (
-      <>
-        <div className="bg-background border-b border-border -mx-6 px-4 py-6">
-          <div className="max-w-7xl mx-auto px-6">
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
             <h1 className="text-3xl font-bold text-foreground">Book Series</h1>
             <p className="text-muted-foreground mt-1">
               Discover multi-book series in your library
             </p>
           </div>
+          <Badge variant="secondary" className="text-sm">...</Badge>
         </div>
         
-        <div className="space-y-6 pt-6">
-          <div className="flex items-center justify-center py-12">
-            <div className="text-center">
-              <BookOpen className="w-12 h-12 animate-spin mx-auto mb-4 text-blue-600" />
-              <p className="text-lg font-medium">Loading series...</p>
+        <Card>
+          <CardContent className="p-12">
+            <div className="flex items-center justify-center">
+              <div className="text-center">
+                <BookOpen className="w-12 h-12 animate-spin mx-auto mb-4 text-blue-600" />
+                <p className="text-lg font-medium">Loading series...</p>
+              </div>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
         
         <ToastContainer />
-      </>
+      </div>
     )
   }
 
   // Error state
   if (error && seriesPages.length === 0) {
     return (
-      <>
-        <div className="bg-background border-b border-border -mx-6 px-4 py-6">
-          <div className="max-w-7xl mx-auto px-6">
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
             <h1 className="text-3xl font-bold text-foreground">Book Series</h1>
             <p className="text-muted-foreground mt-1">
               Discover multi-book series in your library
             </p>
           </div>
+          <Badge variant="secondary" className="text-sm">Error</Badge>
         </div>
         
-        <div className="space-y-6 pt-6">
-          <Card>
-            <CardContent className="p-6">
-              <div className="text-center text-red-600">
-                <p className="font-medium">Error loading series</p>
-                <p className="text-sm mt-1">{error}</p>
-                <Button 
-                  onClick={() => loadSeriesPage(1, false)} 
-                  className="mt-4"
-                  variant="outline"
-                >
-                  Try Again
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center text-red-600">
+              <p className="font-medium">Error loading series</p>
+              <p className="text-sm mt-1">{error}</p>
+              <Button 
+                onClick={() => loadSeriesPage(1, false)} 
+                className="mt-4"
+                variant="outline"
+              >
+                Try Again
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
         
         <ToastContainer />
-      </>
+      </div>
     )
   }
 
   return (
-    <>
-      {/* Header Section */}
-      <div className="bg-background border-b border-border -mx-6 px-4 py-6">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-foreground">Book Series</h1>
-              <p className="text-muted-foreground mt-1">
-                Discover multi-book series in your library
-              </p>
-            </div>
-            <Badge variant="secondary" className="text-sm">
-              {seriesWithBooksArray.length} Series Found
-            </Badge>
-          </div>
-          
-          {/* Search */}
-          <div className="mt-6 max-w-md">
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                <Input
-                  type="text"
-                  placeholder="Search series..."
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  onKeyPress={handleSearchKeyPress}
-                  className="pl-10"
-                />
-              </div>
-              <Button onClick={handleSearch} variant="default">
-                Search
-              </Button>
-              {searchTerm && (
-                <Button onClick={handleClearSearch} variant="outline">
-                  Clear
-                </Button>
-              )}
-            </div>
-          </div>
+    <div className="space-y-6">
+      {/* Header - matching Hot Books page style */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Book Series</h1>
+          <p className="text-muted-foreground mt-1">
+            Discover multi-book series in your library
+          </p>
         </div>
+        <Badge variant="secondary" className="text-sm">
+          {seriesWithBooksArray.length} Series Found
+        </Badge>
       </div>
+      
+      {/* Search Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BookOpen className="h-5 w-5 text-blue-500" />
+            Search Series
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+              <Input
+                type="text"
+                placeholder="Search series..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyPress={handleSearchKeyPress}
+                className="pl-10"
+              />
+            </div>
+            <Button onClick={handleSearch} variant="default">
+              Search
+            </Button>
+            {searchTerm && (
+              <Button onClick={handleClearSearch} variant="outline">
+                Clear
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Content */}
-      <div className="space-y-6 pt-6">
-        <div className="max-w-7xl mx-auto">
+      <div className="space-y-8">
           {seriesWithBooksArray.length === 0 ? (
             <div className="text-center py-12">
               <BookOpen className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -564,11 +569,10 @@ export function SeriesOptimized() {
               )}
             </div>
           )}
-        </div>
       </div>
       
       <ToastContainer />
-    </>
+    </div>
   )
 }
 

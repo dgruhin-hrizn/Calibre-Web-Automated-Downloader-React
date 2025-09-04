@@ -6,6 +6,8 @@ def string_to_bool(s: str) -> bool:
 
 # CWA Database Configuration - fixed container path (users mount their config directory here)
 CWA_DB_PATH = Path("/config/cwa.db")
+# CWA User Database - contains downloads, users, etc.
+CWA_USER_DB_PATH = Path("/config/app.db")
 
 # Downloads Database Configuration - separate database for per-user download tracking
 DATA_DIR = Path(os.getenv("DATA_DIR", "/app/data"))

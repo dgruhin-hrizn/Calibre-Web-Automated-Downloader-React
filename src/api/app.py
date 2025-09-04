@@ -3,6 +3,7 @@
 import logging
 import io, re, os
 import sqlite3
+import requests
 from functools import wraps
 from flask import Flask, request, jsonify, render_template, send_file, send_from_directory, session
 from flask_cors import CORS
@@ -14,7 +15,7 @@ import typing
 
 from ..infrastructure.logger import setup_logger
 from ..infrastructure.config import _SUPPORTED_BOOK_LANGUAGE, BOOK_LANGUAGE
-from ..infrastructure.env import FLASK_HOST, FLASK_PORT, APP_ENV, CWA_DB_PATH, DEBUG, USING_EXTERNAL_BYPASSER, BUILD_VERSION, RELEASE_VERSION, CALIBRE_LIBRARY_PATH, DOWNLOADS_DB_PATH
+from ..infrastructure.env import FLASK_HOST, FLASK_PORT, APP_ENV, CWA_DB_PATH, DEBUG, USING_EXTERNAL_BYPASSER, BUILD_VERSION, RELEASE_VERSION, CALIBRE_LIBRARY_PATH, DOWNLOADS_DB_PATH, INGEST_DIR
 from ..core import backend
 
 from ..integrations.cwa.client import CWAClient
@@ -1393,32 +1394,7 @@ def api_metadata_stats():
         logger.error(f"Error fetching metadata stats: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/metadata/hot-books')
-def api_metadata_hot_books():
-    """Get hot books based on download counts from app.db"""
-    try:
-        db_manager = get_calibre_db_manager()
-        if not db_manager:
-            return jsonify({'error': 'Metadata database not available'}), 503
-        
-        # Get pagination parameters
-        page = int(request.args.get('page', 1))
-        per_page = min(int(request.args.get('per_page', 18)), 100)
-        
-        # Get hot books (most downloaded) from the database
-        result = db_manager.get_hot_books(page=page, per_page=per_page)
-        
-        return jsonify({
-            'books': result['books'],
-            'total': result['total'],
-            'page': result['page'],
-            'per_page': result['per_page'],
-            'pages': result['pages']
-        })
-        
-    except Exception as e:
-        logger.error(f"Error fetching hot books: {e}")
-        return jsonify({'error': str(e)}), 500
+# Old hot books endpoint removed - replaced with CWA user database implementation below
 
 @app.route('/api/metadata/new-books')
 def api_metadata_new_books():
@@ -2029,6 +2005,168 @@ def api_change_password() -> Union[Response, Tuple[Response, int]]:
         logger.error(f"Error changing password for user {username}: {e}")
         return jsonify({"error": str(e)}), 500
 
+# Download Tracking APIs
+@app.route('/api/admin/downloads', methods=['GET'])
+@login_required
+def api_get_download_history() -> Union[Response, Tuple[Response, int]]:
+    """Get download history from CWA database (admin only)"""
+    try:
+        # Check if user is admin
+        username = session.get('username')
+        if not username:
+            return jsonify({"error": "User not authenticated"}), 401
+            
+        from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+        cwa_db = get_cwa_db_manager()
+        if not cwa_db:
+            return jsonify({"error": "CWA database not available"}), 503
+        
+        # Check if user is admin
+        user_permissions = cwa_db.get_user_permissions(username)
+        if not user_permissions.get('admin', False):
+            return jsonify({"error": "Admin access required"}), 403
+        
+        # Get query parameters
+        target_username = request.args.get('username')
+        limit = min(int(request.args.get('limit', 100)), 500)  # Max 500 records
+        
+        downloads = cwa_db.get_user_downloads(target_username, limit)
+        
+        return jsonify({
+            'downloads': downloads,
+            'total_returned': len(downloads)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching download history: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/download-stats', methods=['GET'])
+@login_required
+def api_get_download_stats() -> Union[Response, Tuple[Response, int]]:
+    """Get download statistics (admin only)"""
+    try:
+        # Check if user is admin
+        username = session.get('username')
+        if not username:
+            return jsonify({"error": "User not authenticated"}), 401
+            
+        from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+        cwa_db = get_cwa_db_manager()
+        if not cwa_db:
+            return jsonify({"error": "CWA database not available"}), 503
+        
+        # Check if user is admin
+        user_permissions = cwa_db.get_user_permissions(username)
+        if not user_permissions.get('admin', False):
+            return jsonify({"error": "Admin access required"}), 403
+        
+        stats = cwa_db.get_download_stats()
+        
+        return jsonify(stats)
+        
+    except Exception as e:
+        logger.error(f"Error fetching download stats: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/profile/downloads', methods=['GET'])
+@login_required
+def api_get_my_downloads() -> Union[Response, Tuple[Response, int]]:
+    """Get current user's download history"""
+    try:
+        username = session.get('username')
+        if not username:
+            return jsonify({"error": "User not authenticated"}), 401
+            
+        from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+        cwa_db = get_cwa_db_manager()
+        if not cwa_db:
+            return jsonify({"error": "CWA database not available"}), 503
+        
+        # Get query parameters
+        limit = min(int(request.args.get('limit', 50)), 100)  # Max 100 for personal downloads
+        
+        downloads = cwa_db.get_user_downloads(username, limit)
+        
+        return jsonify({
+            'downloads': downloads,
+            'total_returned': len(downloads)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching user downloads for {username}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/metadata/hot-books', methods=['GET'])
+@login_required
+def api_get_hot_books() -> Union[Response, Tuple[Response, int]]:
+    """Get hot books based on actual download statistics"""
+    try:
+        from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+        cwa_db = get_cwa_db_manager()
+        if not cwa_db:
+            return jsonify({"error": "CWA database not available"}), 503
+        
+        # Get query parameters
+        limit = min(int(request.args.get('per_page', 50)), 100)  # Max 100 books
+        
+        # Get hot books from download statistics
+        hot_books_data = cwa_db.get_hot_books(limit)
+        
+        if not hot_books_data:
+            # Return empty result if no download data
+            return jsonify({
+                'books': [],
+                'total': 0,
+                'page': 1,
+                'per_page': limit,
+                'total_pages': 0
+            })
+        
+        # Get book metadata for each hot book
+        enriched_books = []
+        
+        for book_data in hot_books_data:
+            book_id = book_data['book_id']
+            download_count = book_data['download_count']
+            
+            try:
+                # Fetch book metadata from the direct metadata API
+                metadata_response = requests.get(
+                    f'http://localhost:8084/api/metadata/books/{book_id}',
+                    headers={'User-Agent': 'Inkdrop-HotBooks/1.0'},
+                    timeout=5
+                )
+                
+                if metadata_response.status_code == 200:
+                    book_metadata = metadata_response.json()
+                    
+                    # Enrich with download count
+                    book_metadata['download_count'] = download_count
+                    book_metadata['popularity_rank'] = len(enriched_books) + 1
+                    
+                    enriched_books.append(book_metadata)
+                else:
+                    logger.warning(f"Failed to get metadata for book {book_id}: {metadata_response.status_code}")
+                    
+            except Exception as e:
+                logger.warning(f"Error fetching metadata for book {book_id}: {e}")
+                continue
+        
+        logger.info(f"Successfully enriched {len(enriched_books)} hot books with metadata")
+        
+        return jsonify({
+            'books': enriched_books,
+            'total': len(enriched_books),
+            'page': 1,
+            'per_page': limit,
+            'total_pages': 1
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching hot books: {e}")
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/admin/user-info')
 def api_admin_user_info():
     """Get current user info and admin status - simple version for auth checking"""
@@ -2479,6 +2617,67 @@ def api_cwa_library_send_to_kindle(book_id):
     except Exception as e:
         logger.error(f"Error sending book to Kindle: {e}")
         return jsonify({'error': f'Failed to send book to Kindle: {str(e)}'}), 500
+
+@app.route('/api/ingest/upload', methods=['POST'])
+@login_required
+def api_ingest_upload():
+    """Upload book files to the ingest directory."""
+    try:
+        if 'books' not in request.files:
+            return jsonify({'error': 'No files provided'}), 400
+        
+        files = request.files.getlist('books')
+        if not files:
+            return jsonify({'error': 'No files provided'}), 400
+        
+        # Use the configured ingest directory from environment
+        ingest_dir = str(INGEST_DIR)
+        logger.info(f"Using ingest directory: {ingest_dir}")
+        
+        # Create ingest directory if it doesn't exist
+        os.makedirs(ingest_dir, exist_ok=True)
+        
+        uploaded_files = []
+        errors = []
+        
+        for file in files:
+            if file.filename == '':
+                continue
+                
+            # Validate file extension
+            allowed_extensions = {'.epub', '.pdf', '.mobi', '.azw', '.azw3'}
+            file_ext = os.path.splitext(file.filename)[1].lower()
+            
+            if file_ext not in allowed_extensions:
+                errors.append(f'{file.filename}: Unsupported file type')
+                continue
+            
+            try:
+                # Save file to ingest directory
+                file_path = os.path.join(ingest_dir, file.filename)
+                file.save(file_path)
+                uploaded_files.append(file.filename)
+                logger.info(f"Uploaded book file to ingest: {file.filename}")
+            except Exception as e:
+                logger.error(f"Failed to save file {file.filename}: {e}")
+                errors.append(f'{file.filename}: Failed to save file')
+        
+        if not uploaded_files and errors:
+            return jsonify({'error': 'No files were uploaded', 'details': errors}), 400
+        
+        result = {
+            'message': f'Successfully uploaded {len(uploaded_files)} file(s)',
+            'uploaded': uploaded_files
+        }
+        
+        if errors:
+            result['warnings'] = errors
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Error in ingest upload: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 logger.log_resource_usage()
 

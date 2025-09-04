@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Search as SearchIcon, Filter, Download, Eye, AlertCircle, Loader2 } from 'lucide-react'
+import { Search as SearchIcon, Filter, Download, Eye, AlertCircle, Loader2, Upload, FileText } from 'lucide-react'
 import { Button } from '../components/ui/Button'
+import * as Tabs from '@radix-ui/react-tabs'
 import { CircularProgress } from '../components/ui/CircularProgress'
 import { SkeletonGrid } from '../components/ui/SkeletonCard'
 import { SearchResultModal } from '../components/SearchResultModal'
@@ -21,6 +22,9 @@ export function Search() {
   const [pendingDownloads, setPendingDownloads] = useState<Set<string>>(new Set())
   const [selectedBook, setSelectedBook] = useState<any | null>(null)
   const isUpdatingFromUrl = useRef(false)
+  const [isDragOver, setIsDragOver] = useState(false)
+  const [uploadingFiles, setUploadingFiles] = useState<string[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
   
   // Create search params object for executed searches only
   const [executedSearchParams, setExecutedSearchParams] = useState<any>(null)
@@ -158,17 +162,166 @@ export function Search() {
     }
   }
 
+  // Drag and drop handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(false)
+  }
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(false)
+    
+    const files = Array.from(e.dataTransfer.files)
+    const bookFiles = files.filter(file => 
+      file.name.toLowerCase().endsWith('.epub') ||
+      file.name.toLowerCase().endsWith('.pdf') ||
+      file.name.toLowerCase().endsWith('.mobi') ||
+      file.name.toLowerCase().endsWith('.azw') ||
+      file.name.toLowerCase().endsWith('.azw3')
+    )
+    
+    if (bookFiles.length === 0) {
+      alert('Please drop valid book files (.epub, .pdf, .mobi, .azw, .azw3)')
+      return
+    }
+    
+    await uploadBooks(bookFiles)
+  }
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    if (files.length > 0) {
+      uploadBooks(files)
+    }
+  }
+
+  const uploadBooks = async (files: File[]) => {
+    const fileNames = files.map(f => f.name)
+    setUploadingFiles(fileNames)
+    
+    try {
+      const formData = new FormData()
+      files.forEach(file => {
+        formData.append('books', file)
+      })
+      
+      const response = await fetch('/api/ingest/upload', {
+        method: 'POST',
+        credentials: 'include',
+        body: formData
+      })
+      
+      if (response.ok) {
+        await response.json()
+        alert(`Successfully uploaded ${files.length} book(s) to ingest directory`)
+      } else {
+        throw new Error('Upload failed')
+      }
+    } catch (error) {
+      console.error('Upload error:', error)
+      alert('Failed to upload books. Please try again.')
+    } finally {
+      setUploadingFiles([])
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Search Books</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Add Books</h1>
         <p className="text-muted-foreground">
-          Find and download books from multiple sources
+          Upload your own books or search online to add to your library
         </p>
       </div>
 
-      {/* Search Form */}
-      <div className="space-y-4">
+      <Tabs.Root defaultValue="upload" className="w-full">
+        <Tabs.List className="inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground">
+          <Tabs.Trigger
+            value="upload"
+            className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+          >
+            <Upload className="w-4 h-4 mr-2" />
+            Upload Books
+          </Tabs.Trigger>
+          <Tabs.Trigger
+            value="search"
+            className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+          >
+            <SearchIcon className="w-4 h-4 mr-2" />
+            Search Online
+          </Tabs.Trigger>
+        </Tabs.List>
+
+        <Tabs.Content value="upload" className="mt-6 space-y-4">
+          {/* Compact Drag and Drop Upload Section */}
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+              isDragOver
+                ? 'border-primary bg-primary/5'
+                : 'border-muted-foreground/25 hover:border-muted-foreground/50'
+            }`}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept=".epub,.pdf,.mobi,.azw,.azw3"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+            
+            {uploadingFiles.length > 0 ? (
+              <div className="space-y-3">
+                <Loader2 className="w-6 h-6 mx-auto animate-spin text-primary" />
+                <p className="font-medium">Uploading books...</p>
+                <div className="space-y-1">
+                  {uploadingFiles.map((fileName, index) => (
+                    <p key={index} className="text-sm text-muted-foreground">
+                      <FileText className="w-4 h-4 inline mr-2" />
+                      {fileName}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <Upload className="w-8 h-8 mx-auto text-muted-foreground" />
+                <div>
+                  <p className="font-medium">
+                    Drag and drop book files here
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Supports EPUB, PDF, MOBI, AZW, and AZW3 formats
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Choose Files
+                </Button>
+              </div>
+            )}
+          </div>
+        </Tabs.Content>
+
+        <Tabs.Content value="search" className="mt-6 space-y-4">
+          {/* Search Form */}
         <div className="flex space-x-2">
           <div className="relative flex-1">
             <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -240,72 +393,73 @@ export function Search() {
             </div>
           </div>
         )}
-      </div>
 
-      {/* Search Results */}
-      {searchBooks.isPending && !!executedSearchParams && <SkeletonGrid count={18} />}
-      
-      {searchBooks.isError && !!executedSearchParams && (
-        <div className="text-center py-12">
-          <AlertCircle className="w-12 h-12 mx-auto mb-4 text-destructive" />
-          <p className="text-destructive">Failed to search books. Please try again.</p>
-        </div>
-      )}
-      
-      {(() => {
-        // Get results from cache or current query
-        const results = searchBooks.data || cachedResults
-        // const isLoading = searchBooks.isPending
-        // const isError = searchBooks.isError
-        
-        if (results && results.length === 0) {
-          return (
+          {/* Search Results */}
+          {searchBooks.isPending && !!executedSearchParams && <SkeletonGrid count={18} />}
+          
+          {searchBooks.isError && !!executedSearchParams && (
+            <div className="text-center py-12">
+              <AlertCircle className="w-12 h-12 mx-auto mb-4 text-destructive" />
+              <p className="text-destructive">Failed to search books. Please try again.</p>
+            </div>
+          )}
+          
+          {(() => {
+            // Get results from cache or current query
+            const results = searchBooks.data || cachedResults
+            // const isLoading = searchBooks.isPending
+            // const isError = searchBooks.isError
+            
+            if (results && results.length === 0) {
+              return (
+                <div className="text-center py-12 text-muted-foreground">
+                  <SearchIcon className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>No books found. Try different search terms.</p>
+                </div>
+              )
+            }
+            
+            if (results && results.length > 0) {
+              return (
+                <div className="space-y-4">
+                  <h2 className="text-xl font-semibold text-foreground">
+                    Search Results ({results.length})
+                    {cachedResults && !searchBooks.data && (
+                      <span className="text-sm text-muted-foreground ml-2">(cached)</span>
+                    )}
+                    {searchBooks.dataUpdatedAt && (
+                      <span className="text-xs text-muted-foreground ml-2">
+                        Updated {new Date(searchBooks.dataUpdatedAt).toLocaleTimeString()}
+                      </span>
+                    )}
+                  </h2>
+                  <div className="grid gap-4 grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                    {results.map((book: Book) => (
+                      <BookCard 
+                        key={book.id} 
+                        book={book} 
+                        downloads={downloads}
+                        pendingDownloads={pendingDownloads}
+                        onDownload={handleDownload}
+                        onDetails={() => setSelectedBook(book)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )
+            }
+            
+            return null
+          })()}
+          
+          {!cachedResults && !searchBooks.data && !searchBooks.isError && (
             <div className="text-center py-12 text-muted-foreground">
               <SearchIcon className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p>No books found. Try different search terms.</p>
+              <p>Enter a search query to find books</p>
             </div>
-          )
-        }
-        
-        if (results && results.length > 0) {
-          return (
-            <div className="space-y-4">
-              <h2 className="text-xl font-semibold text-foreground">
-                Search Results ({results.length})
-                {cachedResults && !searchBooks.data && (
-                  <span className="text-sm text-muted-foreground ml-2">(cached)</span>
-                )}
-                {searchBooks.dataUpdatedAt && (
-                  <span className="text-xs text-muted-foreground ml-2">
-                    Updated {new Date(searchBooks.dataUpdatedAt).toLocaleTimeString()}
-                  </span>
-                )}
-              </h2>
-              <div className="grid gap-4 grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-                {results.map((book: Book) => (
-                  <BookCard 
-                    key={book.id} 
-                    book={book} 
-                    downloads={downloads}
-                    pendingDownloads={pendingDownloads}
-                    onDownload={handleDownload}
-                    onDetails={() => setSelectedBook(book)}
-                  />
-                ))}
-              </div>
-            </div>
-          )
-        }
-        
-        return null
-      })()}
-      
-      {!cachedResults && !searchBooks.data && !searchBooks.isError && (
-        <div className="text-center py-12 text-muted-foreground">
-          <SearchIcon className="w-12 h-12 mx-auto mb-4 opacity-50" />
-          <p>Enter a search query to find books</p>
-        </div>
-      )}
+          )}
+        </Tabs.Content>
+      </Tabs.Root>
 
       {/* Search Result Details Modal */}
       <SearchResultModal 

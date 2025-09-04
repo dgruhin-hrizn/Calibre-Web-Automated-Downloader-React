@@ -6,6 +6,7 @@ import { Badge } from './ui/badge'
 import { CachedImage } from './ui/CachedImage'
 import { CircularProgress } from './ui/CircularProgress'
 import { AuthorFormatter } from '../utils/authorFormatter'
+import { HotBookIndicator } from './HotBookIndicator'
 
 // Common book interface that works for both search and library books
 export interface UnifiedBook {
@@ -28,6 +29,9 @@ export interface UnifiedBook {
   pubdate?: string
   timestamp?: string
   comments?: string
+  // Hot books properties
+  download_count?: number
+  popularity_rank?: number
 }
 
 export interface DownloadStatus {
@@ -54,6 +58,7 @@ export interface UnifiedBookCardProps {
   // Button visibility controls
   showDownloadButton?: boolean
   showKindleButton?: boolean
+  showHotIndicator?: boolean  // Show hot book indicators
 }
 
 // Utility function to check if a date is today
@@ -80,6 +85,7 @@ export function UnifiedBookCard({
   onDetails,
   onSendToKindle,
   showKindleButton = true,
+  showHotIndicator = false,
 }: UnifiedBookCardProps) {
   
   // State for send-to-kindle button
@@ -468,7 +474,16 @@ export function UnifiedBookCard({
             </div>
             
             {/* Actions */}
-            {renderLibraryActions()}
+            <div className="flex items-center gap-3">
+              {showHotIndicator && (
+                <HotBookIndicator 
+                  downloadCount={book.download_count}
+                  popularityRank={book.popularity_rank}
+                  viewMode="list"
+                />
+              )}
+              {renderLibraryActions()}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -477,8 +492,17 @@ export function UnifiedBookCard({
   
   // Render for grid view (both search and library)
   return (
-    <Card className="hover:shadow-lg transition-shadow">
+    <Card className="hover:shadow-lg transition-shadow relative">
       <CardContent className="p-0">
+        {/* Hot Indicator Overlay */}
+        {showHotIndicator && (
+          <HotBookIndicator 
+            downloadCount={book.download_count}
+            popularityRank={book.popularity_rank}
+            viewMode="grid"
+          />
+        )}
+        
         {/* Cover */}
         {renderCover('aspect-[2/3] rounded-t-lg', 'h-12 w-12')}
         

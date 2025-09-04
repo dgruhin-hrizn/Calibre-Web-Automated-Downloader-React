@@ -1,12 +1,86 @@
 import { useState, useEffect } from 'react'
-import { TrendingUp, Grid, List } from 'lucide-react'
+import { TrendingUp } from 'lucide-react'
 import { Button } from '../components/ui/Button'
+import { Swiper, SwiperSlide } from 'swiper/react'
+import { Navigation, FreeMode } from 'swiper/modules'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+import { Badge } from '../components/ui/badge'
 import { UnifiedBookCard, type UnifiedBook } from '../components/UnifiedBookCard'
+
 import { useToast } from '../hooks/useToast'
+
+// Import Swiper styles
+import 'swiper/css'
+import 'swiper/css/navigation'
+import 'swiper/css/free-mode'
+
+// Custom styles for Swiper
+const swiperStyles = `
+  .hot-books-swiper {
+    overflow: hidden;
+    width: 100%;
+    position: relative;
+    min-height: 420px;
+  }
+  
+  .hot-books-swiper .swiper-wrapper {
+    width: fit-content;
+    max-width: 100%;
+    min-height: 420px;
+  }
+  
+  .hot-books-swiper .swiper-slide {
+    flex-shrink: 0;
+  }
+  
+  .hot-books-swiper::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 40px;
+    background: linear-gradient(to right, hsl(var(--card)), transparent);
+    z-index: 10;
+    pointer-events: none;
+  }
+  
+  .hot-books-swiper::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 40px;
+    background: linear-gradient(to left, hsl(var(--card)), transparent);
+    z-index: 10;
+    pointer-events: none;
+  }
+  
+  .swiper-button-prev-hot,
+  .swiper-button-next-hot {
+    z-index: 20;
+  }
+  
+  .swiper-button-prev-hot:hover,
+  .swiper-button-next-hot:hover {
+    transform: translateY(-50%) scale(1.1);
+  }
+`
+
+// Inject styles
+if (typeof document !== 'undefined') {
+  const styleElement = document.createElement('style')
+  styleElement.textContent = swiperStyles
+  if (!document.head.querySelector('style[data-hot-books-swiper]')) {
+    styleElement.setAttribute('data-hot-books-swiper', 'true')
+    document.head.appendChild(styleElement)
+  }
+}
 
 interface HotBook extends UnifiedBook {
   download_count?: number
+  popularity_rank?: number
   originalId?: number // Store the original numeric ID for API calls
 }
 
@@ -15,7 +89,6 @@ export function HotBooks() {
   const [books, setBooks] = useState<HotBook[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
 
   // Load hot books from metadata API
   const loadHotBooks = async () => {
@@ -23,9 +96,9 @@ export function HotBooks() {
       setLoading(true)
       setError(null)
 
-      console.log('🔥 Fetching hot books via metadata API...')
+      console.log('🔥 Fetching hot books based on download statistics...')
       
-      const response = await fetch('/api/metadata/hot-books?page=1&per_page=50', {
+      const response = await fetch('/api/metadata/hot-books?per_page=50', {
         credentials: 'include'
       })
 
@@ -40,19 +113,32 @@ export function HotBooks() {
         throw new Error('Invalid response format')
       }
 
-      console.log(`📚 Found ${data.books.length} hot books in metadata response`)
+      console.log(`📚 Found ${data.books.length} hot books based on download data`)
 
       const hotBooks: HotBook[] = data.books.map((book: any, index: number) => {
         // Create unified book object from metadata API response
+        // Handle authors - could be array of strings, array of objects, or string
+        let authors: string[] = ['Unknown Author']
+        if (book.authors) {
+          if (Array.isArray(book.authors)) {
+            authors = book.authors.map((author: any) => 
+              typeof author === 'string' ? author : author.name || author.sort || 'Unknown Author'
+            )
+          } else if (typeof book.authors === 'string') {
+            authors = [book.authors]
+          }
+        }
+
         const hotBook: HotBook = {
           id: book.id.toString(), // Use book ID as string
           title: book.title || 'Unknown Title',
-          authors: book.authors || ['Unknown Author'],
+          authors: authors,
           has_cover: book.has_cover || false,
           formats: book.formats || ['EPUB'],
           comments: book.comments || undefined,
           tags: book.tags || ['Hot', 'Popular'],
           download_count: book.download_count || 0,
+          popularity_rank: book.popularity_rank || (index + 1),
           originalId: book.id,
           // Use metadata API cover endpoint
           preview: book.has_cover ? `/api/metadata/books/${book.id}/cover` : undefined,
@@ -60,8 +146,6 @@ export function HotBooks() {
           series: book.series || [],
           rating: book.rating || undefined,
           pubdate: book.pubdate || undefined,
-          isbn: book.isbn || undefined,
-          publishers: book.publishers || [],
         }
 
         return hotBook
@@ -150,6 +234,11 @@ export function HotBooks() {
     // TODO: Implement book details modal or navigation
   }
 
+  // Handle book click - same as showDetails for now
+  const handleBookClick = (book: HotBook) => {
+    showDetails(book)
+  }
+
   // Load hot books on component mount
   useEffect(() => {
     loadHotBooks()
@@ -157,16 +246,18 @@ export function HotBooks() {
 
   if (error) {
     return (
-      <div className="space-y-8">
+      <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Hot Books</h1>
-          <p className="text-muted-foreground">Most downloaded books from your library</p>
+          <h1 className="text-3xl font-bold text-foreground">Top 10 Books</h1>
+          <p className="text-muted-foreground mt-1">
+            Most downloaded books from your library
+          </p>
         </div>
         
         <Card>
           <CardContent className="p-6">
             <div className="text-center text-red-600">
-              <p className="font-medium">Failed to Load Hot Books</p>
+              <p className="font-medium">Failed to Load Top 10 Books</p>
               <p className="text-sm mt-1">{error}</p>
               <Button 
                 onClick={loadHotBooks} 
@@ -183,90 +274,80 @@ export function HotBooks() {
   }
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
+    <div className="space-y-6">
+      {/* Header - matching Series page style */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <TrendingUp className="h-8 w-8 text-red-500" />
-          Hot Books
-        </h1>
-        <p className="text-muted-foreground">Most downloaded books from your CWA library</p>
+        <h1 className="text-3xl font-bold text-foreground">Top 10 Books</h1>
+        <p className="text-muted-foreground mt-1">
+          Most downloaded books based on real user activity
+        </p>
       </div>
 
-      {/* Stats Card */}
+      {/* Hot Books Carousel */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-red-500" />
-            Popular Downloads
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">
-                Showing the most downloaded books based on user activity
-              </p>
-              <p className="text-2xl font-bold mt-1">
-                {loading ? '...' : books.length} Hot Books
-              </p>
+        <CardContent className="pt-6">
+
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
-            
-            {/* View Mode Toggle */}
-            <div className="flex rounded-md border border-input">
-              <Button
-                variant={viewMode === 'grid' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('grid')}
-                className="rounded-r-none"
-              >
-                <Grid className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={viewMode === 'list' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('list')}
-                className="rounded-l-none"
-              >
-                <List className="h-4 w-4" />
-              </Button>
+          ) : !books || books.length === 0 ? (
+            <div className="text-center py-12">
+              <TrendingUp className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-lg font-medium">No Top 10 Books Found</p>
+              <p className="text-muted-foreground">No books have been downloaded to devices yet. Start downloading books to see what's popular!</p>
             </div>
-          </div>
+          ) : (
+            /* Swiper Carousel */
+            <div className="relative px-10">
+              <Swiper
+                modules={[Navigation, FreeMode]}
+                spaceBetween={16}
+                slidesPerView="auto"
+                freeMode={{
+                  enabled: true,
+                  sticky: false,
+                }}
+                navigation={{
+                  nextEl: '.swiper-button-next-hot',
+                  prevEl: '.swiper-button-prev-hot',
+                }}
+                watchOverflow={true}
+                className="hot-books-swiper"
+              >
+                {books.map((book) => (
+                  <SwiperSlide key={book.id} className="!w-[225px]">
+                    <UnifiedBookCard
+                      book={book}
+                      cardType="library"
+                      viewMode="grid"
+                      onDetails={handleBookClick}
+                      onSendToKindle={() => sendToKindle(book)}
+                      showHotIndicator={true}
+                    />
+                  </SwiperSlide>
+                ))}
+              </Swiper>
+              
+              {/* Custom Navigation Buttons */}
+              {books.length > 1 && (
+                <>
+                  <div className="swiper-button-prev-hot absolute left-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full shadow-lg bg-background/80 backdrop-blur-sm hover:bg-background/90 border border-border flex items-center justify-center cursor-pointer transition-colors">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </div>
+                  <div className="swiper-button-next-hot absolute right-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full shadow-lg bg-background/80 backdrop-blur-sm hover:bg-background/90 border border-border flex items-center justify-center cursor-pointer transition-colors">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
-
-      {/* Books Grid/List */}
-      {loading ? (
-        <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        </div>
-      ) : !books || books.length === 0 ? (
-        <Card>
-          <CardContent className="p-12 text-center">
-            <TrendingUp className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-lg font-medium">No Hot Books Found</p>
-            <p className="text-muted-foreground">No download statistics available yet</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className={viewMode === 'grid' 
-          ? "grid gap-4 grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
-          : "space-y-4"
-        }>
-          {books.map((book) => (
-            <UnifiedBookCard
-              key={book.id}
-              book={book}
-              cardType="library"
-              viewMode={viewMode}
-              onSendToKindle={(_unifiedBook) => sendToKindle(book)}
-              onDetails={(_unifiedBook) => showDetails(book)}
-              shouldLoadImage={(_bookId) => true} // Always load images for hot books
-              onImageLoaded={(_bookId) => {}} // No special handling needed
-            />
-          ))}
-        </div>
-      )}
 
       {/* Toast Notifications */}
       <ToastContainer />

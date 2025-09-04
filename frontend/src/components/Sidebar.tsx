@@ -8,7 +8,8 @@ import {
   TrendingUp,
   BookOpen,
   Users,
-  X
+  X,
+  Plus
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useAuth } from '../contexts/AuthContext'
@@ -21,10 +22,10 @@ interface SidebarProps {
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: Home },
-  { name: 'Find Books', href: '/search', icon: Search },
   { name: 'Library', href: '/library', icon: Library },
   { name: 'Series', href: '/series', icon: BookOpen },
-  { name: 'Hot Books', href: '/hot', icon: TrendingUp },
+  { name: 'Top 10 Books', href: '/hot', icon: TrendingUp },
+  { name: 'Add Books', href: '/search', icon: Plus },
   { name: 'Downloads', href: '/downloads', icon: Download },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]

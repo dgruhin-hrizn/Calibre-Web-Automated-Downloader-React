@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Search as SearchIcon, Filter, AlertCircle, Loader2 } from 'lucide-react'
+import { Search as SearchIcon, Filter, AlertCircle, Loader2, Upload, FileText } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { SkeletonGrid } from '../components/ui/SkeletonCard'
 import { UnifiedBookCard, type UnifiedBook } from '../components/UnifiedBookCard'
@@ -16,6 +16,9 @@ export function SearchOptimized() {
   const [language, setLanguage] = useState('')
   const [format, setFormat] = useState('')
   const [pendingDownloads, setPendingDownloads] = useState<Set<string>>(new Set())
+  const [isDragOver, setIsDragOver] = useState(false)
+  const [uploadingFiles, setUploadingFiles] = useState<string[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
   
   // Create search params object
   const searchParamsObj = query.trim() ? {
@@ -106,6 +109,78 @@ export function SearchOptimized() {
     }
   }
 
+  // Drag and drop handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(false)
+  }
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(false)
+    
+    const files = Array.from(e.dataTransfer.files)
+    const bookFiles = files.filter(file => 
+      file.name.toLowerCase().endsWith('.epub') ||
+      file.name.toLowerCase().endsWith('.pdf') ||
+      file.name.toLowerCase().endsWith('.mobi') ||
+      file.name.toLowerCase().endsWith('.azw') ||
+      file.name.toLowerCase().endsWith('.azw3')
+    )
+    
+    if (bookFiles.length === 0) {
+      alert('Please drop valid book files (.epub, .pdf, .mobi, .azw, .azw3)')
+      return
+    }
+    
+    await uploadBooks(bookFiles)
+  }
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    if (files.length > 0) {
+      uploadBooks(files)
+    }
+  }
+
+  const uploadBooks = async (files: File[]) => {
+    const fileNames = files.map(f => f.name)
+    setUploadingFiles(fileNames)
+    
+    try {
+      const formData = new FormData()
+      files.forEach(file => {
+        formData.append('books', file)
+      })
+      
+      const response = await fetch('/api/ingest/upload', {
+        method: 'POST',
+        credentials: 'include',
+        body: formData
+      })
+      
+      if (response.ok) {
+        await response.json()
+        alert(`Successfully uploaded ${files.length} book(s) to ingest directory`)
+      } else {
+        throw new Error('Upload failed')
+      }
+    } catch (error) {
+      console.error('Upload error:', error)
+      alert('Failed to upload books. Please try again.')
+    } finally {
+      setUploadingFiles([])
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
+
   // Get results from cache or current query
   const results = searchBooks.data || cachedResults
   const isLoading = searchBooks.isPending
@@ -114,14 +189,74 @@ export function SearchOptimized() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Search Books</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Add Books</h1>
         <p className="text-muted-foreground">
-          Find and download books from Anna's Archive
+          Upload your own books or search online to add to your library
         </p>
+      </div>
+
+      {/* Drag and Drop Upload Section */}
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold">Add Books</h2>
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+            isDragOver
+              ? 'border-primary bg-primary/5'
+              : 'border-muted-foreground/25 hover:border-muted-foreground/50'
+          }`}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept=".epub,.pdf,.mobi,.azw,.azw3"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+          
+          {uploadingFiles.length > 0 ? (
+            <div className="space-y-2">
+              <Loader2 className="w-8 h-8 mx-auto animate-spin text-primary" />
+              <p className="text-lg font-medium">Uploading books...</p>
+              <div className="space-y-1">
+                {uploadingFiles.map((fileName, index) => (
+                  <p key={index} className="text-sm text-muted-foreground">
+                    <FileText className="w-4 h-4 inline mr-2" />
+                    {fileName}
+                  </p>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <Upload className="w-12 h-12 mx-auto text-muted-foreground" />
+              <div>
+                <p className="text-lg font-medium">
+                  Drag and drop book files here
+                </p>
+                <p className="text-muted-foreground">
+                  Supports EPUB, PDF, MOBI, AZW, and AZW3 formats
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                Choose Files
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Search Form */}
       <div className="space-y-4">
+        <h2 className="text-xl font-semibold">Search for Books Online</h2>
         <form onSubmit={handleSearch} className="flex gap-4">
           <div className="flex-1 relative">
             <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
