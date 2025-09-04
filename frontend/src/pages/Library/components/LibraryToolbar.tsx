@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Search, Grid, List, AlertTriangle, ChevronDown, X, Calendar, User, BookOpen, TrendingUp, TrendingDown, Clock, ArrowUp, ArrowDown } from 'lucide-react'
+import { Search, Grid, List, ChevronDown, X, Calendar, User, BookOpen, TrendingUp, TrendingDown, Clock, ArrowUp, ArrowDown, Copy } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { LibraryPagination } from './LibraryPagination'
@@ -100,27 +100,93 @@ export function LibraryToolbar({
               </p>
             </div>
             
-            {/* Admin Controls */}
-            {isAdmin && (
-              <Button
-                onClick={onManageDuplicates}
-                variant="outline"
-                className="flex items-center gap-2"
-                disabled={loading}
-              >
-                <AlertTriangle className="h-4 w-4" />
-                Manage Duplicates
-              </Button>
-            )}
+            {/* Mobile Controls: Sort + Admin */}
+            <div className="flex items-center gap-2 md:hidden">
+              {/* Sort Dropdown - Mobile Only */}
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    disabled={loading}
+                    className="flex items-center gap-2"
+                    title={sortOptions.find(option => option.value === sortParam)?.label || 'Sort by...'}
+                  >
+                    {(() => {
+                      const currentOption = sortOptions.find(option => option.value === sortParam)
+                      const IconComponent = currentOption?.icon || BookOpen
+                      return <IconComponent className="h-4 w-4" />
+                    })()}
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content 
+                    className="min-w-[200px] bg-background border border-border rounded-md shadow-lg p-1 z-50"
+                    align="end"
+                    sideOffset={8}
+                  >
+                    {sortOptions.map((option) => {
+                      const IconComponent = option.icon
+                      return (
+                        <DropdownMenu.Item
+                          key={option.value}
+                          className={`
+                            flex items-center gap-3 px-3 py-2 text-sm rounded-sm cursor-pointer outline-none
+                            hover:bg-accent hover:text-accent-foreground
+                            focus:bg-accent focus:text-accent-foreground
+                            ${sortParam === option.value ? 'bg-accent text-accent-foreground' : ''}
+                          `}
+                          onSelect={() => onSortChange(option.value)}
+                        >
+                          <IconComponent className="h-4 w-4 flex-shrink-0" />
+                          <span className="flex-1">{option.label}</span>
+                        </DropdownMenu.Item>
+                      )
+                    })}
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
+
+              {/* Admin Controls - Mobile (icon only) */}
+              {isAdmin && (
+                <Button
+                  onClick={onManageDuplicates}
+                  variant="outline"
+                  size="sm"
+                  disabled={loading}
+                  title="Manage Duplicates"
+                  className="h-9 w-9 p-0"
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+
+            {/* Desktop Admin Controls */}
+            <div className="hidden md:flex">
+              {isAdmin && (
+                <Button
+                  onClick={onManageDuplicates}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                  disabled={loading}
+                  title="Manage Duplicates"
+                >
+                  <Copy className="h-4 w-4" />
+                  <span>Manage Duplicates</span>
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Bottom Row: Search, Filters, View Mode, and Pagination */}
           <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
             {/* Left Side: Search */}
-            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center flex-1">
+            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center w-full lg:flex-1">
               {/* Search */}
-              <form onSubmit={handleSearch} className="flex gap-2 w-full sm:w-auto items-center">
-                <div className="relative flex-1 sm:w-64 md:w-80">
+              <form onSubmit={handleSearch} className="flex gap-2 w-full items-center">
+                <div className="relative flex-1 md:w-80 lg:w-96">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                   <input
                     type="text"
@@ -129,7 +195,7 @@ export function LibraryToolbar({
                     onChange={(e) => setSearchInput(e.target.value)}
                     onKeyPress={handleKeyPress}
                     disabled={loading}
-                    className="pl-10 pr-10 py-2 w-full h-10 rounded-md border border-input bg-background text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="pl-10 pr-10 py-3 w-full h-10 rounded-md border border-input bg-background text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   />
                   {searchInput && (
                     <button

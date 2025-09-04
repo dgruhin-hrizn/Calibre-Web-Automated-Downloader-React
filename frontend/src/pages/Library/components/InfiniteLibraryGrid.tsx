@@ -19,7 +19,7 @@ interface InfiniteLibraryGridProps {
   // Animation state
   deletingBooks?: Set<number>
   // Infinite scroll
-  loadMoreRef: React.RefObject<HTMLDivElement>
+  loadMoreRef: React.RefObject<HTMLDivElement | null>
   // Book tracking
   registerBookRef?: (bookId: number, element: HTMLElement | null) => void
   registerPageRef?: (page: number, element: HTMLElement | null) => void

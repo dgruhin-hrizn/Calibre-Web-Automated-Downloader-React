@@ -32,29 +32,7 @@ const swiperStyles = `
     flex-shrink: 0;
   }
   
-  .series-swiper::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 40px;
-    background: linear-gradient(to right, hsl(var(--card)), transparent);
-    z-index: 10;
-    pointer-events: none;
-  }
-  
-  .series-swiper::after {
-    content: '';
-    position: absolute;
-    right: 0;
-    top: 0;
-    bottom: 0;
-    width: 40px;
-    background: linear-gradient(to left, hsl(var(--card)), transparent);
-    z-index: 10;
-    pointer-events: none;
-  }
+
   
   .swiper-button-prev-custom:hover,
   .swiper-button-next-custom:hover {
@@ -487,7 +465,7 @@ export function Series() {
             Discover multi-book series in your library
           </p>
         </div>
-        <Badge variant="secondary" className="text-sm">
+        <Badge variant="secondary" className="text-sm font-medium px-3 py-1.5 text-center">
           {seriesWithBooksArray.length} Series Found
         </Badge>
       </div>

@@ -43,8 +43,8 @@ export function LibraryGridView({
                   data-page-number={pageNumber}
                   className="absolute -top-20 left-0 h-1 w-full"
                   style={{
-                    backgroundColor: 'red',
-                    opacity: 0.7,
+                    backgroundColor: 'transparent', // Invisible but functional
+                    opacity: 1,
                     zIndex: 10
                   }}
                 />
