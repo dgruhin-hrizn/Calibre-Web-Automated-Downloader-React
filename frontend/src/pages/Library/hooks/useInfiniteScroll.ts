@@ -158,8 +158,8 @@ export function useBookInView(books: any[], enabled: boolean = true) {
           }
         })
 
-        // Only update if we have a reasonable intersection (at least 60% visible for stability)
-        if (topBookId && maxRatio > 0.6) {
+        // Only update if we have a reasonable intersection (at least 30% visible for more responsive detection)
+        if (topBookId && maxRatio > 0.3) {
           // Only update if it's a different book to prevent rapid switching
           setBookInView(prev => {
             if (prev !== topBookId) {
@@ -171,7 +171,7 @@ export function useBookInView(books: any[], enabled: boolean = true) {
       },
       {
         threshold: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
-        rootMargin: '0px 0px -10% 0px' // Less aggressive margin for more stable detection
+        rootMargin: '0px 0px -20% 0px' // More aggressive detection - trigger when book is higher in viewport
       }
     )
 
@@ -206,6 +206,43 @@ export function useBookInView(books: any[], enabled: boolean = true) {
   return {
     bookInView,
     registerBookRef
+  }
+}
+
+/**
+ * Calculate scroll offset based on page and device type
+ */
+function calculateScrollOffset(targetPage?: number) {
+  // Calculate dynamic offset based on actual DOM elements
+  const header = document.querySelector('header')
+  const toolbar = document.querySelector('[class*="sticky"]') // Find the sticky toolbar
+  
+  const headerHeight = header?.getBoundingClientRect().height || 64 // fallback to 64px
+  const toolbarHeight = toolbar?.getBoundingClientRect().height || 140 // fallback to 140px
+  const totalFixedHeight = headerHeight + toolbarHeight
+  
+  // Check if we're on mobile (screen width < 768px, matching Tailwind's md breakpoint)
+  const isMobile = window.innerWidth < 768
+  
+  // Different offsets for desktop vs mobile
+  let paddingOffset: number
+  if (targetPage === 1 || targetPage === undefined) {
+    // Page 1: More padding so books aren't right against toolbar
+    paddingOffset = isMobile ? 70 : 70  // Mobile: 20px, Desktop: 70px
+  } else {
+    // Page 2+: Less padding to scroll deeper and trigger page detection
+    paddingOffset = isMobile ? -150 : 10  // Mobile: -20px, Desktop: 10px
+  }
+  
+  const toolbarOffset = totalFixedHeight + paddingOffset
+  
+  return {
+    headerHeight,
+    toolbarHeight,
+    totalFixedHeight,
+    isMobile,
+    paddingOffset,
+    toolbarOffset
   }
 }
 
@@ -253,19 +290,9 @@ export function useScrollToBook() {
       const elementRect = element.getBoundingClientRect()
       const elementTop = elementRect.top - containerRect.top + scrollContainer.scrollTop
       
-      // Dynamic offset based on target page and device:
-      // Check if we're on mobile (screen width < 768px, matching Tailwind's md breakpoint)
-      const isMobile = window.innerWidth < 768
+      // Calculate scroll offset using centralized function
+      const { headerHeight, toolbarHeight, totalFixedHeight, isMobile, paddingOffset, toolbarOffset } = calculateScrollOffset(targetPage)
       
-      let toolbarOffset: number
-      if (targetPage === 1 || targetPage === undefined) {
-        // Page 1: More offset to ensure books aren't hidden under toolbar
-        toolbarOffset = isMobile ? 550 : 400
-      } else {
-        // Page 2+: Less offset to scroll far enough to trigger page detection
-        toolbarOffset = isMobile ? -750 : -275
-      }
-      console.log('scrollToBook:', { bookId, targetPage, toolbarOffset, elementTop, targetScrollTop: elementTop - toolbarOffset })
       const targetScrollTop = elementTop - toolbarOffset
       
       scrollContainer.scrollTo({
@@ -280,14 +307,8 @@ export function useScrollToBook() {
           const containerRect = scrollContainer.getBoundingClientRect()
           const elementRect = retryElement.getBoundingClientRect()
           const elementTop = elementRect.top - containerRect.top + scrollContainer.scrollTop
-          // Dynamic offset based on target page and device
-          const isMobile = window.innerWidth < 768
-          let toolbarOffset: number
-          if (targetPage === 1 || targetPage === undefined) {
-            toolbarOffset = isMobile ? 200 : 400
-          } else {
-            toolbarOffset = isMobile ? -100 : -275
-          }
+          // Calculate scroll offset using centralized function
+          const { toolbarOffset } = calculateScrollOffset(targetPage)
           const targetScrollTop = elementTop - toolbarOffset
           
           scrollContainer.scrollTo({

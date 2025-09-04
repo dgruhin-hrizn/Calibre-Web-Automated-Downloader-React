@@ -5,9 +5,6 @@ import { DuplicateManagerModal } from '../../components/DuplicateManagerModal'
 import MetadataEditModal from '../../components/MetadataEditModal'
 import { useToast } from '../../hooks/useToast'
 
-import {
-  LibraryStats
-} from './components'
 import { LibraryToolbar } from './components/LibraryToolbar'
 import { LibraryMobileFooter } from './components/LibraryMobileFooter'
 import { InfiniteLibraryGrid } from './components/InfiniteLibraryGrid'
@@ -35,7 +32,6 @@ export function Library() {
   // Infinite scroll state management
   const {
     books,
-    stats,
     totalPages,
     totalBooks,
     hasNextPage,
@@ -213,9 +209,6 @@ export function Library() {
 
       {/* Content */}
       <div className="space-y-6">
-        {/* Stats Cards */}
-        {stats && <LibraryStats stats={stats} />}
-
         {/* Infinite Scroll Books Grid */}
         <InfiniteLibraryGrid
           books={books}

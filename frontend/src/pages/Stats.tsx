@@ -6,11 +6,14 @@ import { BookCover } from '../components/ui/BookCover'
 import { CircularProgress } from '../components/ui/CircularProgress'
 // import CWAStatus from '../components/CWAStatus'
 import { useDownloadStatus, useUserDownloadHistory } from '../hooks/useDownloads'
+import { useLibraryStats } from '../pages/Library/hooks/useLibraryQueries'
+import { LibraryStats } from '../pages/Library/components/LibraryStats'
 import { formatDate } from '../lib/utils'
 
 export function Stats() {
   const { data: statusData, isLoading, error } = useDownloadStatus()
   const { data: userHistory } = useUserDownloadHistory(undefined, 20, 0) // Get recent user history
+  const { data: libraryStats } = useLibraryStats() // Get library collection stats
 
   const navigate = useNavigate()
   
@@ -150,12 +153,22 @@ export function Stats() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-foreground">Stats</h1>
         <p className="text-muted-foreground">
-          Overview of your book download activity
+          Overview of your library collection and download activity
         </p>
       </div>
 
+      {/* Library Collection Stats */}
+      {libraryStats && (
+        <div>
+          <h2 className="text-xl font-semibold mb-4 text-foreground">Library Collection</h2>
+          <LibraryStats stats={libraryStats} />
+        </div>
+      )}
 
-      {/* Stats Cards */}
+      {/* Download Activity Stats */}
+      <div>
+        <h2 className="text-xl font-semibold mb-4 text-foreground">Download Activity</h2>
+        {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6 hover:shadow-md transition-shadow">
           <div className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -212,6 +225,7 @@ export function Stats() {
         </div>
 
 
+      </div>
       </div>
 
       {/* Recent Activity */}

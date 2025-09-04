@@ -24,7 +24,7 @@ export function LibraryGridView({
   registerBookRef
 }: LibraryGridViewProps) {
   return (
-    <div className="flex flex-wrap gap-4 justify-start transition-all duration-500 ease-out">
+    <div className="grid gap-4 transition-all duration-500 ease-out grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 max-w-[1200px] mx-auto">
       {books.map((book) => {
         const isDeleting = deletingBooks.has(book.id)
         return (
@@ -32,7 +32,7 @@ export function LibraryGridView({
             key={book.id}
             data-book-id={book.id}
             ref={(el) => registerBookRef?.(book.id, el)}
-            className={`w-[calc(50%-8px)] sm:w-[225px] sm:min-w-[225px] sm:max-w-[225px] h-[475px] sm:h-[475px] transition-all ease-out ${
+            className={`w-full h-[475px] transition-all ease-out ${
               isDeleting
                 ? 'opacity-0 scale-75 translate-y-4 duration-500'
                 : 'opacity-100 scale-100 translate-y-0 hover:scale-[1.02] hover:shadow-lg duration-700'

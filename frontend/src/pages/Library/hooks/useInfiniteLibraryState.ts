@@ -103,39 +103,24 @@ export function useInfiniteLibraryState({
   // Update the page parameter based on which book is actually in view
   const updateCurrentPage = useCallback(() => {
     if (books.length === 0) {
-
       return
     }
     
-    // const scrollTop = window.scrollY
-
-    
     // If we have a book in view, calculate page based on that (ignore scroll position)
     if (bookInView) {
-
       const bookIndex = books.findIndex(book => book.id === bookInView)
-
       
       if (bookIndex === -1) {
-
         return
       }
       
       const booksPerPage = 20
       const calculatedPage = Math.floor(bookIndex / booksPerPage) + 1
-      // const positionInPage = bookIndex % booksPerPage
-      
-
       
       // Simplified logic - just update if page is different
       if (calculatedPage !== currentPage && calculatedPage > 0 && calculatedPage <= totalPages) {
-
         updateURLParams({ page: calculatedPage })
-      } else {
-
       }
-    } else {
-
     }
   }, [bookInView, books, currentPage, totalPages, updateURLParams])
 
@@ -208,15 +193,16 @@ export function useInfiniteLibraryState({
       const targetBookIndex = (targetPage - 1) * booksPerPage
       const targetBook = books[targetBookIndex]
       
-      if (targetBook) {
-        // Choose scroll behavior based on navigation type
-        const scrollBehavior = isManualNavigation ? 'smooth' : 'auto'
-        
-        setTimeout(() => {
-          scrollToBook(targetBook.id, scrollBehavior, targetPage)
-          setHasRestoredScroll(true)
-          setPendingPageNavigation(null) // Clear pending navigation
-        }, isManualNavigation ? 100 : 300)
+              if (targetBook) {
+          // Choose scroll behavior based on navigation type
+          const scrollBehavior = isManualNavigation ? 'smooth' : 'auto'
+          
+          
+          setTimeout(() => {
+            scrollToBook(targetBook.id, scrollBehavior, targetPage)
+            setHasRestoredScroll(true)
+            setPendingPageNavigation(null) // Clear pending navigation
+          }, isManualNavigation ? 100 : 300)
         return
       }
     } else if (targetPage > loadedPages) {
