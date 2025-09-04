@@ -268,7 +268,7 @@ export function Library() {
         onClose={() => setShowDuplicateModal(false)}
         onBooksDeleted={() => {
           // React Query will automatically refetch when cache is invalidated
-          setShowDuplicateModal(false)
+          // Keep modal open after deletion
         }}
       />
       

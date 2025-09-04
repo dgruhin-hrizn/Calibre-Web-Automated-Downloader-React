@@ -33,13 +33,15 @@ interface DuplicateGroup {
   books: DuplicateBook[];
 }
 
+interface DuplicatesData {
+  by_isbn: DuplicateGroup[];
+  by_title_author: DuplicateGroup[];
+  by_file_hash: DuplicateGroup[];
+}
+
 interface DuplicatesResponse {
-  duplicates: {
-    by_isbn: DuplicateGroup[];
-    by_title_author: DuplicateGroup[];
-    by_file_hash: DuplicateGroup[];
-  };
-  summary: {
+  duplicates: DuplicatesData | { duplicates: DuplicatesData };
+  summary?: {
     total_duplicate_groups: number;
     total_duplicate_books: number;
     by_category: {
@@ -124,7 +126,10 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
   const getAllDuplicateGroups = () => {
     if (!duplicatesData || !duplicatesData.duplicates) return [];
     
-    const duplicates = duplicatesData.duplicates;
+    // Handle nested duplicates structure - API returns {duplicates: {duplicates: {...}}}
+    const duplicates: DuplicatesData = 'duplicates' in duplicatesData.duplicates 
+      ? duplicatesData.duplicates.duplicates 
+      : duplicatesData.duplicates;
     const groups: Array<DuplicateGroup & { type: string; reason: string }> = [];
     const seenBookSets = new Set();
     
@@ -189,7 +194,8 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
 
   const handleSelectGroup = (books: DuplicateBook[], checked: boolean) => {
     const newSelected = new Set(selectedBooks);
-    books.forEach(book => {
+    // Skip the first book (index 0) and only select/deselect duplicates (index 1+)
+    books.slice(1).forEach(book => {
       if (checked) {
         newSelected.add(book.id);
       } else {
@@ -235,10 +241,13 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
       // Update duplicates data locally instead of refetching
       if (duplicatesData) {
         const updatedData = { ...duplicatesData };
-        const duplicates = updatedData.duplicates;
+        // Handle nested duplicates structure - API returns {duplicates: {duplicates: {...}}}
+        const duplicates: DuplicatesData = 'duplicates' in updatedData.duplicates 
+          ? updatedData.duplicates.duplicates 
+          : updatedData.duplicates;
         
         // Remove book from all duplicate categories
-        (['by_isbn', 'by_title_author'] as const).forEach((category: keyof typeof duplicates) => {
+        (['by_isbn', 'by_title_author'] as const).forEach((category: keyof DuplicatesData) => {
           if (duplicates[category]) {
             duplicates[category] = duplicates[category]
               .map((group: DuplicateGroup) => ({
@@ -250,14 +259,23 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
           }
         });
         
+        // Update the nested structure if needed
+        if ('duplicates' in updatedData.duplicates) {
+          (updatedData.duplicates as { duplicates: DuplicatesData }).duplicates = duplicates;
+        } else {
+          updatedData.duplicates = duplicates;
+        }
+        
         // Update summary counts
         const totalBooks = Object.values(duplicates).flat()
-          .reduce((sum, group) => sum + (group.books?.length || 0), 0);
+          .reduce((sum, group) => sum + group.books.length, 0);
         const totalGroups = Object.values(duplicates)
-          .reduce((sum, category) => sum + (category?.length || 0), 0);
+          .reduce((sum, category) => sum + category.length, 0);
         
-        updatedData.summary.total_duplicate_books = totalBooks;
-        updatedData.summary.total_duplicate_groups = totalGroups;
+        if (updatedData.summary) {
+          updatedData.summary.total_duplicate_books = totalBooks;
+          updatedData.summary.total_duplicate_groups = totalGroups;
+        }
         
         setDuplicatesData(updatedData);
       }
@@ -356,10 +374,13 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
       // Update duplicates data locally instead of refetching
       if (duplicatesData && successfullyDeletedIds.length > 0) {
         const updatedData = { ...duplicatesData };
-        const duplicates = updatedData.duplicates;
+        // Handle nested duplicates structure - API returns {duplicates: {duplicates: {...}}}
+        const duplicates: DuplicatesData = 'duplicates' in updatedData.duplicates 
+          ? updatedData.duplicates.duplicates 
+          : updatedData.duplicates;
         
         // Remove books from all duplicate categories
-        (['by_isbn', 'by_title_author'] as const).forEach((category: keyof typeof duplicates) => {
+        (['by_isbn', 'by_title_author'] as const).forEach((category: keyof DuplicatesData) => {
           if (duplicates[category]) {
             duplicates[category] = duplicates[category]
               .map((group: DuplicateGroup) => ({
@@ -371,14 +392,23 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
           }
         });
         
+        // Update the nested structure if needed
+        if ('duplicates' in updatedData.duplicates) {
+          (updatedData.duplicates as { duplicates: DuplicatesData }).duplicates = duplicates;
+        } else {
+          updatedData.duplicates = duplicates;
+        }
+        
         // Update summary counts
         const totalBooks = Object.values(duplicates).flat()
-          .reduce((sum, group) => sum + (group.books?.length || 0), 0);
+          .reduce((sum, group) => sum + group.books.length, 0);
         const totalGroups = Object.values(duplicates)
-          .reduce((sum, category) => sum + (category?.length || 0), 0);
+          .reduce((sum, category) => sum + category.length, 0);
         
-        updatedData.summary.total_duplicate_books = totalBooks;
-        updatedData.summary.total_duplicate_groups = totalGroups;
+        if (updatedData.summary) {
+          updatedData.summary.total_duplicate_books = totalBooks;
+          updatedData.summary.total_duplicate_groups = totalGroups;
+        }
         
         setDuplicatesData(updatedData);
         
@@ -430,14 +460,28 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-orange-500" />
-            <h2 className="text-xl font-semibold text-foreground">Duplicate Manager</h2>
+        <div className="p-6 border-b">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-orange-500" />
+              <h2 className="text-xl font-semibold text-foreground">Duplicate Manager</h2>
+            </div>
+            <Button variant="ghost" size="sm" onClick={handleClose}>
+              <X className="h-4 w-4" />
+            </Button>
           </div>
-          <Button variant="ghost" size="sm" onClick={handleClose}>
-            <X className="h-4 w-4" />
-          </Button>
+          {!loading && allGroups.length > 0 && (
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-muted-foreground">
+                Found {allGroups.reduce((acc, group) => acc + group.books.length, 0)} duplicate books in {allGroups.length} groups
+              </span>
+              {selectedBooks.size > 0 && (
+                <Badge variant="secondary">
+                  {selectedBooks.size} selected
+                </Badge>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Content */}
@@ -457,31 +501,6 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
             </div>
           ) : (
             <div className="space-y-6">
-              {/* Actions Bar */}
-              <div className="flex items-center justify-between bg-muted p-4 rounded-lg">
-                <div className="flex items-center gap-4">
-                  <span className="text-sm text-muted-foreground">
-                    Found {allGroups.reduce((acc, group) => acc + group.books.length, 0)} duplicate books in {allGroups.length} groups
-                  </span>
-                  {selectedBooks.size > 0 && (
-                    <Badge variant="secondary">
-                      {selectedBooks.size} selected
-                    </Badge>
-                  )}
-                </div>
-                {selectedBooks.size > 0 && (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={handleDeleteSelected}
-                    disabled={deleting}
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete Selected ({selectedBooks.size})
-                  </Button>
-                )}
-              </div>
-
               {/* Duplicate Groups */}
               {allGroups.map((group, groupIndex) => {
                 const groupKey = `${group.type}-${group.books.map(b => b.id).sort().join('-')}`;
@@ -507,11 +526,12 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
                       </div>
                       <div className="flex items-center gap-2">
                         <Checkbox
-                          checked={group.books.every(book => selectedBooks.has(book.id))}
+                          checked={group.books.slice(1).every(book => selectedBooks.has(book.id)) && group.books.length > 1}
                           onCheckedChange={(checked) => handleSelectGroup(group.books, checked as boolean)}
+                          className="!h-8 !w-8 !min-h-0 !min-w-0"
                         />
                         <span className="text-sm text-gray-600 dark:text-gray-400">
-                          Select All
+                          Select Duplicates
                         </span>
                       </div>
                     </div>
@@ -532,14 +552,15 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
                         >
                           {/* Checkbox */}
                           <div className="absolute top-2 left-2 z-10">
-                            <div className="bg-card/90 backdrop-blur-sm rounded-md p-1 shadow-sm border border-border/50">
-                              <Checkbox
-                                checked={selectedBooks.has(book.id)}
-                                onCheckedChange={(checked) => 
-                                  handleSelectBook(book.id, checked as boolean)
-                                }
-                              />
-                            </div>
+                            <Checkbox
+                              checked={selectedBooks.has(book.id)}
+                              onCheckedChange={(checked) => 
+                                handleSelectBook(book.id, checked as boolean)
+                              }
+                              className={`!h-8 !w-8 !min-h-0 !min-w-0 backdrop-blur-sm shadow-sm border-border/50 ${
+                                selectedBooks.has(book.id) ? '' : '!bg-white/90'
+                              }`}
+                            />
                           </div>
                           
                           {/* Delete Button */}
@@ -549,9 +570,9 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
                               size="sm"
                               onClick={() => handleDeleteSingle(book.id)}
                               disabled={deleting}
-                              className="h-8 w-8 p-0"
+                              className="h-5 w-5 p-0"
                             >
-                              <Trash2 className="h-4 w-4" />
+                              <Trash2 className="h-5 w-5" />
                             </Button>
                           </div>
                           
@@ -614,16 +635,28 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
 
         {/* Footer */}
         <div className="flex items-center justify-between p-6 border-t bg-gray-50 dark:bg-gray-800">
-          <Button 
-            variant="outline" 
-            onClick={() => {
-              resetTransientState();
-              fetchDuplicates();
-            }} 
-            disabled={loading}
-          >
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                resetTransientState();
+                fetchDuplicates();
+              }} 
+              disabled={loading}
+            >
+              Refresh
+            </Button>
+            {selectedBooks.size > 0 && (
+              <Button
+                variant="destructive"
+                onClick={handleDeleteSelected}
+                disabled={deleting}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete Selected ({selectedBooks.size})
+              </Button>
+            )}
+          </div>
           <Button variant="outline" onClick={handleClose}>
             Close
           </Button>
