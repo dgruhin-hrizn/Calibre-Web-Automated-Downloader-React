@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Book, Send, Star, Check, X, Loader2, Calendar, FileText, Tag, Trash2, AlertTriangle, Edit } from 'lucide-react'
+import { Send, Star, Check, X, Loader2, Calendar, FileText, Tag, Trash2, AlertTriangle, Edit } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { Card, CardContent } from '../../../components/ui/card'
 import { formatDate } from '../../../lib/utils'
@@ -224,8 +224,15 @@ export function LibraryBookModal({ book, onClose, onSendToKindle, onBookDeleted,
                     onLoad={() => setImageError(false)}
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-muted">
-                    <Book className="h-16 w-16 text-muted-foreground" />
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-muted p-4 text-center">
+                    <img 
+                      src="/droplet.png" 
+                      alt="No cover available" 
+                      className="w-16 h-16 mb-3 opacity-60"
+                    />
+                    <span className="text-sm text-muted-foreground font-medium">
+                      No Available Cover
+                    </span>
                   </div>
                 )}
                 {isNewBook && (
@@ -396,7 +403,7 @@ export function LibraryBookModal({ book, onClose, onSendToKindle, onBookDeleted,
             {data.description && (
               <div className="space-y-3">
                 <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
-                  <Book className="w-5 h-5 text-primary" />
+                  <FileText className="w-5 h-5 text-primary" />
                   Description
                 </h3>
                 <div className="border border-border rounded-lg p-4 bg-muted/20">

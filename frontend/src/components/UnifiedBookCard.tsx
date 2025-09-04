@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { Download, Book, Eye, Star, Send, Check, X, Loader2 } from 'lucide-react'
+import { Download, Eye, Star, Send, Check, X, Loader2 } from 'lucide-react'
 import { Button } from './ui/Button'
 import { Card, CardContent } from './ui/card'
 import { Badge } from './ui/badge'
@@ -353,8 +353,15 @@ export function UnifiedBookCard({
     const coverContent = () => {
       if (!coverUrl) {
         return (
-          <div className={`${aspectClass} bg-muted overflow-hidden flex items-center justify-center relative`}>
-            <Book className={`${iconSize} text-muted-foreground`} />
+          <div className={`${aspectClass} bg-muted overflow-hidden flex flex-col items-center justify-center relative p-4 text-center`}>
+            <img 
+              src="/droplet.png" 
+              alt="No cover available" 
+              className="w-12 h-12 mb-2 opacity-60"
+            />
+            <span className="text-xs text-muted-foreground font-medium">
+              No Available Cover
+            </span>
             {isNewBook && (
               <div className="absolute top-2 right-2 bg-teal-700 text-white text-[8px] font-bold px-1.5 py-0.5 rounded shadow-md">
                 NEW
@@ -402,8 +409,15 @@ export function UnifiedBookCard({
                   style={{ display: imageError ? 'none' : 'block' }}
                 />
                 {imageError && (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Book className={`${iconSize} text-muted-foreground`} />
+                  <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center">
+                    <img 
+                      src="/droplet.png" 
+                      alt="No cover available" 
+                      className="w-12 h-12 mb-2 opacity-60"
+                    />
+                    <span className="text-xs text-muted-foreground font-medium">
+                      No Available Cover
+                    </span>
                   </div>
                 )}
               </>
