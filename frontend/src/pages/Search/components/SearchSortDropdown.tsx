@@ -1,4 +1,4 @@
-import { ChevronDown, ArrowUp, ArrowDown, User, FileText, Calendar, Globe, BookOpen } from 'lucide-react'
+import { ChevronDown, ArrowUp, ArrowDown, User, FileText, Calendar, CalendarArrowDown, CalendarArrowUp, Globe, BookOpen } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 
@@ -29,8 +29,8 @@ const sortOptions = [
   { value: 'author-desc' as SearchSortParam, label: 'Author (Z-A)', icon: User },
   { value: 'format-asc' as SearchSortParam, label: 'File Type (A-Z)', icon: FileText },
   { value: 'format-desc' as SearchSortParam, label: 'File Type (Z-A)', icon: FileText },
-  { value: 'year-asc' as SearchSortParam, label: 'Publish Date (Oldest)', icon: Calendar },
-  { value: 'year-desc' as SearchSortParam, label: 'Publish Date (Newest)', icon: Calendar },
+  { value: 'year-asc' as SearchSortParam, label: 'Publish Date (Oldest)', icon: CalendarArrowUp },
+  { value: 'year-desc' as SearchSortParam, label: 'Publish Date (Newest)', icon: CalendarArrowDown },
   { value: 'language-asc' as SearchSortParam, label: 'Language (A-Z)', icon: Globe },
   { value: 'language-desc' as SearchSortParam, label: 'Language (Z-A)', icon: Globe }
 ]

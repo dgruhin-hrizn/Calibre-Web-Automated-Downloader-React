@@ -21,7 +21,7 @@ export function Search() {
   const [author, setAuthor] = useState('')
   const [language, setLanguage] = useState('')
   const [format, setFormat] = useState('')
-  const [sortParam, setSortParam] = useState<SearchSortParam>('year-asc')
+  const [sortParam, setSortParam] = useState<SearchSortParam>('year-desc')
   const [currentMode, setCurrentMode] = useState<'search' | 'upload'>('search')
   const [pendingDownloads, setPendingDownloads] = useState<Set<string>>(new Set())
   const [selectedBook, setSelectedBook] = useState<any | null>(null)
