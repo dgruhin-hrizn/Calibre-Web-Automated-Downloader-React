@@ -8,7 +8,8 @@ import {
   Users,
   X,
   Plus,
-  BarChart3
+  BarChart3,
+  Heart
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useAuth } from '../contexts/AuthContext'
@@ -21,6 +22,7 @@ interface SidebarProps {
 
 const navigation = [
   { name: 'Library', href: '/', icon: Library },
+  { name: 'My Books', href: '/my-books', icon: Heart },
   { name: 'Series', href: '/series', icon: BookOpen },
   { name: 'Top 10 Books', href: '/top10', icon: TrendingUp },
   { name: 'Add Books', href: '/search', icon: Plus },

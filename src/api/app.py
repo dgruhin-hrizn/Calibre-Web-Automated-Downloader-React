@@ -2631,11 +2631,12 @@ def api_get_user_books_by_status(status):
         status_map = {
             'read': rs_manager.STATUS_FINISHED,
             'unread': rs_manager.STATUS_UNREAD,
-            'in_progress': rs_manager.STATUS_IN_PROGRESS
+            'in_progress': rs_manager.STATUS_IN_PROGRESS,
+            'want_to_read': rs_manager.STATUS_WANT_TO_READ
         }
         
         if status not in status_map:
-            return jsonify({'error': 'Invalid status. Use: read, unread, in_progress'}), 400
+            return jsonify({'error': 'Invalid status. Use: read, unread, in_progress, want_to_read'}), 400
         
         # Get or create user ID
         user_id = rs_manager.get_or_create_user(username)
@@ -2646,7 +2647,29 @@ def api_get_user_books_by_status(status):
         # Get book IDs by status
         book_ids = rs_manager.get_books_by_read_status(user_id, status_map[status], limit)
         
-        return jsonify({'book_ids': book_ids, 'status': status, 'count': len(book_ids)})
+        if not book_ids:
+            return jsonify({'books': [], 'status': status, 'total': 0})
+        
+        # Get full book metadata from Calibre
+        calibre_manager = get_calibre_db_manager()
+        if not calibre_manager:
+            return jsonify({'error': 'Calibre database not available'}), 503
+            
+        books = []
+        for book_id in book_ids:
+            try:
+                book_data = calibre_manager.get_book_details(book_id)
+                if book_data:
+                    books.append(book_data)
+            except Exception as e:
+                logger.warning(f"Could not get book data for ID {book_id}: {e}")
+                continue
+        
+        # Enrich with read status for authenticated users
+        if books:
+            books = enrich_books_with_read_status(books, username)
+        
+        return jsonify({'books': books, 'status': status, 'total': len(books)})
         
     except Exception as e:
         logger.error(f"Error getting user books by status {status}: {e}")
