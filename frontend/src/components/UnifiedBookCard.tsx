@@ -7,6 +7,8 @@ import { CachedImage } from './ui/CachedImage'
 import { CircularProgress } from './ui/CircularProgress'
 import { AuthorFormatter } from '../utils/authorFormatter'
 import { HotBookIndicator } from './HotBookIndicator'
+import { ReadStatusDropdown, type ReadStatus } from './ReadStatusDropdown'
+import { useReadStatus } from '../hooks/useReadStatus'
 
 // Common book interface that works for both search and library books
 export interface UnifiedBook {
@@ -32,6 +34,8 @@ export interface UnifiedBook {
   // Hot books properties
   download_count?: number
   popularity_rank?: number
+  // Read status properties (from API)
+  read_status?: ReadStatus
 }
 
 export interface DownloadStatus {
@@ -59,6 +63,7 @@ export interface UnifiedBookCardProps {
   showDownloadButton?: boolean
   showKindleButton?: boolean
   showHotIndicator?: boolean  // Show hot book indicators
+  showReadStatus?: boolean  // Show read status dropdown for library books
 }
 
 // Utility function to check if a date is today
@@ -86,10 +91,23 @@ export function UnifiedBookCard({
   onSendToKindle,
   showKindleButton = true,
   showHotIndicator = false,
+  showReadStatus = false,
 }: UnifiedBookCardProps) {
   
   // State for send-to-kindle button
   const [kindleState, setKindleState] = useState<'idle' | 'sending' | 'success' | 'failed'>('idle')
+  
+  // Read status hook (only for library books when showReadStatus is true)
+  const { readStatus, updateStatus } = useReadStatus(
+    showReadStatus && cardType === 'library' ? book.id : null
+  )
+
+  // Wrapper function to match ReadStatusDropdown's expected signature
+  const handleStatusChange = useCallback(async (bookId: string | number, action: 'toggle' | 'mark_read' | 'mark_unread' | 'mark_in_progress') => {
+    if (updateStatus) {
+      await updateStatus(action)
+    }
+  }, [updateStatus])
   
   // Handle send to kindle with UI feedback
   const handleSendToKindle = useCallback(async (book: UnifiedBook) => {
@@ -250,7 +268,7 @@ export function UnifiedBookCard({
         onClick={() => onDownload(book)}
         disabled={false}
       >
-        <Download className="w-3 h-3 mr-1" />
+        <Download className="w-4 h-4 mr-1" />
         Download
       </Button>
     )
@@ -271,7 +289,7 @@ export function UnifiedBookCard({
             className: `${className} cursor-not-allowed`,
             children: (
               <>
-                <Loader2 className="h-3 w-3 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
                 <span className="ml-1 text-xs">Sending...</span>
               </>
             )
@@ -283,7 +301,7 @@ export function UnifiedBookCard({
             className: `${className} bg-green-50 border-green-200 text-green-700 cursor-default`,
             children: (
               <>
-                <Check className="h-3 w-3" />
+                <Check className="h-4 w-4" />
                 <span className="ml-1 text-xs">Sent</span>
               </>
             )
@@ -295,7 +313,7 @@ export function UnifiedBookCard({
             className: `${className} bg-red-50 border-red-200 text-red-700 cursor-default`,
             children: (
               <>
-                <X className="h-3 w-3" />
+                <X className="h-4 w-4" />
                 <span className="ml-1 text-xs">Failed</span>
               </>
             )
@@ -306,7 +324,7 @@ export function UnifiedBookCard({
             disabled: false,
             className,
             onClick: () => handleSendToKindle(book),
-            children: <Send className="h-3 w-3" />
+            children: <Send className="h-4 w-4" />
           }
       }
     }
@@ -318,14 +336,14 @@ export function UnifiedBookCard({
     )
   }
 
-  // Render library book action buttons
+  // Render library book action buttons (excluding read status)
   const renderLibraryActions = () => {
     if (viewMode === 'list') {
       return (
         <div className="flex flex-col gap-2">
           {onDetails && (
             <Button size="sm" variant="outline" onClick={() => onDetails(book)}>
-              <Eye className="h-3 w-3" />
+              <Eye className="h-4 w-4" />
             </Button>
           )}
           {renderKindleButton()}
@@ -336,7 +354,7 @@ export function UnifiedBookCard({
         <div className="flex gap-1">
           {onDetails && (
             <Button size="sm" variant="outline" onClick={() => onDetails(book)} className="flex-1">
-              <Eye className="h-3 w-3" />
+              <Eye className="h-4 w-4" />
             </Button>
           )}
           {renderKindleButton('flex-1')}
@@ -344,6 +362,7 @@ export function UnifiedBookCard({
       )
     }
   }
+
   
   // Check if this book was added today
   const isNewBook = cardType === 'library' && isToday(book.timestamp)
@@ -496,15 +515,25 @@ export function UnifiedBookCard({
             </div>
             
             {/* Actions */}
-            <div className="flex items-center gap-3">
-              {showHotIndicator && (
-                <HotBookIndicator 
-                  downloadCount={book.download_count}
-                  popularityRank={book.popularity_rank}
-                  viewMode="list"
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {showHotIndicator && (
+                  <HotBookIndicator 
+                    downloadCount={book.download_count}
+                    popularityRank={book.popularity_rank}
+                    viewMode="list"
+                  />
+                )}
+                {renderLibraryActions()}
+              </div>
+              {showReadStatus && (
+                <ReadStatusDropdown
+                  bookId={book.id}
+                  readStatus={book.read_status || readStatus}
+                  onStatusChange={handleStatusChange}
+                  size="sm"
                 />
               )}
-              {renderLibraryActions()}
             </div>
           </div>
         </CardContent>
@@ -524,6 +553,7 @@ export function UnifiedBookCard({
             viewMode="grid"
           />
         )}
+        
         
         {/* Cover */}
         {renderCover('aspect-[2/3] rounded-t-lg', 'h-12 w-12')}
@@ -572,8 +602,18 @@ export function UnifiedBookCard({
           )}
           
           {/* Actions */}
-          <div className="flex gap-1">
-            {cardType === 'search' ? renderSearchActions() : renderLibraryActions()}
+          <div className="flex items-center justify-between gap-1">
+            <div className="flex gap-1 flex-1">
+              {cardType === 'search' ? renderSearchActions() : renderLibraryActions()}
+            </div>
+            {showReadStatus && cardType === 'library' && (
+              <ReadStatusDropdown
+                bookId={book.id}
+                readStatus={book.read_status || readStatus}
+                onStatusChange={handleStatusChange}
+                size="sm"
+              />
+            )}
           </div>
         </div>
       </CardContent>

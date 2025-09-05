@@ -336,7 +336,6 @@ def login_required(f):
         # Check if user is logged in via session
         if not session.get('logged_in') or not session.get('username'):
             return jsonify({"error": "Authentication required"}), 401
-            
         return f(*args, **kwargs)
     return decorated_function
 

@@ -91,6 +91,7 @@ export function LibraryGridView({
                       onImageLoaded={() => markImageLoaded(book.id)}
                       showDownloadButton={true}
                       showKindleButton={true}
+                      showReadStatus={true}
                     />
                   </div>
                   
