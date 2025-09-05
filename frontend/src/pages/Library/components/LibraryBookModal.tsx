@@ -171,14 +171,14 @@ export function LibraryBookModal({ book, onClose, onSendToKindle, onBookDeleted,
   
   return (
     <div 
-      className={`fixed top-0 left-0 right-0 bottom-0 z-50 flex items-center justify-center p-4 bg-black transition-opacity duration-200 ${
+      className={`fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black transition-opacity duration-200 ${
         isVisible && !isClosing ? 'bg-opacity-50' : 'bg-opacity-0'
       }`} 
       style={{ margin: 0 }}
       onClick={showDeleteConfirm ? undefined : handleClose}
     >
       <div 
-        className={`bg-card border border-border rounded-lg shadow-lg max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col transition-all duration-200 ${
+        className={`bg-card border-0 sm:border border-border rounded-none sm:rounded-lg shadow-lg max-w-5xl w-full h-full sm:h-auto sm:max-h-[90vh] overflow-hidden flex flex-col transition-all duration-200 ${
           isVisible && !isClosing 
             ? 'opacity-100 scale-100 translate-y-0' 
             : 'opacity-0 scale-95 translate-y-4'
@@ -187,13 +187,13 @@ export function LibraryBookModal({ book, onClose, onSendToKindle, onBookDeleted,
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border flex-shrink-0">
-          <div className="flex-1 mr-4">
-            <h2 className="text-xl font-semibold text-foreground line-clamp-2">
+        <div className="flex items-start justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-border flex-shrink-0">
+          <div className="flex-1 mr-3 min-w-0">
+            <h2 className="text-lg sm:text-xl font-semibold text-foreground line-clamp-2 break-words">
               {data.title}
             </h2>
             {data.authors && data.authors.length > 0 && (
-              <p className="text-sm text-muted-foreground mt-1">
+              <p className="text-sm text-muted-foreground mt-1 line-clamp-1">
                 by {AuthorFormatter.formatForDisplay(data.authors.join(', '))}
               </p>
             )}
@@ -202,29 +202,29 @@ export function LibraryBookModal({ book, onClose, onSendToKindle, onBookDeleted,
             variant="ghost"
             size="sm"
             onClick={handleClose}
-            className="p-2 flex-shrink-0"
+            className="p-2 flex-shrink-0 -mt-1"
           >
             <X className="w-4 h-4" />
           </Button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="space-y-6">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6">
+          <div className="space-y-4 sm:space-y-6 min-w-0">
             {/* Main Book Layout */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6 min-w-0">
               {/* Cover */}
-              <div className="w-full h-64 md:h-80 bg-muted rounded overflow-hidden flex-shrink-0 relative">
+              <div className="w-full h-auto sm:h-64 lg:h-80 bg-muted rounded overflow-hidden flex-shrink-0 relative mx-auto max-w-full sm:max-w-xs lg:max-w-none">
                 {coverUrl && !imageError ? (
                   <img 
                     src={coverUrl} 
                     alt={data.title}
-                    className="w-full h-full object-cover"
+                    className="w-full h-auto sm:h-full sm:object-cover object-contain max-h-[100vh] sm:max-h-none"
                     onError={() => setImageError(true)}
                     onLoad={() => setImageError(false)}
                   />
                 ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center bg-muted p-4 text-center">
+                  <div className="w-full h-48 sm:h-full flex flex-col items-center justify-center bg-muted p-4 text-center">
                     <img 
                       src="/droplet.png" 
                       alt="No cover available" 
@@ -243,9 +243,9 @@ export function LibraryBookModal({ book, onClose, onSendToKindle, onBookDeleted,
               </div>
 
               {/* Book Details */}
-              <div className="md:col-span-3 space-y-6">
+              <div className="lg:col-span-3 space-y-4 sm:space-y-6">
                 {/* Publication Details */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   {/* Left Column - Publication Info */}
                   <div className="space-y-4">
                     <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
@@ -406,10 +406,10 @@ export function LibraryBookModal({ book, onClose, onSendToKindle, onBookDeleted,
                   <FileText className="w-5 h-5 text-primary" />
                   Description
                 </h3>
-                <div className="border border-border rounded-lg p-4 bg-muted/20">
-                  <div className="prose prose-sm max-w-none text-muted-foreground leading-relaxed">
+                <div className="border border-border rounded-lg p-3 sm:p-4 bg-muted/20 overflow-hidden">
+                  <div className="prose prose-sm max-w-none text-muted-foreground leading-relaxed break-words overflow-wrap-anywhere">
                     <div 
-                      className="[&>p]:mb-3 [&>p:last-child]:mb-0 [&>br]:block [&>br]:mb-2 [&>b]:font-semibold [&>strong]:font-semibold [&>i]:italic [&>em]:italic [&>u]:underline"
+                      className="[&>p]:mb-3 [&>p:last-child]:mb-0 [&>br]:block [&>br]:mb-2 [&>b]:font-semibold [&>strong]:font-semibold [&>i]:italic [&>em]:italic [&>u]:underline [&>*]:break-words [&>*]:overflow-wrap-anywhere [&>*]:max-w-full"
                       dangerouslySetInnerHTML={{ __html: data.description }} 
                     />
                   </div>
@@ -422,17 +422,17 @@ export function LibraryBookModal({ book, onClose, onSendToKindle, onBookDeleted,
         </div>
         
         {/* Footer */}
-        <div className="flex-shrink-0 border-t border-border p-6">
-          <div className="flex justify-between items-center">
-            {/* Left side - Admin Delete Button */}
-            <div className="flex gap-3">
+        <div className="flex-shrink-0 border-t border-border p-4 sm:p-6">
+          <div className="flex sm:justify-between items-center gap-2 sm:gap-3">
+            {/* All buttons in single row on mobile, desktop layout preserved */}
+            <div className="flex gap-2 sm:gap-3 flex-1 sm:flex-none">
               {isAdmin && (
                 <Button
                   onClick={handleDeleteClick}
                   disabled={deleteState !== 'idle'}
                   variant="destructive"
-                  size="lg"
-                  className={`px-6 ${
+                  size="sm"
+                  className={`px-2 sm:px-6 flex-1 sm:flex-none ${
                     deleteState === 'success' ? 'bg-green-600 hover:bg-green-700' :
                     deleteState === 'failed' ? 'bg-red-700 hover:bg-red-800' :
                     ''
@@ -440,26 +440,30 @@ export function LibraryBookModal({ book, onClose, onSendToKindle, onBookDeleted,
                 >
                   {deleteState === 'deleting' && (
                     <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Deleting...
+                      <Loader2 className="h-4 w-4 sm:mr-2 animate-spin" />
+                      <span className="hidden sm:inline">Deleting...</span>
+                      <span className="sm:hidden text-xs">Del...</span>
                     </>
                   )}
                   {deleteState === 'success' && (
                     <>
-                      <Check className="h-4 w-4 mr-2" />
-                      Deleted
+                      <Check className="h-4 w-4 sm:mr-2" />
+                      <span className="hidden sm:inline">Deleted</span>
+                      <span className="sm:hidden text-xs">Done</span>
                     </>
                   )}
                   {deleteState === 'failed' && (
                     <>
-                      <X className="h-4 w-4 mr-2" />
-                      Delete Failed
+                      <X className="h-4 w-4 sm:mr-2" />
+                      <span className="hidden sm:inline">Delete Failed</span>
+                      <span className="sm:hidden text-xs">Error</span>
                     </>
                   )}
                   {deleteState === 'idle' && (
                     <>
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Delete Book
+                      <Trash2 className="h-4 w-4 sm:mr-2" />
+                      <span className="hidden sm:inline">Delete Book</span>
+                      <span className="sm:hidden text-xs">Delete</span>
                     </>
                   )}
                 </Button>
@@ -469,20 +473,21 @@ export function LibraryBookModal({ book, onClose, onSendToKindle, onBookDeleted,
               <Button
                 onClick={() => onEditMetadata?.(book.id)}
                 variant="outline"
-                size="lg"
-                className="px-6"
+                size="sm"
+                className="px-2 sm:px-6 flex-1 sm:flex-none"
               >
-                <Edit className="h-4 w-4 mr-2" />
-                Edit Metadata
+                <Edit className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Edit Metadata</span>
+                <span className="sm:hidden text-xs">Edit</span>
               </Button>
             </div>
             
-            {/* Right side - Send to e-Reader Button */}
+            {/* Send to e-Reader Button */}
             <Button
               onClick={handleSendToKindle}
               disabled={kindleState !== 'idle'}
-              size="lg"
-              className={`px-8 ${
+              size="sm"
+              className={`px-2 sm:px-8 flex-1 sm:flex-none ${
                 kindleState === 'success' ? 'bg-green-600 hover:bg-green-700 text-white' :
                 kindleState === 'failed' ? 'bg-red-600 hover:bg-red-700 text-white' :
                 ''
@@ -490,26 +495,30 @@ export function LibraryBookModal({ book, onClose, onSendToKindle, onBookDeleted,
             >
               {kindleState === 'sending' && (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Sending...
+                  <Loader2 className="h-4 w-4 sm:mr-2 animate-spin" />
+                  <span className="hidden sm:inline">Sending...</span>
+                  <span className="sm:hidden text-xs">Send...</span>
                 </>
               )}
               {kindleState === 'success' && (
                 <>
-                  <Check className="h-4 w-4 mr-2" />
-                  Sent to e-Reader
+                  <Check className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Sent to e-Reader</span>
+                  <span className="sm:hidden text-xs">Sent</span>
                 </>
               )}
               {kindleState === 'failed' && (
                 <>
-                  <X className="h-4 w-4 mr-2" />
-                  Send Failed
+                  <X className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Send Failed</span>
+                  <span className="sm:hidden text-xs">Failed</span>
                 </>
               )}
               {kindleState === 'idle' && (
                 <>
-                  <Send className="h-4 w-4 mr-2" />
-                  Send to e-Reader
+                  <Send className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Send to e-Reader</span>
+                  <span className="sm:hidden text-xs">Send</span>
                 </>
               )}
             </Button>
@@ -519,7 +528,7 @@ export function LibraryBookModal({ book, onClose, onSendToKindle, onBookDeleted,
       
       {/* Delete Confirmation Dialog */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div 
             className={`absolute inset-0 bg-black transition-opacity duration-200 ${
               deleteConfirmVisible ? 'bg-opacity-50' : 'bg-opacity-0'
@@ -527,34 +536,35 @@ export function LibraryBookModal({ book, onClose, onSendToKindle, onBookDeleted,
             onClick={handleDeleteCancel} 
           />
           <Card 
-            className={`relative w-full max-w-md mx-4 z-10 transition-all duration-200 ${
+            className={`relative w-full max-w-sm sm:max-w-md mx-4 z-10 transition-all duration-200 ${
               deleteConfirmVisible 
                 ? 'opacity-100 scale-100 translate-y-0' 
                 : 'opacity-0 scale-95 translate-y-4'
             }`}
           >
-            <CardContent className="p-6">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-center gap-3 mb-4">
-                <div className="flex-shrink-0 w-10 h-10 bg-destructive/10 rounded-full flex items-center justify-center">
-                  <AlertTriangle className="w-5 h-5 text-destructive" />
+                <div className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 bg-destructive/10 rounded-full flex items-center justify-center">
+                  <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-destructive" />
                 </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-foreground">Delete Book</h3>
-                  <p className="text-sm text-muted-foreground">This action cannot be undone</p>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base sm:text-lg font-semibold text-foreground">Delete Book</h3>
+                  <p className="text-xs sm:text-sm text-muted-foreground">This action cannot be undone</p>
                 </div>
               </div>
               
-              <p className="text-sm text-muted-foreground mb-6">
-                Are you sure you want to delete <strong>"{book.title}"</strong>
+              <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
+                Are you sure you want to delete <strong className="break-words">"{book.title}"</strong>
                 {book.authors && <span> by {AuthorFormatter.formatForDisplay(book.authors.join(', '))}</span>}? 
                 This will permanently remove the book from your library.
               </p>
               
-              <div className="flex justify-end gap-3">
+              <div className="flex flex-col sm:flex-row justify-end gap-3">
                 <Button
                   onClick={handleDeleteCancel}
                   variant="outline"
                   size="sm"
+                  className="order-2 sm:order-1"
                 >
                   Cancel
                 </Button>
@@ -562,7 +572,7 @@ export function LibraryBookModal({ book, onClose, onSendToKindle, onBookDeleted,
                   onClick={handleDeleteConfirm}
                   variant="destructive"
                   size="sm"
-                  className="px-4"
+                  className="px-4 order-1 sm:order-2"
                 >
                   <Trash2 className="w-4 h-4 mr-2" />
                   Delete Book
