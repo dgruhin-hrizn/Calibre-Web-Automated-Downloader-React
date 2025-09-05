@@ -74,7 +74,6 @@ export function SearchResultModal({ book: basicBook, onClose }: SearchResultModa
   useEffect(() => {
     const fetchEnhancedData = async () => {
       if (!basicBook || !basicBook.title) {
-        console.log('BookDetailsModal: No basic book data available for enhanced data fetch')
         return
       }
 

@@ -135,17 +135,34 @@ export function HeaderQueueWidget() {
                         
                         {/* Progress for downloading items */}
                         {activeDownloads.some(d => d.id === download.id) && (
-                          <div className="flex items-center gap-2 mt-1">
-                            <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
-                              <div 
-                                className="h-full bg-primary transition-all duration-300"
-                                style={{ width: `${download.progress || 0}%` }}
-                              />
+                          <>
+                            <div className="flex items-center gap-2 mt-1">
+                              <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-primary transition-all duration-300"
+                                  style={{ width: `${download.progress || 0}%` }}
+                                />
+                              </div>
+                              <span className="text-xs text-muted-foreground">
+                                {Math.round(download.progress || 0)}%
+                              </span>
                             </div>
-                            <span className="text-xs text-muted-foreground">
-                              {Math.round(download.progress || 0)}%
-                            </span>
-                          </div>
+                            {/* Speed and ETA for downloading items */}
+                            {(download.download_speed || (download.eta_seconds && download.eta_seconds > 0)) && (
+                              <div className="flex items-center gap-2 mt-1">
+                                {download.download_speed && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {download.download_speed}
+                                  </span>
+                                )}
+                                {download.eta_seconds && download.eta_seconds > 0 && (
+                                  <span className="text-xs text-muted-foreground">
+                                    ETA: {Math.floor(download.eta_seconds / 60)}m {download.eta_seconds % 60}s
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </>
                         )}
                         
                         {/* Status for other items */}
