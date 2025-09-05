@@ -74,7 +74,7 @@ export function HeaderQueueWidget() {
         </Collapsible.Trigger>
 
         <Collapsible.Content asChild>
-          <div className="absolute top-full right-0 mt-2 w-96 bg-card border border-border rounded-lg shadow-lg z-50 max-h-96 overflow-hidden">
+          <div className="absolute top-full mt-2 left-3/4 -translate-x-3/4 sm:left-auto sm:right-0 sm:translate-x-0 w-[calc(100vw-2rem)] sm:w-96 bg-card border border-border rounded-lg shadow-lg z-50 max-h-96 overflow-hidden max-w-sm sm:max-w-none">
             <div className="p-4 border-b border-border">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
