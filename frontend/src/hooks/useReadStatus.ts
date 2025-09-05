@@ -4,9 +4,10 @@ import { apiRequest } from '../lib/utils'
 
 export interface ReadStatus {
   book_id: number
-  read_status: number // 0=unread, 1=read, 2=in_progress
+  read_status: number // 0=unread, 1=read, 2=in_progress, 3=want_to_read
   is_read: boolean
   is_in_progress: boolean
+  is_want_to_read: boolean
   last_modified: string | null
   last_time_started_reading: string | null
   times_started_reading: number
@@ -35,7 +36,7 @@ export function useReadStatus(bookId: string | number) {
 
   // Mutation to update read status
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ action }: { action: 'toggle' | 'mark_read' | 'mark_unread' | 'mark_in_progress' }) => {
+    mutationFn: async ({ action }: { action: 'toggle' | 'mark_read' | 'mark_unread' | 'mark_in_progress' | 'mark_want_to_read' }) => {
       return await apiRequest(`/api/books/${bookId}/read-status`, {
         method: 'POST',
         body: JSON.stringify({ action })
@@ -59,7 +60,7 @@ export function useReadStatus(bookId: string | number) {
     }
   })
 
-  const updateStatus = useCallback(async (action: 'toggle' | 'mark_read' | 'mark_unread' | 'mark_in_progress') => {
+  const updateStatus = useCallback(async (action: 'toggle' | 'mark_read' | 'mark_unread' | 'mark_in_progress' | 'mark_want_to_read') => {
     await updateStatusMutation.mutateAsync({ action })
   }, [updateStatusMutation])
 

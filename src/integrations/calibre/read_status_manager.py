@@ -14,10 +14,11 @@ logger = logging.getLogger(__name__)
 class ReadStatusManager:
     """Manages user read/unread status for books using CWA's app.db structure"""
     
-    # Status constants matching CWA
+    # Status constants matching CWA (extended with want-to-read)
     STATUS_UNREAD = 0
     STATUS_FINISHED = 1
     STATUS_IN_PROGRESS = 2
+    STATUS_WANT_TO_READ = 3
     
     def __init__(self, app_db_path: str):
         """Initialize with path to CWA's app.db"""
@@ -119,6 +120,7 @@ class ReadStatusManager:
                     'read_status': row['read_status'],
                     'is_read': row['read_status'] == self.STATUS_FINISHED,
                     'is_in_progress': row['read_status'] == self.STATUS_IN_PROGRESS,
+                    'is_want_to_read': row['read_status'] == self.STATUS_WANT_TO_READ,
                     'last_modified': row['last_modified'],
                     'last_time_started_reading': row['last_time_started_reading'],
                     'times_started_reading': row['times_started_reading'] or 0
@@ -130,6 +132,7 @@ class ReadStatusManager:
                     'read_status': self.STATUS_UNREAD,
                     'is_read': False,
                     'is_in_progress': False,
+                    'is_want_to_read': False,
                     'last_modified': None,
                     'last_time_started_reading': None,
                     'times_started_reading': 0
@@ -158,6 +161,7 @@ class ReadStatusManager:
                     'read_status': row['read_status'],
                     'is_read': row['read_status'] == self.STATUS_FINISHED,
                     'is_in_progress': row['read_status'] == self.STATUS_IN_PROGRESS,
+                    'is_want_to_read': row['read_status'] == self.STATUS_WANT_TO_READ,
                     'last_modified': row['last_modified'],
                     'last_time_started_reading': row['last_time_started_reading'],
                     'times_started_reading': row['times_started_reading'] or 0
@@ -171,6 +175,7 @@ class ReadStatusManager:
                         'read_status': self.STATUS_UNREAD,
                         'is_read': False,
                         'is_in_progress': False,
+                        'is_want_to_read': False,
                         'last_modified': None,
                         'last_time_started_reading': None,
                         'times_started_reading': 0
@@ -180,7 +185,7 @@ class ReadStatusManager:
     
     def set_book_read_status(self, book_id: int, user_id: int, read_status: int) -> bool:
         """Set read status for a book"""
-        if read_status not in [self.STATUS_UNREAD, self.STATUS_FINISHED, self.STATUS_IN_PROGRESS]:
+        if read_status not in [self.STATUS_UNREAD, self.STATUS_FINISHED, self.STATUS_IN_PROGRESS, self.STATUS_WANT_TO_READ]:
             raise ValueError(f"Invalid read status: {read_status}")
         
         now = datetime.now(timezone.utc).isoformat()
@@ -248,6 +253,10 @@ class ReadStatusManager:
     def mark_as_in_progress(self, book_id: int, user_id: int) -> bool:
         """Mark book as currently reading"""
         return self.set_book_read_status(book_id, user_id, self.STATUS_IN_PROGRESS)
+    
+    def mark_as_want_to_read(self, book_id: int, user_id: int) -> bool:
+        """Mark book as want to read"""
+        return self.set_book_read_status(book_id, user_id, self.STATUS_WANT_TO_READ)
     
     def get_user_reading_stats(self, user_id: int) -> Dict[str, int]:
         """Get reading statistics for a user"""

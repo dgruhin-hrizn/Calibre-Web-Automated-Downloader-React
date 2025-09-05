@@ -2530,7 +2530,6 @@ def api_set_book_read_status(book_id):
         # Handle different actions
         action = data.get('action')
         if action == 'toggle':
-            # Toggle between read/unread
             status = rs_manager.toggle_book_read_status(book_id, user_id)
         elif action == 'mark_read':
             rs_manager.mark_as_read(book_id, user_id)
@@ -2541,8 +2540,11 @@ def api_set_book_read_status(book_id):
         elif action == 'mark_in_progress':
             rs_manager.mark_as_in_progress(book_id, user_id)
             status = rs_manager.get_book_read_status(book_id, user_id)
+        elif action == 'mark_want_to_read':
+            rs_manager.mark_as_want_to_read(book_id, user_id)
+            status = rs_manager.get_book_read_status(book_id, user_id)
         else:
-            return jsonify({'error': 'Invalid action. Use: toggle, mark_read, mark_unread, mark_in_progress'}), 400
+            return jsonify({'error': 'Invalid action. Use: toggle, mark_read, mark_unread, mark_in_progress, mark_want_to_read'}), 400
         
         return jsonify(status)
         

@@ -103,7 +103,7 @@ export function UnifiedBookCard({
   )
 
   // Wrapper function to match ReadStatusDropdown's expected signature
-  const handleStatusChange = useCallback(async (bookId: string | number, action: 'toggle' | 'mark_read' | 'mark_unread' | 'mark_in_progress') => {
+  const handleStatusChange = useCallback(async (bookId: string | number, action: 'toggle' | 'mark_read' | 'mark_unread' | 'mark_in_progress' | 'mark_want_to_read') => {
     if (updateStatus) {
       await updateStatus(action)
     }

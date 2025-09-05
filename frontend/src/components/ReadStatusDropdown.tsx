@@ -1,13 +1,14 @@
 import { useState, useCallback } from 'react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { BookOpen, BookCheck, Clock, Loader2 } from 'lucide-react'
+import { BookOpen, BookCheck, Clock, Loader2, Heart } from 'lucide-react'
 import { Button } from './ui/Button'
 import { cn } from '../lib/utils'
 
 export interface ReadStatus {
   is_read: boolean
   is_in_progress: boolean
-  status_code: number // 0=unread, 1=read, 2=in_progress
+  is_want_to_read: boolean
+  status_code: number // 0=unread, 1=read, 2=in_progress, 3=want_to_read
   last_modified: string | null
   times_started_reading: number
 }
@@ -15,7 +16,7 @@ export interface ReadStatus {
 export interface ReadStatusDropdownProps {
   bookId: string | number
   readStatus?: ReadStatus
-  onStatusChange?: (bookId: string | number, action: 'toggle' | 'mark_read' | 'mark_unread' | 'mark_in_progress') => Promise<void>
+  onStatusChange?: (bookId: string | number, action: 'toggle' | 'mark_read' | 'mark_unread' | 'mark_in_progress' | 'mark_want_to_read') => Promise<void>
   disabled?: boolean
   size?: 'sm' | 'md'
   className?: string
@@ -45,6 +46,14 @@ const STATUS_CONFIG = {
     buttonIcon: Clock,
     buttonLabel: 'Reading',
     buttonClass: 'text-blue-600 hover:text-blue-700',
+  },
+  want_to_read: {
+    icon: Heart,
+    label: 'Mark as Read',
+    action: 'mark_read' as const,
+    buttonIcon: Heart,
+    buttonLabel: 'Want to Read',
+    buttonClass: 'text-pink-600 hover:text-pink-700',
   }
 } as const
 
@@ -64,6 +73,7 @@ export function ReadStatusDropdown({
     if (!readStatus) return 'unread'
     if (readStatus.is_read) return 'read'
     if (readStatus.is_in_progress) return 'in_progress'
+    if (readStatus.is_want_to_read) return 'want_to_read'
     return 'unread'
   }
 
@@ -71,7 +81,7 @@ export function ReadStatusDropdown({
   const config = STATUS_CONFIG[currentStatus]
 
   // Handle status change
-  const handleStatusChange = useCallback(async (action: 'toggle' | 'mark_read' | 'mark_unread' | 'mark_in_progress') => {
+  const handleStatusChange = useCallback(async (action: 'toggle' | 'mark_read' | 'mark_unread' | 'mark_in_progress' | 'mark_want_to_read') => {
     if (!onStatusChange || isLoading) return
 
     setIsLoading(true)
@@ -154,6 +164,21 @@ export function ReadStatusDropdown({
           >
             <Clock className="w-4 h-4 mr-2 text-blue-600" />
             <span>Mark as Reading</span>
+          </DropdownMenu.Item>
+
+          {/* Mark as Want to Read */}
+          <DropdownMenu.Item
+            className={cn(
+              "flex items-center px-2 py-2 text-sm rounded-sm cursor-pointer",
+              "hover:bg-accent hover:text-accent-foreground",
+              "focus:bg-accent focus:text-accent-foreground focus:outline-none",
+              currentStatus === 'want_to_read' && "text-muted-foreground"
+            )}
+            disabled={currentStatus === 'want_to_read'}
+            onSelect={() => handleStatusChange('mark_want_to_read')}
+          >
+            <Heart className="w-4 h-4 mr-2 text-pink-600" />
+            <span>Want to Read</span>
           </DropdownMenu.Item>
 
           {/* Mark as Unread */}
