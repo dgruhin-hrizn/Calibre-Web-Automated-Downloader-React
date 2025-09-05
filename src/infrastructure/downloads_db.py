@@ -462,3 +462,90 @@ class DownloadsDBManager:
                 logger.info(f"Cleaned up {deleted_count} old download records")
             
             return deleted_count
+    
+    def cancel_phantom_downloads(self, book_id: str) -> int:
+        """Cancel phantom downloads that exist in database but not in queue.
+        
+        Args:
+            book_id: Book identifier to cancel
+            
+        Returns:
+            int: Number of downloads cancelled
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Find active downloads for this book_id
+            cursor.execute("""
+                SELECT id, status FROM download_history 
+                WHERE book_id = ? AND status IN ('queued', 'processing', 'downloading', 'waiting')
+            """, (book_id,))
+            
+            active_downloads = cursor.fetchall()
+            
+            if not active_downloads:
+                return 0
+            
+            # Cancel all active downloads for this book_id
+            cursor.execute("""
+                UPDATE download_history 
+                SET status = 'cancelled', 
+                    completed_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP,
+                    error_message = 'Cancelled via phantom removal - queue desync detected'
+                WHERE book_id = ? AND status IN ('queued', 'processing', 'downloading', 'waiting')
+            """, (book_id,))
+            
+            cancelled_count = cursor.rowcount
+            conn.commit()
+            
+            logger.info(f"Cancelled {cancelled_count} phantom database entries for book_id: {book_id}")
+            return cancelled_count
+    
+    def cleanup_phantom_downloads_on_startup(self) -> int:
+        """Clean up phantom downloads on server startup.
+        
+        Since the download queue has no persistent state, any downloads marked as
+        'downloading', 'processing', or 'waiting' are impossible after a restart.
+        These are automatically converted to 'cancelled' with appropriate messaging.
+        
+        Returns:
+            int: Number of phantom downloads cleaned up
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Find all impossible states after startup
+            cursor.execute("""
+                SELECT id, book_id, book_title, status, queued_at 
+                FROM download_history 
+                WHERE status IN ('downloading', 'processing', 'waiting')
+                ORDER BY queued_at DESC
+            """)
+            
+            phantom_downloads = cursor.fetchall()
+            
+            if not phantom_downloads:
+                logger.info("No phantom downloads found during startup cleanup")
+                return 0
+            
+            # Log what we're cleaning up
+            logger.info(f"Found {len(phantom_downloads)} phantom downloads during startup cleanup:")
+            for download in phantom_downloads:
+                logger.info(f"  - ID {download[0]}: {download[2]} ({download[1]}) - was '{download[3]}'")
+            
+            # Cancel all phantom downloads
+            cursor.execute("""
+                UPDATE download_history 
+                SET status = 'cancelled', 
+                    completed_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP,
+                    error_message = 'Auto-cancelled on server startup - downloads cannot persist across restarts'
+                WHERE status IN ('downloading', 'processing', 'waiting')
+            """)
+            
+            cancelled_count = cursor.rowcount
+            conn.commit()
+            
+            logger.info(f"Startup cleanup: Cancelled {cancelled_count} phantom downloads")
+            return cancelled_count

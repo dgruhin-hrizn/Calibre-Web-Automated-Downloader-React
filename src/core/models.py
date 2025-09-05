@@ -261,6 +261,59 @@ class BookQueue:
                 return True
             
             return False
+    
+    def force_cancel_download(self, book_id: str) -> bool:
+        """Force cancel a download regardless of current status.
+        
+        Args:
+            book_id: Book identifier to force cancel
+            
+        Returns:
+            bool: True if force cancellation was successful
+        """
+        with self._lock:
+            if book_id in self._status:
+                # Signal active download to stop if it exists
+                if book_id in self._cancel_flags:
+                    self._cancel_flags[book_id].set()
+                
+                # Force set status to cancelled regardless of current state
+                self._update_status(book_id, QueueStatus.CANCELLED)
+                return True
+            
+            return False
+    
+    def remove_from_tracking(self, book_id: str) -> None:
+        """Remove a book from all tracking systems.
+        Always succeeds - used for cleaning up phantom entries.
+        
+        Args:
+            book_id: Book identifier to remove from tracking
+        """
+        with self._lock:
+            # Remove from all tracking dictionaries
+            self._status.pop(book_id, None)
+            self._progress.pop(book_id, None)
+            self._wait_times.pop(book_id, None)
+            
+            # Set cancel flag if exists
+            if book_id in self._cancel_flags:
+                self._cancel_flags[book_id].set()
+                del self._cancel_flags[book_id]
+            
+            # Try to remove from queue (if it exists)
+            temp_items = []
+            while not self._queue.empty():
+                try:
+                    item = self._queue.get_nowait()
+                    if item['book_id'] != book_id:
+                        temp_items.append(item)
+                except:
+                    break
+            
+            # Put back non-matching items
+            for item in temp_items:
+                self._queue.put(item)
             
     def set_priority(self, book_id: str, new_priority: int) -> bool:
         """Change the priority of a queued book.

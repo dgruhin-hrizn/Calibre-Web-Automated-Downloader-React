@@ -239,6 +239,26 @@ def cancel_download(book_id: str) -> bool:
     """
     return book_queue.cancel_download(book_id)
 
+def force_cancel_download(book_id: str) -> bool:
+    """Force cancel a download regardless of status.
+    
+    Args:
+        book_id: Book identifier to force cancel
+        
+    Returns:
+        bool: True if force cancellation was successful
+    """
+    return book_queue.force_cancel_download(book_id)
+
+def remove_from_tracking(book_id: str) -> None:
+    """Remove a book from all tracking systems.
+    Always succeeds - used for cleaning up phantom entries.
+    
+    Args:
+        book_id: Book identifier to remove from tracking
+    """
+    book_queue.remove_from_tracking(book_id)
+
 def set_book_priority(book_id: str, priority: int) -> bool:
     """Set priority for a queued book.
     

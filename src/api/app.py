@@ -193,6 +193,12 @@ def get_downloads_db_manager():
         try:
             downloads_db_manager = DownloadsDBManager(DOWNLOADS_DB_PATH)
             logger.info(f"Downloads database connected: {DOWNLOADS_DB_PATH}")
+            
+            # Perform startup cleanup of phantom downloads
+            phantom_count = downloads_db_manager.cleanup_phantom_downloads_on_startup()
+            if phantom_count > 0:
+                logger.info(f"Startup cleanup completed: {phantom_count} phantom downloads cancelled")
+            
         except Exception as e:
             logger.error(f"Failed to initialize downloads database: {e}")
             return None
@@ -1231,6 +1237,61 @@ def api_cancel_download(book_id: str) -> Union[Response, Tuple[Response, int]]:
         return jsonify({"error": "Failed to cancel download or book not found"}), 404
     except Exception as e:
         logger.error_trace(f"Cancel download error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/download/<book_id>/force-cancel', methods=['DELETE'])
+@login_required
+def api_force_cancel_download(book_id: str) -> Union[Response, Tuple[Response, int]]:
+    """
+    Force cancel a stuck download regardless of status.
+
+    Path Parameters:
+        book_id (str): Book identifier to force cancel
+
+    Returns:
+        flask.Response: JSON status indicating success or failure.
+    """
+    try:
+        success = backend.force_cancel_download(book_id)
+        if success:
+            return jsonify({"status": "force_cancelled", "book_id": book_id})
+        return jsonify({"error": "Book not found in queue"}), 404
+    except Exception as e:
+        logger.error_trace(f"Force cancel download error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/download/<book_id>/remove-tracking', methods=['DELETE'])
+@login_required
+def api_remove_tracking(book_id: str) -> Union[Response, Tuple[Response, int]]:
+    """
+    Remove a book from all tracking (for phantom/stuck entries).
+    This always succeeds and clears the book from any internal tracking.
+    Also handles database-only entries that aren't in the queue.
+
+    Path Parameters:
+        book_id (str): Book identifier to remove from tracking
+
+    Returns:
+        flask.Response: JSON status indicating success.
+    """
+    try:
+        # Remove from queue manager (if exists)
+        backend.remove_from_tracking(book_id)
+        
+        # ALSO remove from database (for phantom entries)
+        downloads_db = get_downloads_db_manager()
+        if downloads_db:
+            # Find any active downloads for this book_id and cancel them
+            cancelled_count = downloads_db.cancel_phantom_downloads(book_id)
+            logger.info(f"Cancelled {cancelled_count} phantom database entries for book_id: {book_id}")
+        
+        return jsonify({
+            "status": "removed_from_tracking", 
+            "book_id": book_id,
+            "message": "Removed from both queue and database"
+        })
+    except Exception as e:
+        logger.error_trace(f"Remove tracking error: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/queue/<book_id>/priority', methods=['PUT'])

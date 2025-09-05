@@ -235,12 +235,52 @@ export function useCancelDownload() {
   
   return useMutation({
     mutationFn: async (bookId: string) => {
-      return apiRequest(`${api.cancelDownload}/${bookId}/cancel`, {
+      try {
+        // Try regular cancel first
+        return await apiRequest(`${api.cancelDownload}/${bookId}/cancel`, {
+          method: 'DELETE',
+        })
+      } catch (error: any) {
+        // If regular cancel fails (404 for stuck downloads), try force cancel
+        if (error.message?.includes('404')) {
+          console.log(`Regular cancel failed for ${bookId}, trying force cancel...`)
+          try {
+            return await apiRequest(`${api.cancelDownload}/${bookId}/force-cancel`, {
+              method: 'DELETE',
+            })
+          } catch (forceError: any) {
+            // If force cancel also fails (phantom entry), remove from tracking
+            if (forceError.message?.includes('404')) {
+              console.log(`Force cancel failed for ${bookId}, removing from tracking...`)
+              return await apiRequest(`${api.cancelDownload}/${bookId}/remove-tracking`, {
+                method: 'DELETE',
+              })
+            }
+            throw forceError
+          }
+        }
+        throw error
+      }
+    },
+    onSuccess: () => {
+      // Invalidate and refetch download status after cancelling
+      queryClient.invalidateQueries({ queryKey: ['downloadStatus'] })
+    },
+  })
+}
+
+// Hook for force cancelling a stuck download
+export function useForceCancel() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async (bookId: string) => {
+      return apiRequest(`${api.cancelDownload}/${bookId}/force-cancel`, {
         method: 'DELETE',
       })
     },
     onSuccess: () => {
-      // Invalidate and refetch download status after cancelling
+      // Invalidate and refetch download status after force cancelling
       queryClient.invalidateQueries({ queryKey: ['downloadStatus'] })
     },
   })
