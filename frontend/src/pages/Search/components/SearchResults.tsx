@@ -114,7 +114,7 @@ export function SearchResults({
                       {new Date(dataUpdatedAt).toLocaleTimeString('en-US', { 
                         hour: '2-digit', 
                         minute: '2-digit',
-                        hour12: false 
+                        hour12: true 
                       })}
                     </span>
                   )}
@@ -150,7 +150,7 @@ export function SearchResults({
                       Updated {new Date(dataUpdatedAt).toLocaleTimeString('en-US', { 
                         hour: '2-digit', 
                         minute: '2-digit',
-                        hour12: false 
+                        hour12: true 
                       })}
                     </span>
                   )}
