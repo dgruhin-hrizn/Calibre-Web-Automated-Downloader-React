@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { BookOpen, Search } from 'lucide-react'
+import { Search } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Swiper, SwiperSlide } from 'swiper/react'
 import { Navigation, FreeMode } from 'swiper/modules'
@@ -402,16 +402,10 @@ export function Series() {
           <Badge variant="secondary" className="text-sm">...</Badge>
         </div>
         
-        <Card>
-          <CardContent className="p-12">
-            <div className="flex items-center justify-center">
-              <div className="text-center">
-                <BookOpen className="w-12 h-12 animate-spin mx-auto mb-4 text-blue-600" />
-                <p className="text-lg font-medium">Loading series...</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          <span className="ml-2 text-muted-foreground">Loading series...</span>
+        </div>
         
         <ToastContainer />
       </div>
@@ -471,10 +465,7 @@ export function Series() {
       {/* Search Card */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BookOpen className="h-5 w-5 text-blue-500" />
-            Search Series
-          </CardTitle>
+          <CardTitle>Search Series</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex gap-2">
@@ -505,7 +496,6 @@ export function Series() {
       <div className="space-y-8">
           {seriesWithBooksArray.length === 0 ? (
             <div className="text-center py-12">
-              <BookOpen className="w-16 h-16 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-foreground mb-2">
                 {searchTerm ? 'No series found' : 'No multi-book series available'}
               </h3>
@@ -533,7 +523,7 @@ export function Series() {
                 <div ref={loadMoreRef} className="flex justify-center py-8">
                   {loadingMore ? (
                     <div className="flex items-center gap-2">
-                      <BookOpen className="w-5 h-5 animate-spin" />
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
                       <span>Loading more series...</span>
                     </div>
                   ) : (
