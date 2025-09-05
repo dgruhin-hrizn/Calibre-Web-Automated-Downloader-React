@@ -9,7 +9,7 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/dgruhin-hrizn/inkdrop</Support>
   <Project>https://github.com/dgruhin-hrizn/inkdrop</Project>
-  <Overview>Inkdrop - Modern digital library management system with automated book downloading capabilities. Features a React-based frontend with infinite scroll, advanced search, and comprehensive library management. Supports FlareSolverr for reliable Cloudflare bypass, multiple book formats, and seamless integration with Calibre-Web-Automated. Includes real-time download progress, queue management, and responsive design for all devices.</Overview>
+  <Overview>Inkdrop - Independent digital library management system with automated book downloading capabilities. Features a React-based frontend with infinite scroll, advanced search, and comprehensive library management. Completely self-contained with bundled Calibre for format conversion, direct database access, and built-in Send to Kindle functionality. Supports FlareSolverr for reliable Cloudflare bypass, multiple book formats, and responsive design for all devices. No external dependencies required.</Overview>
   <Category>MediaApp:Books</Category>
   <WebUI>http://[IP]:[PORT:8084]</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/dgruhin-hrizn/inkdrop/main/unraid-template.xml</TemplateURL>
@@ -20,20 +20,18 @@
   <DateInstalled>1756755762</DateInstalled>
   <DonateText/>
   <DonateLink/>
-  <Requires>Calibre-Web-Automated container must be running and accessible</Requires>
+  <Requires>No external dependencies - fully self-contained</Requires>
   <Config Name="Web UI Port" Target="8084" Default="8084" Mode="tcp" Description="Port for accessing the web interface" Type="Port" Display="always" Required="true" Mask="false">8084</Config>
   
   <!-- Volume Mappings -->
-  <Config Name="Config Directory" Target="/config" Default="/mnt/user/appdata/calibre-web/config" Mode="rw" Description="Path to CWA config directory (contains app.db for authentication)" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/calibre-web/config</Config>
-  <Config Name="Calibre Library" Target="/calibre-library" Default="/mnt/user/media/books/calibre-library" Mode="ro" Description="Path to your Calibre library directory" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media/books/calibre-library</Config>
-  <Config Name="Book Ingest Directory" Target="/ingest" Default="/mnt/user/media/books/ingest" Mode="rw" Description="Directory where downloaded books are placed for CWA processing" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media/books/ingest</Config>
-  <Config Name="App Data Directory" Target="/app/data" Default="/mnt/user/appdata/cwa-book-downloader/data" Mode="rw" Description="Application data directory" Type="Path" Display="always" Required="false" Mask="false">/mnt/user/appdata/cwa-book-downloader/data</Config>
-  <Config Name="Logs Directory" Target="/logs" Default="/mnt/user/appdata/cwa-book-downloader/logs" Mode="rw" Description="Application logs directory" Type="Path" Display="always" Required="false" Mask="false">/mnt/user/appdata/cwa-book-downloader/logs</Config>
+  <Config Name="Config Directory" Target="/config" Default="/mnt/user/appdata/calibre-web/config" Mode="rw" Description="Path to existing config directory (contains app.db and cwa.db for user authentication and settings)" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/calibre-web/config</Config>
+  <Config Name="Calibre Library" Target="/calibre-library" Default="/mnt/user/media/books/calibre-library" Mode="rw" Description="Path to your Calibre library directory (Inkdrop can read and write directly)" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media/books/calibre-library</Config>
+  <Config Name="Book Ingest Directory" Target="/ingest" Default="/mnt/user/media/books/ingest" Mode="rw" Description="Directory where downloaded books are processed and converted by Inkdrop" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media/books/ingest</Config>
+  <Config Name="App Data Directory" Target="/app/data" Default="/mnt/user/appdata/inkdrop/data" Mode="rw" Description="Application data directory" Type="Path" Display="always" Required="false" Mask="false">/mnt/user/appdata/inkdrop/data</Config>
+  <Config Name="Logs Directory" Target="/logs" Default="/mnt/user/appdata/inkdrop/logs" Mode="rw" Description="Application logs directory" Type="Path" Display="always" Required="false" Mask="false">/mnt/user/appdata/inkdrop/logs</Config>
   
-  <!-- Required Environment Variables -->
-  <Config Name="CWA Base URL" Target="CWA_BASE_URL" Default="http://192.168.1.100:8083" Mode="" Description="URL of your Calibre-Web-Automated instance" Type="Variable" Display="always" Required="true" Mask="false">http://192.168.1.100:8083</Config>
-  <Config Name="CWA Username" Target="CWA_USERNAME" Default="admin" Mode="" Description="CWA admin username" Type="Variable" Display="always" Required="true" Mask="false">admin</Config>
-  <Config Name="CWA Password" Target="CWA_PASSWORD" Default="" Mode="" Description="CWA admin password" Type="Variable" Display="always" Required="true" Mask="true"></Config>
+  <!-- Core Configuration -->
+  <!-- No external CWA connection required - Inkdrop is fully independent -->
   
   <!-- System Settings -->
   <Config Name="Timezone" Target="TZ" Default="America/New_York" Mode="" Description="Container timezone" Type="Variable" Display="always" Required="false" Mask="false">America/New_York</Config>
@@ -41,7 +39,8 @@
   <Config Name="Group ID" Target="PGID" Default="1000" Mode="" Description="Group ID for file permissions" Type="Variable" Display="always" Required="false" Mask="false">1000</Config>
   
   <!-- Authentication Settings -->
-  <Config Name="CWA Database Path" Target="CWA_DB_PATH" Default="/config/app.db" Mode="" Description="Path to CWA's app.db file (inside container)" Type="Variable" Display="advanced" Required="false" Mask="false">/config/app.db</Config>
+  <Config Name="User Database Path" Target="CWA_USER_DB_PATH" Default="/config/app.db" Mode="" Description="Path to user database file (app.db) for authentication" Type="Variable" Display="advanced" Required="false" Mask="false">/config/app.db</Config>
+  <Config Name="Settings Database Path" Target="CWA_DB_PATH" Default="/config/cwa.db" Mode="" Description="Path to settings database file (cwa.db) for configuration" Type="Variable" Display="advanced" Required="false" Mask="false">/config/cwa.db</Config>
   <Config Name="Disable Authentication" Target="DISABLE_AUTH" Default="false" Mode="" Description="Disable authentication (NOT recommended for production)" Type="Variable" Display="advanced" Required="false" Mask="false">false</Config>
   
   <!-- Download Settings -->
@@ -71,6 +70,10 @@
   <Config Name="Flask Port" Target="FLASK_PORT" Default="8084" Mode="" Description="Internal Flask port (should match exposed port)" Type="Variable" Display="advanced" Required="false" Mask="false">8084</Config>
   <Config Name="Flask Host" Target="FLASK_HOST" Default="0.0.0.0" Mode="" Description="Flask host binding" Type="Variable" Display="advanced" Required="false" Mask="false">0.0.0.0</Config>
   <Config Name="Enable Logging" Target="ENABLE_LOGGING" Default="true" Mode="" Description="Enable detailed logging for download operations" Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
-  <Config Name="CWA User Database Path" Target="CWA_USER_DB_PATH" Default="/config/app.db" Mode="" Description="Path to CWA's user database (app.db)" Type="Variable" Display="advanced" Required="false" Mask="false">/config/app.db</Config>
   <Config Name="Calibre Library Path" Target="CALIBRE_LIBRARY_PATH" Default="/calibre-library" Mode="" Description="Internal path to Calibre library (container path)" Type="Variable" Display="advanced" Required="false" Mask="false">/calibre-library</Config>
+  <Config Name="Calibre Config Directory" Target="CALIBRE_CONFIG_DIR" Default="/app/data/.config/calibre" Mode="" Description="Internal path to Calibre configuration directory" Type="Variable" Display="advanced" Required="false" Mask="false">/app/data/.config/calibre</Config>
+  
+  <!-- Inkdrop Settings -->
+  <Config Name="Enable Conversion" Target="CONVERSION_ENABLED" Default="true" Mode="" Description="Enable automatic format conversion using bundled Calibre" Type="Variable" Display="always" Required="false" Mask="false">true</Config>
+  <Config Name="Target Format" Target="CONVERSION_TARGET_FORMAT" Default="epub" Mode="" Description="Target format for conversion (epub, pdf, mobi, azw3)" Type="Variable" Display="always" Required="false" Mask="false">epub</Config>
 </Container>

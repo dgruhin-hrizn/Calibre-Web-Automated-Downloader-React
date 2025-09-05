@@ -35,15 +35,12 @@ app.config['PERMANENT_SESSION_LIFETIME'] = 86400
 
 # Configure CORS for development
 if DEBUG:
-    CORS(app, origins=["http://localhost:5173", "http://localhost:3000"], supports_credentials=True)
+    CORS(app, 
+         origins=["http://localhost:5173", "http://localhost:3000"], 
+         supports_credentials=True,
+         allow_headers=['Content-Type', 'Authorization', 'X-Requested-With'],
+         methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
     
-    @app.after_request
-    def after_request(response):
-        response.headers['Access-Control-Allow-Credentials'] = 'true'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
-        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-        return response
-
 # ============================================================================
 # Authentication Decorators
 # ============================================================================
@@ -57,7 +54,7 @@ def login_required(f):
         disable_auth = os.environ.get('DISABLE_AUTH', 'false').lower()
         if disable_auth == 'true':
             return f(*args, **kwargs)
-        
+            
         if not session.get('logged_in') or not session.get('username'):
             return jsonify({"error": "Authentication required"}), 401
         return f(*args, **kwargs)
@@ -83,7 +80,7 @@ def admin_required(f):
             
             if not is_admin:
                 return jsonify({"error": "Admin privileges required"}), 403
-            
+                
         except Exception as e:
             logger.error(f"Error checking admin status for {username}: {e}")
             return jsonify({"error": "Admin verification failed"}), 403
@@ -128,7 +125,7 @@ def catch_all(path):
 
 @app.route('/api/health')
 def health_check():
-    return jsonify({
+        return jsonify({
         'status': 'healthy',
         'version': BUILD_VERSION,
         'timestamp': datetime.now().isoformat(),

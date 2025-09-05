@@ -14,7 +14,12 @@ logger = setup_logger(__name__)
 def get_read_status_manager():
     """Get read status manager instance"""
     from ...integrations.calibre.read_status_manager import get_read_status_manager
-    return get_read_status_manager()
+    from ...infrastructure.env import CWA_USER_DB_PATH
+    try:
+        return get_read_status_manager(str(CWA_USER_DB_PATH))
+    except Exception as e:
+        logger.error(f"Failed to get read status manager: {e}")
+        return None
 
 def register_routes(app):
     """Register read status routes with the Flask app"""

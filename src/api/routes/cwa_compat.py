@@ -16,7 +16,8 @@ def get_calibre_db_manager():
     from ...integrations.calibre.db_manager import CalibreDBManager
     from ...infrastructure.env import CALIBRE_LIBRARY_PATH
     try:
-        return CalibreDBManager(CALIBRE_LIBRARY_PATH)
+        metadata_db_path = CALIBRE_LIBRARY_PATH / 'metadata.db'
+        return CalibreDBManager(str(metadata_db_path))
     except Exception as e:
         logger.error(f"Failed to get Calibre database manager: {e}")
         return None

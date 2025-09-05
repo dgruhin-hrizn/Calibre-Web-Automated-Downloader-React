@@ -17,7 +17,8 @@ logger = setup_logger(__name__)
 def get_calibre_db_manager():
     """Get or create Calibre DB manager instance"""
     try:
-        return CalibreDBManager(CALIBRE_LIBRARY_PATH)
+        metadata_db_path = CALIBRE_LIBRARY_PATH / 'metadata.db'
+        return CalibreDBManager(str(metadata_db_path))
     except Exception as e:
         logger.error(f"Failed to get Calibre database manager: {e}")
         return None
@@ -26,7 +27,8 @@ def enrich_books_with_read_status(books, username):
     """Enrich books with read status for authenticated user"""
     try:
         from ...integrations.calibre.read_status_manager import get_read_status_manager
-        read_status_manager = get_read_status_manager()
+        from ...infrastructure.env import CWA_USER_DB_PATH
+        read_status_manager = get_read_status_manager(str(CWA_USER_DB_PATH))
         if not read_status_manager:
             return books
             

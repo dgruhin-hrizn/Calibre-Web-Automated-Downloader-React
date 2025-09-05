@@ -64,6 +64,7 @@ def register_routes(app):
             is_admin = user_permissions.get('admin', False)
             
             return jsonify({
+                'authenticated': True,
                 'username': username,
                 'is_admin': is_admin,
                 'permissions': user_permissions

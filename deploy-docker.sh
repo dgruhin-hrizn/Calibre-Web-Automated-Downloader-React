@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# Docker Deployment Script for CWA Book Downloader
+# Docker Deployment Script for Inkdrop Book Downloader
 # This script handles just the Docker image building and deployment
 
 set -e  # Exit on any error
 
-echo "🐳 CWA Book Downloader - Docker Deployment"
-echo "=========================================="
+echo "🐳 Inkdrop Book Downloader - Docker Deployment"
+echo "=============================================="
 
 # Configuration
 GITHUB_USERNAME="dgruhin-hrizn"
@@ -84,8 +84,8 @@ echo "  https://raw.githubusercontent.com/${GITHUB_USERNAME}/${REPO_NAME}/main/u
 echo ""
 echo "🔧 For Unraid Users:"
 echo "1. Add the template URL to your Unraid Community Applications"
-echo "2. Install 'CWA-Book-Downloader' from templates"
-echo "3. Configure your CWA connection settings"
+echo "2. Install 'Inkdrop' from templates"
+echo "3. Configure your library and data paths"
 echo "4. Access at: http://YOUR_UNRAID_IP:8084"
 echo ""
 echo "✨ Your application is now ready for deployment!"
