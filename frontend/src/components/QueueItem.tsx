@@ -287,9 +287,14 @@ export function QueueItem({
                 <div className="text-xs text-muted-foreground">
                   {Math.round(download.progress || 0)}%
                 </div>
-                {download.speed && (
+                {download.download_speed && (
                   <div className="text-xs text-muted-foreground">
-                    {download.speed}
+                    {download.download_speed}
+                  </div>
+                )}
+                {download.eta_seconds && download.eta_seconds > 0 && (
+                  <div className="text-xs text-muted-foreground">
+                    ETA: {Math.floor(download.eta_seconds / 60)}m {download.eta_seconds % 60}s
                   </div>
                 )}
               </>

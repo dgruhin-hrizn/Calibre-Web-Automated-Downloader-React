@@ -154,7 +154,7 @@ def _download_book_with_cancellation(book_id: str, cancel_flag: Event) -> Option
             logger.info(f"Download cancelled before book manager call: {book_id}")
             return None
         
-        progress_callback = lambda progress: update_download_progress(book_id, progress)
+        progress_callback = lambda progress, speed=None, eta=None: update_download_progress(book_id, progress, speed, eta)
         success = book_manager.download_book(book_info, book_path, progress_callback, cancel_flag)
         
         # Stop progress updates
@@ -215,14 +215,14 @@ def _download_book_with_cancellation(book_id: str, cancel_flag: Event) -> Option
             logger.error_trace(f"Error downloading book: {e}")
         return None
 
-def update_download_progress(book_id: str, progress: float) -> None:
-    """Update download progress."""
+def update_download_progress(book_id: str, progress: float, speed: str = None, eta: int = None) -> None:
+    """Update download progress with speed and ETA."""
     # Transition from PROCESSING to DOWNLOADING on first progress update
     current_status = book_queue.get_status_for_book(book_id)
     if current_status == QueueStatus.PROCESSING:
         book_queue.update_status(book_id, QueueStatus.DOWNLOADING)
     
-    book_queue.update_progress(book_id, progress)
+    book_queue.update_progress(book_id, progress, speed, eta)
     
 def update_download_wait_time(book_id: str, wait_time: int, wait_start: float) -> None:
     """Update the waiting time information for a book."""

@@ -81,7 +81,7 @@ def html_get_page(url: str, retry: int = MAX_RETRY, use_bypasser: bool = False) 
         time.sleep(sleep_time)
         return html_get_page(url, retry - 1, use_bypasser)
 
-def download_url(link: str, size: str = "", progress_callback: Optional[Callable[[float], None]] = None, cancel_flag: Optional[Event] = None) -> Optional[BytesIO]:
+def download_url(link: str, size: str = "", progress_callback: Optional[Callable[[float, str, int], None]] = None, cancel_flag: Optional[Event] = None) -> Optional[BytesIO]:
     """Download content from URL into a BytesIO buffer.
     
     Args:
@@ -111,14 +111,32 @@ def download_url(link: str, size: str = "", progress_callback: Optional[Callable
             total_size = float(response.headers.get('content-length', 0))
         
         buffer = BytesIO()
+        start_time = time.time()
 
         # Initialize the progress bar with your guess
         pbar = tqdm(total=total_size, unit='B', unit_scale=True, desc='Downloading')
         for chunk in response.iter_content(chunk_size=1000):
             buffer.write(chunk)
             pbar.update(len(chunk))
+            
             if progress_callback is not None:
-                progress_callback(pbar.n * 100.0 / total_size)
+                # Calculate download speed and ETA
+                elapsed_time = time.time() - start_time
+                if elapsed_time > 0:
+                    speed_bps = pbar.n / elapsed_time
+                    speed_str = f"{speed_bps / (1024 * 1024):.1f} MB/s" if speed_bps > 1024 * 1024 else f"{speed_bps / 1024:.1f} KB/s"
+                    
+                    # Calculate ETA
+                    if speed_bps > 0 and total_size > 0:
+                        remaining_bytes = total_size - pbar.n
+                        eta_seconds = int(remaining_bytes / speed_bps)
+                    else:
+                        eta_seconds = 0
+                    
+                    progress_callback(pbar.n * 100.0 / total_size, speed_str, eta_seconds)
+                else:
+                    progress_callback(pbar.n * 100.0 / total_size, "0 KB/s", 0)
+                    
             if cancel_flag is not None and cancel_flag.is_set():
                 logger.info(f"Download cancelled: {link}")
                 return None

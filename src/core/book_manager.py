@@ -302,7 +302,7 @@ def _extract_book_metadata(
     }
 
 
-def download_book(book_info: BookInfo, book_path: Path, progress_callback: Optional[Callable[[float], None]] = None, cancel_flag: Optional[Event] = None) -> bool:
+def download_book(book_info: BookInfo, book_path: Path, progress_callback: Optional[Callable[[float, str, int], None]] = None, cancel_flag: Optional[Event] = None) -> bool:
     """Download a book from available sources.
 
     Args:
@@ -390,7 +390,7 @@ def download_book(book_info: BookInfo, book_path: Path, progress_callback: Optio
     return False
 
 
-def _download_from_direct_url(download_url: str, book_path: Path, expected_size: int = None, progress_callback: Optional[Callable[[float], None]] = None, cancel_flag: Optional[Event] = None) -> bool:
+def _download_from_direct_url(download_url: str, book_path: Path, expected_size: int = None, progress_callback: Optional[Callable[[float, str, int], None]] = None, cancel_flag: Optional[Event] = None) -> bool:
     """Download a book directly from a known working URL.
     
     Args:

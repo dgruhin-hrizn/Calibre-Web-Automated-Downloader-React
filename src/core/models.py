@@ -51,6 +51,8 @@ class BookInfo:
     download_path: Optional[str] = None
     priority: int = 0
     progress: Optional[float] = None
+    download_speed: Optional[str] = None  # Download speed (e.g., "1.2 MB/s")
+    eta_seconds: Optional[int] = None     # Estimated time to completion
     wait_time: Optional[int] = None      # Total wait time in seconds
     wait_start: Optional[float] = None   # When waiting started (timestamp)
     download_id: Optional[int] = None    # Database ID for tracking downloads
@@ -166,6 +168,12 @@ class BookQueue:
         with self._lock:
             if book_id in self._book_data:
                 self._book_data[book_id].progress = progress
+                
+                # Store speed and ETA in BookInfo object for real-time access
+                if speed:
+                    self._book_data[book_id].download_speed = speed
+                if eta:
+                    self._book_data[book_id].eta_seconds = eta
                 
                 # Update downloads database
                 book_data = self._book_data[book_id]

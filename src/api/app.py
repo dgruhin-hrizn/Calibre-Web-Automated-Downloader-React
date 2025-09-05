@@ -1062,6 +1062,8 @@ def api_user_download_status():
                         queue_data = global_status[queue_status_key][book_id]  # This is a BookInfo object
                         enriched_record.update({
                             'progress': getattr(queue_data, 'progress', 0),
+                            'download_speed': getattr(queue_data, 'download_speed', None),
+                            'eta_seconds': getattr(queue_data, 'eta_seconds', None),
                             'wait_time': getattr(queue_data, 'wait_time', None),
                             'wait_start': getattr(queue_data, 'wait_start', None),
                             'error': getattr(queue_data, 'error', None)
@@ -1269,29 +1271,66 @@ def api_remove_tracking(book_id: str) -> Union[Response, Tuple[Response, int]]:
     Also handles database-only entries that aren't in the queue.
 
     Path Parameters:
-        book_id (str): Book identifier to remove from tracking
+        book_id (str): Book identifier to remove from tracking (can be book hash or database ID)
 
     Returns:
         flask.Response: JSON status indicating success.
     """
     try:
-        # Remove from queue manager (if exists)
-        backend.remove_from_tracking(book_id)
-        
-        # ALSO remove from database (for phantom entries)
+        username = session.get('username')
+        if not username:
+            return jsonify({"error": "User not logged in"}), 401
+            
         downloads_db = get_downloads_db_manager()
-        if downloads_db:
-            # Find any active downloads for this book_id and cancel them
+        if not downloads_db:
+            return jsonify({"error": "Downloads database not available"}), 503
+        
+        # Handle both database ID (numeric) and book hash ID cases
+        cancelled_count = 0
+        actual_book_id = book_id
+        
+        if book_id.isdigit():
+            # This is a database ID, get the actual book_id from the record
+            logger.info(f"Received database ID {book_id}, looking up actual book_id")
+            with downloads_db._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT book_id FROM download_history WHERE id = ? AND username = ?", (int(book_id), username))
+                result = cursor.fetchone()
+                if result:
+                    actual_book_id = result[0]
+                    logger.info(f"Found actual book_id: {actual_book_id}")
+                    
+                    # Cancel this specific database record
+                    cursor.execute("""
+                        UPDATE download_history 
+                        SET status = 'cancelled', 
+                            completed_at = CURRENT_TIMESTAMP,
+                            updated_at = CURRENT_TIMESTAMP,
+                            error_message = 'Manually cancelled via remove tracking'
+                        WHERE id = ? AND username = ?
+                    """, (int(book_id), username))
+                    cancelled_count = cursor.rowcount
+                    conn.commit()
+                else:
+                    return jsonify({"error": f"Database record {book_id} not found or not owned by user"}), 404
+        else:
+            # This is a book hash, use the phantom downloads method
             cancelled_count = downloads_db.cancel_phantom_downloads(book_id)
-            logger.info(f"Cancelled {cancelled_count} phantom database entries for book_id: {book_id}")
+        
+        # Remove from queue manager (if exists) - use actual book_id
+        backend.remove_from_tracking(actual_book_id)
+        
+        logger.info(f"Removed tracking for {actual_book_id} (original ID: {book_id}), cancelled {cancelled_count} database entries")
         
         return jsonify({
             "status": "removed_from_tracking", 
-            "book_id": book_id,
-            "message": "Removed from both queue and database"
+            "book_id": actual_book_id,
+            "original_id": book_id,
+            "cancelled_count": cancelled_count,
+            "message": f"Removed from both queue and database ({cancelled_count} records cancelled)"
         })
     except Exception as e:
-        logger.error_trace(f"Remove tracking error: {e}")
+        logger.error_trace(f"Remove tracking error for {book_id}: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/queue/<book_id>/priority', methods=['PUT'])
