@@ -13,7 +13,6 @@ import { Search } from './pages/Search'
 import { Downloads } from './pages/Downloads'
 import { Settings } from './pages/Settings'
 import Library from './pages/Library'
-import MyBooks from './pages/MyBooks'
 import Top10 from './pages/Top10'
 import Series from './pages/Series'
 import Admin from './pages/Admin'
@@ -103,7 +102,7 @@ function App() {
                           <Route path="/stats" element={<Stats />} />
                           <Route path="/search" element={<Search />} />
                           <Route path="/library" element={<Library />} />
-                          <Route path="/my-books" element={<MyBooks />} />
+                          <Route path="/my-books" element={<Library mode="mybooks" title="My Books" />} />
                           <Route path="/series" element={<Series />} />
                           <Route path="/top10" element={<Top10 />} />
                           <Route path="/downloads" element={<Downloads />} />

@@ -2627,25 +2627,31 @@ def api_get_user_books_by_status(status):
         if not username:
             return jsonify({'error': 'User not authenticated'}), 401
         
-        # Map status string to constant
-        status_map = {
-            'read': rs_manager.STATUS_FINISHED,
-            'unread': rs_manager.STATUS_UNREAD,
-            'in_progress': rs_manager.STATUS_IN_PROGRESS,
-            'want_to_read': rs_manager.STATUS_WANT_TO_READ
-        }
-        
-        if status not in status_map:
-            return jsonify({'error': 'Invalid status. Use: read, unread, in_progress, want_to_read'}), 400
-        
         # Get or create user ID
         user_id = rs_manager.get_or_create_user(username)
         
-        # Get limit from query params
+        # Get limit and offset from query params
         limit = request.args.get('limit', 50, type=int)
+        offset = request.args.get('offset', 0, type=int)
         
-        # Get book IDs by status
-        book_ids = rs_manager.get_books_by_read_status(user_id, status_map[status], limit)
+        if status == 'all':
+            # Use efficient pagination for all user books
+            book_ids, total_books = rs_manager.get_all_user_books_paginated(user_id, limit, offset)
+        else:
+            # Map status string to constant
+            status_map = {
+                'read': rs_manager.STATUS_FINISHED,
+                'unread': rs_manager.STATUS_UNREAD,
+                'in_progress': rs_manager.STATUS_IN_PROGRESS,
+                'want_to_read': rs_manager.STATUS_WANT_TO_READ
+            }
+            
+            if status not in status_map:
+                return jsonify({'error': 'Invalid status. Use: read, unread, in_progress, want_to_read, all'}), 400
+            
+            # Use efficient pagination for single status
+            total_books = rs_manager.get_books_count_by_status(user_id, status_map[status])
+            book_ids = rs_manager.get_books_by_read_status(user_id, status_map[status], limit, offset)
         
         if not book_ids:
             return jsonify({'books': [], 'status': status, 'total': 0})
@@ -2669,7 +2675,7 @@ def api_get_user_books_by_status(status):
         if books:
             books = enrich_books_with_read_status(books, username)
         
-        return jsonify({'books': books, 'status': status, 'total': len(books)})
+        return jsonify({'books': books, 'status': status, 'total': total_books})
         
     except Exception as e:
         logger.error(f"Error getting user books by status {status}: {e}")

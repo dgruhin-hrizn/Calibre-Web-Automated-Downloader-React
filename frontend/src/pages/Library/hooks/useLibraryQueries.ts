@@ -67,6 +67,8 @@ interface LibraryBooksParams {
   search?: string
   sort?: SortParam
   perPage?: number
+  mode?: 'library' | 'mybooks'
+  readStatus?: 'read' | 'unread' | 'in_progress' | 'want_to_read' | 'all'
 }
 
 interface LibraryBooksResponse {
@@ -108,30 +110,48 @@ export function useLibraryBook(bookId: number, enabled: boolean = true) {
 /**
  * Hook for fetching library books with pagination and caching
  */
-export function useLibraryBooks({ page, search = '', sort = 'new', perPage = 20 }: LibraryBooksParams) {
+export function useLibraryBooks({ page, search = '', sort = 'new', perPage = 20, mode = 'library', readStatus }: LibraryBooksParams) {
   return useQuery<LibraryBooksResponse>({
-    queryKey: ['library', 'books', { page, search, sort, perPage }],
+    queryKey: ['library', 'books', { page, search, sort, perPage, mode, readStatus }],
     queryFn: async () => {
       const offset = (page - 1) * perPage
       const cacheBuster = Date.now()
       
-      const searchParam = search ? `&search=${encodeURIComponent(search)}` : ''
-      const url = `/api/metadata/books?offset=${offset}&limit=${perPage}&sort=${sort}${searchParam}&_t=${cacheBuster}`
+      let url: string
       
+      if (mode === 'mybooks' && readStatus) {
+        // Use the MyBooks API endpoint for specific read status
+        url = `/api/user/books/${readStatus}?limit=${perPage}&offset=${offset}&_t=${cacheBuster}`
+      } else {
+        // Use the regular library endpoint
+        const searchParam = search ? `&search=${encodeURIComponent(search)}` : ''
+        url = `/api/metadata/books?offset=${offset}&limit=${perPage}&sort=${sort}${searchParam}&_t=${cacheBuster}`
+      }
 
       const response: any = await apiRequest(url)
 
-      const transformedBooks = (response.books || []).map(transformBook)
+
+      // Handle different response formats
+      let books, total
+      if (mode === 'mybooks') {
+        books = response.books || []
+        total = response.total || books.length
+      } else {
+        books = response.books || []
+        total = response.total || 0
+      }
+
+      const transformedBooks = books.map(transformBook)
 
       return {
         books: transformedBooks,
-        total: response.total || 0,
+        total,
         page: response.page || page,
         per_page: response.per_page || perPage,
-        pages: response.pages || 1
+        pages: Math.ceil(total / perPage)
       }
     },
-    enabled: page > 0,
+    enabled: page > 0 && (mode === 'library' || (mode === 'mybooks' && readStatus)),
     staleTime: 5 * 60 * 1000, // 5 minutes fresh
     gcTime: 30 * 60 * 1000,   // 30 minutes in cache
     refetchOnWindowFocus: false,
@@ -177,28 +197,46 @@ export function useLibraryStats() {
 /**
  * Hook for infinite loading of library books
  */
-export function useInfiniteLibraryBooks({ search = '', sort = 'new', perPage = 20 }: Omit<LibraryBooksParams, 'page'>) {
+export function useInfiniteLibraryBooks({ search = '', sort = 'new', perPage = 20, mode = 'library', readStatus }: Omit<LibraryBooksParams, 'page'>) {
   return useInfiniteQuery<LibraryBooksResponse>({
-    queryKey: ['library', 'infinite', { search, sort, perPage }],
+    queryKey: ['library', 'infinite', { search, sort, perPage, mode, readStatus }],
     queryFn: async (context) => {
       const pageParam = context.pageParam as number || 1
       const offset = (pageParam - 1) * perPage
       const cacheBuster = Date.now()
       
-      const searchParam = search ? `&search=${encodeURIComponent(search)}` : ''
-      const url = `/api/metadata/books?offset=${offset}&limit=${perPage}&sort=${sort}${searchParam}&_t=${cacheBuster}`
+      let url: string
       
+      if (mode === 'mybooks' && readStatus) {
+        // Use the MyBooks API endpoint for specific read status
+        url = `/api/user/books/${readStatus}?limit=${perPage}&offset=${offset}&_t=${cacheBuster}`
+      } else {
+        // Use the regular library endpoint
+        const searchParam = search ? `&search=${encodeURIComponent(search)}` : ''
+        url = `/api/metadata/books?offset=${offset}&limit=${perPage}&sort=${sort}${searchParam}&_t=${cacheBuster}`
+      }
 
       const response: any = await apiRequest(url)
 
-      const transformedBooks = (response.books || []).map(transformBook)
+
+      // Handle different response formats
+      let books, total
+      if (mode === 'mybooks') {
+        books = response.books || []
+        total = response.total || books.length
+      } else {
+        books = response.books || []
+        total = response.total || 0
+      }
+
+      const transformedBooks = books.map(transformBook)
 
       return {
         books: transformedBooks,
-        total: response.total || 0,
+        total,
         page: response.page || pageParam,
         per_page: response.per_page || perPage,
-        pages: response.pages || 1
+        pages: Math.ceil(total / perPage)
       }
     },
     getNextPageParam: (lastPage) => {

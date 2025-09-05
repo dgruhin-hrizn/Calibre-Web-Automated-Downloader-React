@@ -9,6 +9,8 @@ interface UseInfiniteLibraryStateOptions {
   enableInfiniteScroll?: boolean
   enableScrollMemory?: boolean
   enableBookTracking?: boolean
+  mode?: 'library' | 'mybooks'
+  readStatus?: 'read' | 'unread' | 'in_progress' | 'want_to_read'
 }
 
 /**
@@ -17,7 +19,9 @@ interface UseInfiniteLibraryStateOptions {
 export function useInfiniteLibraryState({ 
   enableInfiniteScroll = true,
   enableScrollMemory = true,
-  enableBookTracking = true
+  enableBookTracking = true,
+  mode = 'library',
+  readStatus
 }: UseInfiniteLibraryStateOptions = {}) {
   const [searchParams, setSearchParams] = useSearchParams()
   const { invalidateLibraryStats } = useLibraryCache()
@@ -27,11 +31,17 @@ export function useInfiniteLibraryState({
   const sortParam = (searchParams.get('sort') || 'new') as SortParam
   const viewMode = (searchParams.get('view') || 'grid') as ViewMode
   const currentPage = parseInt(searchParams.get('page') || '1', 10)
+  const urlStatusFilter = searchParams.get('status') || (mode === 'mybooks' ? 'all' : '')
+
+  // Use URL status filter for MyBooks mode, otherwise use prop
+  const effectiveReadStatus = mode === 'mybooks' ? urlStatusFilter : readStatus
 
   // React Query infinite query
   const infiniteQuery = useInfiniteLibraryBooks({ 
     search: searchQuery, 
-    sort: sortParam 
+    sort: sortParam,
+    mode,
+    readStatus: effectiveReadStatus
   })
   
   const statsQuery = useLibraryStats()
@@ -138,6 +148,13 @@ export function useInfiniteLibraryState({
   const handleViewModeChange = useCallback((view: ViewMode) => {
     updateURLParams({ view })
   }, [updateURLParams])
+
+  const handleStatusFilterChange = useCallback((status: string) => {
+    scrollMemory.clearScrollMemory()
+    setHasRestoredScroll(false)
+    setPendingPageNavigation(null)
+    updateURLParams({ status, page: undefined }) // Reset page on status change
+  }, [updateURLParams, scrollMemory])
 
   // Load more books manually (for "Load More" button)
   const handleLoadMore = useCallback(() => {
@@ -346,6 +363,7 @@ export function useInfiniteLibraryState({
     searchQuery,
     sortParam,
     viewMode,
+    statusFilter: urlStatusFilter,
     
     // UI state
     selectedBook,
@@ -368,6 +386,7 @@ export function useInfiniteLibraryState({
     handleSearchChange,
     handleSortChange,
     handleViewModeChange,
+    handleStatusFilterChange,
     handleBookClick,
     handleBookDeleted,
     closeBookModal,

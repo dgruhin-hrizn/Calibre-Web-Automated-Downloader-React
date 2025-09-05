@@ -20,7 +20,13 @@ import { useAuth } from '../../contexts/AuthContext'
 
 import type { LibraryBook } from './types'
 
-export function Library() {
+interface LibraryProps {
+  mode?: 'library' | 'mybooks'
+  readStatus?: 'read' | 'unread' | 'in_progress' | 'want_to_read'
+  title?: string
+}
+
+export function Library({ mode = 'library', readStatus, title }: LibraryProps = {}) {
   const { showToast, ToastContainer } = useToast()
   const { isAdmin } = useAuth()
   
@@ -39,6 +45,7 @@ export function Library() {
     searchQuery,
     sortParam,
     viewMode,
+    statusFilter,
     selectedBook,
     showDuplicateModal,
     setShowDuplicateModal,
@@ -51,6 +58,7 @@ export function Library() {
     handleSortChange,
     handlePageChange,
     handleViewModeChange,
+    handleStatusFilterChange,
     handleBookClick,
     handleBookDeleted,
     closeBookModal,
@@ -60,7 +68,7 @@ export function Library() {
     registerBookRef,
     registerPageRef,
     scrollToTop
-  } = useInfiniteLibraryState()
+  } = useInfiniteLibraryState({ mode, readStatus })
   
   const { refetchBook, updateBookInCache, invalidateLibraryBooks } = useLibraryCache()
   
@@ -165,6 +173,13 @@ export function Library() {
           onPageChange={handlePageChange}
           isAdmin={isAdmin}
           onManageDuplicates={() => setShowDuplicateModal(true)}
+          title={title}
+          showSearch={mode === 'library'}
+          showSort={mode === 'library'}
+          showDuplicateManager={mode === 'library'}
+          showStatusFilter={mode === 'mybooks'}
+          statusFilter={statusFilter}
+          onStatusFilterChange={handleStatusFilterChange}
         />
         
         {/* Content */}
@@ -206,6 +221,13 @@ export function Library() {
         onPageChange={handlePageChange}
         isAdmin={isAdmin}
         onManageDuplicates={() => setShowDuplicateModal(true)}
+        title={title}
+        showSearch={mode === 'library'}
+        showSort={mode === 'library'}
+        showDuplicateManager={mode === 'library'}
+        showStatusFilter={mode === 'mybooks'}
+        statusFilter={statusFilter}
+        onStatusFilterChange={handleStatusFilterChange}
       />
 
       {/* Content */}

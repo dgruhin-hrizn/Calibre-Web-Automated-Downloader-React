@@ -6,7 +6,7 @@ import sqlite3
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Union
 from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
@@ -291,18 +291,66 @@ class ReadStatusManager:
             
             return stats
     
-    def get_books_by_read_status(self, user_id: int, read_status: int, limit: int = 50) -> List[int]:
-        """Get list of book IDs by read status"""
+    def get_books_by_read_status(self, user_id: int, read_status: int, limit: Optional[int] = 50, offset: int = 0) -> List[int]:
+        """Get list of book IDs by read status with pagination support"""
         with self._get_connection() as conn:
+            if limit is None:
+                # No limit - get all books
+                cursor = conn.execute('''
+                    SELECT book_id 
+                    FROM book_read_link 
+                    WHERE user_id = ? AND read_status = ?
+                    ORDER BY last_modified DESC
+                    OFFSET ?
+                ''', (user_id, read_status, offset))
+            else:
+                # With limit and offset
+                cursor = conn.execute('''
+                    SELECT book_id 
+                    FROM book_read_link 
+                    WHERE user_id = ? AND read_status = ?
+                    ORDER BY last_modified DESC
+                    LIMIT ? OFFSET ?
+                ''', (user_id, read_status, limit, offset))
+            
+            return [row['book_id'] for row in cursor.fetchall()]
+
+    def get_books_count_by_status(self, user_id: int, read_status: int) -> int:
+        """Get count of books by read status"""
+        with self._get_connection() as conn:
+            cursor = conn.execute('''
+                SELECT COUNT(*) as count
+                FROM book_read_link 
+                WHERE user_id = ? AND read_status = ?
+            ''', (user_id, read_status))
+            
+            result = cursor.fetchone()
+            return result['count'] if result else 0
+
+    def get_all_user_books_paginated(self, user_id: int, limit: int = 50, offset: int = 0) -> tuple[List[int], int]:
+        """Get all user books across all statuses with pagination"""
+        with self._get_connection() as conn:
+            # Get total count first
+            count_cursor = conn.execute('''
+                SELECT COUNT(*) as total
+                FROM book_read_link 
+                WHERE user_id = ? AND read_status IN (?, ?, ?)
+            ''', (user_id, self.STATUS_FINISHED, self.STATUS_IN_PROGRESS, self.STATUS_WANT_TO_READ))
+            
+            total_count = count_cursor.fetchone()['total']
+            
+            # Get paginated book IDs
             cursor = conn.execute('''
                 SELECT book_id 
                 FROM book_read_link 
-                WHERE user_id = ? AND read_status = ?
+                WHERE user_id = ? AND read_status IN (?, ?, ?)
                 ORDER BY last_modified DESC
-                LIMIT ?
-            ''', (user_id, read_status, limit))
+                LIMIT ? OFFSET ?
+            ''', (user_id, self.STATUS_FINISHED, self.STATUS_IN_PROGRESS, self.STATUS_WANT_TO_READ, limit, offset))
             
-            return [row['book_id'] for row in cursor.fetchall()]
+            book_ids = [row['book_id'] for row in cursor.fetchall()]
+            
+            return book_ids, total_count
 
 
 # Global instance

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Search, Grid, List, ChevronDown, X, Calendar, User, BookOpen, TrendingUp, TrendingDown, Clock, ArrowUp, ArrowDown, Copy } from 'lucide-react'
+import { Search, Grid, List, ChevronDown, X, Calendar, User, BookOpen, TrendingUp, TrendingDown, Clock, ArrowUp, ArrowDown, Copy, Eye, Heart, CheckCircle, Filter } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { LibraryPagination } from './LibraryPagination'
@@ -24,6 +24,17 @@ interface LibraryToolbarProps {
   // Admin controls
   isAdmin: boolean
   onManageDuplicates: () => void
+  
+  // Optional customization
+  title?: string
+  showSearch?: boolean
+  showSort?: boolean
+  showDuplicateManager?: boolean
+  
+  // MyBooks status filter
+  showStatusFilter?: boolean
+  statusFilter?: string
+  onStatusFilterChange?: (status: string) => void
 }
 
 // Sort options configuration with icons
@@ -40,6 +51,14 @@ const sortOptions = [
   { value: 'hotdesc' as SortParam, label: 'Downloads (High to Low)', icon: TrendingDown }
 ]
 
+// Status filter options for MyBooks
+const statusFilterOptions = [
+  { value: 'all', label: 'All My Books', icon: Filter },
+  { value: 'in_progress', label: 'Currently Reading', icon: BookOpen },
+  { value: 'want_to_read', label: 'Want to Read', icon: Heart },
+  { value: 'read', label: 'Finished Reading', icon: CheckCircle },
+]
+
 export function LibraryToolbar({
   searchQuery,
   onSearchChange,
@@ -53,7 +72,14 @@ export function LibraryToolbar({
   totalPages,
   onPageChange,
   isAdmin,
-  onManageDuplicates
+  onManageDuplicates,
+  title,
+  showSearch = true,
+  showSort = true,
+  showDuplicateManager = true,
+  showStatusFilter = false,
+  statusFilter = 'all',
+  onStatusFilterChange
 }: LibraryToolbarProps) {
   // Local search input state (separate from actual search query)
   const [searchInput, setSearchInput] = useState(searchQuery)
@@ -94,16 +120,65 @@ export function LibraryToolbar({
           {/* Top Row: Title and Admin Controls */}
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">Library</h1>
+              <h1 className="text-2xl font-bold tracking-tight text-foreground">{title || 'Library'}</h1>
               <p className="text-sm text-muted-foreground">
-                {totalBooks > 0 ? `${totalBooks} books in your collection` : 'Browse your CWA library collection'}
+                {totalBooks > 0 ? `${totalBooks} books ${title ? 'found' : 'in your collection'}` : `Browse your ${title ? title.toLowerCase() : 'CWA library collection'}`}
               </p>
             </div>
             
-            {/* Mobile Controls: Sort + Admin */}
+            {/* Mobile Controls: Status Filter + Sort + Admin */}
             <div className="flex items-center gap-2 md:hidden">
+              {/* Status Filter Dropdown - Mobile Only */}
+              {showStatusFilter && onStatusFilterChange && (
+                <DropdownMenu.Root>
+                <DropdownMenu.Trigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    disabled={loading}
+                    className="flex items-center gap-2"
+                    title={statusFilterOptions.find(option => option.value === statusFilter)?.label || 'Filter by status...'}
+                  >
+                    {(() => {
+                      const currentOption = statusFilterOptions.find(option => option.value === statusFilter)
+                      const IconComponent = currentOption?.icon || Filter
+                      return <IconComponent className="h-4 w-4" />
+                    })()}
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content 
+                    className="min-w-[200px] bg-background border border-border rounded-md shadow-lg p-1 z-50"
+                    align="end"
+                    sideOffset={8}
+                  >
+                    {statusFilterOptions.map((option) => {
+                      const IconComponent = option.icon
+                      return (
+                        <DropdownMenu.Item
+                          key={option.value}
+                          className={`
+                            flex items-center gap-3 px-3 py-2 text-sm rounded-sm cursor-pointer outline-none
+                            hover:bg-accent hover:text-accent-foreground
+                            focus:bg-accent focus:text-accent-foreground
+                            ${statusFilter === option.value ? 'bg-accent text-accent-foreground' : ''}
+                          `}
+                          onSelect={() => onStatusFilterChange(option.value)}
+                        >
+                          <IconComponent className="h-4 w-4 flex-shrink-0" />
+                          <span className="flex-1">{option.label}</span>
+                        </DropdownMenu.Item>
+                      )
+                    })}
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
+              )}
+
               {/* Sort Dropdown - Mobile Only */}
-              <DropdownMenu.Root>
+              {showSort && (
+                <DropdownMenu.Root>
                 <DropdownMenu.Trigger asChild>
                   <Button 
                     variant="outline" 
@@ -147,9 +222,10 @@ export function LibraryToolbar({
                   </DropdownMenu.Content>
                 </DropdownMenu.Portal>
               </DropdownMenu.Root>
+              )}
 
               {/* Admin Controls - Mobile (icon only) */}
-              {isAdmin && (
+              {isAdmin && showDuplicateManager && (
                 <Button
                   onClick={onManageDuplicates}
                   variant="outline"
@@ -165,7 +241,7 @@ export function LibraryToolbar({
 
             {/* Desktop Admin Controls */}
             <div className="hidden md:flex">
-              {isAdmin && (
+              {isAdmin && showDuplicateManager && (
                 <Button
                   onClick={onManageDuplicates}
                   variant="outline"
@@ -185,7 +261,8 @@ export function LibraryToolbar({
             {/* Left Side: Search */}
             <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center w-full lg:flex-1">
               {/* Search */}
-              <form onSubmit={handleSearch} className="flex gap-2 w-full items-center">
+              {showSearch && (
+                <form onSubmit={handleSearch} className="flex gap-2 w-full items-center">
                 <div className="relative flex-1 md:w-80 lg:w-96">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                   <input
@@ -229,12 +306,63 @@ export function LibraryToolbar({
                   </Button>
                 )}
               </form>
+              )}
             </div>
 
-            {/* Right Side: Sort, View Mode, and Pagination - Hidden on mobile */}
+            {/* Right Side: Status Filter, Sort, View Mode, and Pagination - Hidden on mobile */}
             <div className="hidden md:flex items-center gap-4">
+              {/* Status Filter Dropdown */}
+              {showStatusFilter && onStatusFilterChange && (
+                <DropdownMenu.Root>
+                <DropdownMenu.Trigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    disabled={loading}
+                    className="flex items-center gap-2"
+                    title={statusFilterOptions.find(option => option.value === statusFilter)?.label || 'Filter by status...'}
+                  >
+                    {(() => {
+                      const currentOption = statusFilterOptions.find(option => option.value === statusFilter)
+                      const IconComponent = currentOption?.icon || Filter
+                      return <IconComponent className="h-4 w-4" />
+                    })()}
+                    <span className="hidden lg:inline">{statusFilterOptions.find(option => option.value === statusFilter)?.label || 'Filter'}</span>
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content 
+                    className="min-w-[200px] bg-background border border-border rounded-md shadow-lg p-1 z-50"
+                    align="end"
+                    sideOffset={8}
+                  >
+                    {statusFilterOptions.map((option) => {
+                      const IconComponent = option.icon
+                      return (
+                        <DropdownMenu.Item
+                          key={option.value}
+                          className={`
+                            flex items-center gap-3 px-3 py-2 text-sm rounded-sm cursor-pointer outline-none
+                            hover:bg-accent hover:text-accent-foreground
+                            focus:bg-accent focus:text-accent-foreground
+                            ${statusFilter === option.value ? 'bg-accent text-accent-foreground' : ''}
+                          `}
+                          onSelect={() => onStatusFilterChange(option.value)}
+                        >
+                          <IconComponent className="h-4 w-4 flex-shrink-0" />
+                          <span className="flex-1">{option.label}</span>
+                        </DropdownMenu.Item>
+                      )
+                    })}
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
+              )}
+
               {/* Sort Dropdown */}
-              <DropdownMenu.Root>
+              {showSort && (
+                <DropdownMenu.Root>
                 <DropdownMenu.Trigger asChild>
                   <Button 
                     variant="outline" 
@@ -278,6 +406,7 @@ export function LibraryToolbar({
                   </DropdownMenu.Content>
                 </DropdownMenu.Portal>
               </DropdownMenu.Root>
+              )}
 
               {/* View Mode Toggle - Hidden on mobile */}
               <div className="hidden md:flex items-center border rounded-md">
