@@ -47,27 +47,9 @@ export function QueueNotifications() {
       }
     })
 
-    // Check for downloads that failed (still in status data)
-    Object.entries(statusData.error || {}).forEach(([id, download]) => {
-      if (!previousState.error?.[id]) {
-        // Get cover from download object first, then fall back to downloadStore
-        const storeDownload = downloads[id]
-        const coverUrl = download.cover_url || download.preview || storeDownload?.coverUrl
-        
-        newNotifications.push({
-          id: `download_failed_${id}`,
-          type: 'download_failed',
-          title: 'Download Failed',
-          message: `"${download.title}" failed to download`,
-          timestamp: currentTime,
-          book_id: id,
-          book_title: download.title,
-          cover_url: coverUrl,
-          auto_hide: true,
-          duration: 7000 // 7 seconds for failed downloads (longer to read error)
-        })
-      }
-    })
+    // Note: Failure notifications are now handled by the backend NotificationManager
+    // to prevent duplicate notifications. The backend triggers failure notifications
+    // immediately when status changes to ERROR.
 
     if (newNotifications.length > 0) {
       setDisplayedNotifications(prev => [...newNotifications, ...prev].slice(0, 10))
