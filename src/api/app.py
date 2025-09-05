@@ -1409,6 +1409,33 @@ def api_clear_completed() -> Union[Response, Tuple[Response, int]]:
         logger.error_trace(f"Clear completed error: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/downloads/history/clear', methods=['DELETE'])
+@login_required
+def api_clear_download_history() -> Union[Response, Tuple[Response, int]]:
+    """
+    Clear all download history for the current user.
+
+    Returns:
+        flask.Response: JSON response with count of cleared records.
+    """
+    try:
+        username = session.get('username')
+        if not username:
+            return jsonify({"error": "User not logged in"}), 401
+        
+        downloads_db = get_downloads_db_manager()
+        if not downloads_db:
+            return jsonify({"error": "Downloads database not available"}), 503
+        
+        cleared_count = downloads_db.clear_user_download_history(username)
+        return jsonify({
+            "cleared": cleared_count,
+            "message": f"Cleared {cleared_count} download history records"
+        })
+    except Exception as e:
+        logger.error_trace(f"Clear download history error: {e}")
+        return jsonify({"error": str(e)}), 500
+
 # Calibre check endpoints removed - using CWA proxy instead
 
 @app.errorhandler(404)

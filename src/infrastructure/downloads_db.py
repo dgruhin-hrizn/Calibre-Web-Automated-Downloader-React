@@ -549,3 +549,31 @@ class DownloadsDBManager:
             
             logger.info(f"Startup cleanup: Cancelled {cancelled_count} phantom downloads")
             return cancelled_count
+    
+    def clear_user_download_history(self, username: str) -> int:
+        """Clear all download history for a specific user.
+        
+        Args:
+            username: Username whose history to clear
+            
+        Returns:
+            int: Number of records deleted
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Count records before deletion for logging
+            cursor.execute("SELECT COUNT(*) FROM download_history WHERE username = ?", (username,))
+            record_count = cursor.fetchone()[0]
+            
+            if record_count == 0:
+                logger.info(f"No download history found for user: {username}")
+                return 0
+            
+            # Delete all download history for the user
+            cursor.execute("DELETE FROM download_history WHERE username = ?", (username,))
+            deleted_count = cursor.rowcount
+            conn.commit()
+            
+            logger.info(f"Cleared {deleted_count} download history records for user: {username}")
+            return deleted_count

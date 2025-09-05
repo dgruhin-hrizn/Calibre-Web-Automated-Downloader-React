@@ -286,6 +286,31 @@ export function useForceCancel() {
   })
 }
 
+// Hook for clearing download history
+export function useClearDownloadHistory() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async () => {
+      return apiRequest('/api/downloads/history/clear', {
+        method: 'DELETE',
+      })
+    },
+    onSuccess: (data) => {
+      // Invalidate all download-related queries to update counts and history
+      queryClient.invalidateQueries({ queryKey: ['downloadStatus'] })
+      queryClient.invalidateQueries({ queryKey: ['userDownloadHistory'] })
+      queryClient.invalidateQueries({ queryKey: ['downloadHistory'] })
+      
+      // Force refetch to ensure immediate UI updates
+      queryClient.refetchQueries({ queryKey: ['downloadStatus'] })
+      queryClient.refetchQueries({ queryKey: ['userDownloadHistory'] })
+      
+      console.log(`Cleared ${data.cleared} download history records`)
+    },
+  })
+}
+
 // Hook for clearing completed downloads
 export function useClearCompleted() {
   const queryClient = useQueryClient()
