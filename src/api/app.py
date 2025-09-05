@@ -22,6 +22,7 @@ from ..integrations.cwa.client import CWAClient
 from ..integrations.cwa.settings import cwa_settings
 from ..integrations.cwa.proxy import CWAProxy, create_cwa_proxy_routes, create_opds_routes
 from ..integrations.calibre.db_manager import CalibreDBManager
+from ..integrations.calibre.read_status_manager import get_read_status_manager
 from ..infrastructure.downloads_db import DownloadsDBManager
 from ..infrastructure.uploads_db import UploadsDBManager
 from ..utils.rate_limiter import get_rate_limiter_stats
@@ -90,6 +91,9 @@ calibre_db_manager = None
 
 # Initialize Downloads DB manager for per-user download tracking
 downloads_db_manager = None
+
+# Initialize Read Status Manager for user reading status
+read_status_manager = None
 
 # Flask logger
 app.logger.handlers = logger.handlers
@@ -193,6 +197,72 @@ def get_downloads_db_manager():
             logger.error(f"Failed to initialize downloads database: {e}")
             return None
     return downloads_db_manager
+
+def get_read_status_manager_instance():
+    """Get or initialize read status manager"""
+    global read_status_manager
+    if read_status_manager is None:
+        try:
+            # Use CWA's app.db for read status tracking
+            from ..infrastructure.env import CWA_USER_DB_PATH
+            if CWA_USER_DB_PATH.exists():
+                read_status_manager = get_read_status_manager(str(CWA_USER_DB_PATH))
+                logger.info(f"Read status manager connected: {CWA_USER_DB_PATH}")
+            else:
+                logger.warning(f"CWA app.db not found at {CWA_USER_DB_PATH}")
+        except Exception as e:
+            logger.error(f"Failed to initialize read status manager: {e}")
+            read_status_manager = None
+    return read_status_manager
+
+def enrich_books_with_read_status(books_data, username=None):
+    """Enrich book data with read status information for the current user"""
+    if not username or not books_data:
+        return books_data
+    
+    try:
+        rs_manager = get_read_status_manager_instance()
+        if not rs_manager:
+            return books_data
+        
+        # Get user ID
+        user_id = rs_manager.get_or_create_user(username)
+        
+        # Extract book IDs
+        book_ids = [book['id'] for book in books_data if 'id' in book]
+        if not book_ids:
+            return books_data
+        
+        # Get read status for all books
+        read_statuses = rs_manager.get_multiple_books_read_status(book_ids, user_id)
+        
+        # Enrich each book with read status
+        for book in books_data:
+            book_id = book.get('id')
+            if book_id and book_id in read_statuses:
+                status_info = read_statuses[book_id]
+                book['read_status'] = {
+                    'is_read': status_info['is_read'],
+                    'is_in_progress': status_info['is_in_progress'],
+                    'status_code': status_info['read_status'],
+                    'last_modified': status_info['last_modified'],
+                    'times_started_reading': status_info['times_started_reading']
+                }
+            else:
+                # Default to unread if no status found
+                book['read_status'] = {
+                    'is_read': False,
+                    'is_in_progress': False,
+                    'status_code': 0,
+                    'last_modified': None,
+                    'times_started_reading': 0
+                }
+        
+        return books_data
+        
+    except Exception as e:
+        logger.error(f"Error enriching books with read status: {e}")
+        return books_data
 
 # Global uploads DB manager instance
 uploads_db_manager = None
@@ -1394,6 +1464,11 @@ def api_metadata_books():
             sort=sort_by
         )
         
+        # Enrich with read status if user is authenticated
+        username = session.get('username')
+        if username:
+            result['books'] = enrich_books_with_read_status(result['books'], username)
+        
         return jsonify({
             'books': result['books'],
             'total': result['total'],
@@ -1417,6 +1492,12 @@ def api_metadata_book_details(book_id):
         book = db_manager.get_book_details(book_id)
         if not book:
             return jsonify({'error': 'Book not found'}), 404
+        
+        # Enrich with read status if user is authenticated
+        username = session.get('username')
+        if username:
+            enriched_books = enrich_books_with_read_status([book], username)
+            book = enriched_books[0] if enriched_books else book
             
         return jsonify(book)
         
@@ -2393,6 +2474,181 @@ def api_admin_bulk_delete_books():
         
     except Exception as e:
         logger.error(f"Error bulk deleting books: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# ============================================================================
+# Read Status API Endpoints (User Reading Status)
+# ============================================================================
+
+@app.route('/api/books/<int:book_id>/read-status', methods=['GET'])
+@login_required
+def api_get_book_read_status(book_id):
+    """Get read status for a specific book for the current user"""
+    try:
+        rs_manager = get_read_status_manager_instance()
+        if not rs_manager:
+            return jsonify({'error': 'Read status manager not available'}), 503
+        
+        # Get current user info from session
+        username = session.get('username')
+        if not username:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        # Get or create user ID
+        user_id = rs_manager.get_or_create_user(username)
+        
+        # Get read status
+        status = rs_manager.get_book_read_status(book_id, user_id)
+        
+        return jsonify(status)
+        
+    except Exception as e:
+        logger.error(f"Error getting read status for book {book_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/books/<int:book_id>/read-status', methods=['POST'])
+@login_required
+def api_set_book_read_status(book_id):
+    """Set read status for a specific book for the current user"""
+    try:
+        rs_manager = get_read_status_manager_instance()
+        if not rs_manager:
+            return jsonify({'error': 'Read status manager not available'}), 503
+        
+        # Get current user info from session
+        username = session.get('username')
+        if not username:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        # Get request data
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Get or create user ID
+        user_id = rs_manager.get_or_create_user(username)
+        
+        # Handle different actions
+        action = data.get('action')
+        if action == 'toggle':
+            # Toggle between read/unread
+            status = rs_manager.toggle_book_read_status(book_id, user_id)
+        elif action == 'mark_read':
+            rs_manager.mark_as_read(book_id, user_id)
+            status = rs_manager.get_book_read_status(book_id, user_id)
+        elif action == 'mark_unread':
+            rs_manager.mark_as_unread(book_id, user_id)
+            status = rs_manager.get_book_read_status(book_id, user_id)
+        elif action == 'mark_in_progress':
+            rs_manager.mark_as_in_progress(book_id, user_id)
+            status = rs_manager.get_book_read_status(book_id, user_id)
+        else:
+            return jsonify({'error': 'Invalid action. Use: toggle, mark_read, mark_unread, mark_in_progress'}), 400
+        
+        return jsonify(status)
+        
+    except Exception as e:
+        logger.error(f"Error setting read status for book {book_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/books/read-status', methods=['POST'])
+@login_required
+def api_get_multiple_books_read_status():
+    """Get read status for multiple books for the current user"""
+    try:
+        rs_manager = get_read_status_manager_instance()
+        if not rs_manager:
+            return jsonify({'error': 'Read status manager not available'}), 503
+        
+        # Get current user info from session
+        username = session.get('username')
+        if not username:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        # Get request data
+        data = request.get_json()
+        if not data or 'book_ids' not in data:
+            return jsonify({'error': 'book_ids array required'}), 400
+        
+        book_ids = data['book_ids']
+        if not isinstance(book_ids, list):
+            return jsonify({'error': 'book_ids must be an array'}), 400
+        
+        # Get or create user ID
+        user_id = rs_manager.get_or_create_user(username)
+        
+        # Get read status for all books
+        statuses = rs_manager.get_multiple_books_read_status(book_ids, user_id)
+        
+        return jsonify({'book_statuses': statuses})
+        
+    except Exception as e:
+        logger.error(f"Error getting multiple books read status: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/user/reading-stats', methods=['GET'])
+@login_required
+def api_get_user_reading_stats():
+    """Get reading statistics for the current user"""
+    try:
+        rs_manager = get_read_status_manager_instance()
+        if not rs_manager:
+            return jsonify({'error': 'Read status manager not available'}), 503
+        
+        # Get current user info from session
+        username = session.get('username')
+        if not username:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        # Get or create user ID
+        user_id = rs_manager.get_or_create_user(username)
+        
+        # Get reading stats
+        stats = rs_manager.get_user_reading_stats(user_id)
+        
+        return jsonify(stats)
+        
+    except Exception as e:
+        logger.error(f"Error getting user reading stats: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/user/books/<status>', methods=['GET'])
+@login_required
+def api_get_user_books_by_status(status):
+    """Get books by read status for the current user"""
+    try:
+        rs_manager = get_read_status_manager_instance()
+        if not rs_manager:
+            return jsonify({'error': 'Read status manager not available'}), 503
+        
+        # Get current user info from session
+        username = session.get('username')
+        if not username:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        # Map status string to constant
+        status_map = {
+            'read': rs_manager.STATUS_FINISHED,
+            'unread': rs_manager.STATUS_UNREAD,
+            'in_progress': rs_manager.STATUS_IN_PROGRESS
+        }
+        
+        if status not in status_map:
+            return jsonify({'error': 'Invalid status. Use: read, unread, in_progress'}), 400
+        
+        # Get or create user ID
+        user_id = rs_manager.get_or_create_user(username)
+        
+        # Get limit from query params
+        limit = request.args.get('limit', 50, type=int)
+        
+        # Get book IDs by status
+        book_ids = rs_manager.get_books_by_read_status(user_id, status_map[status], limit)
+        
+        return jsonify({'book_ids': book_ids, 'status': status, 'count': len(book_ids)})
+        
+    except Exception as e:
+        logger.error(f"Error getting user books by status {status}: {e}")
         return jsonify({'error': str(e)}), 500
 
 # ============================================================================
