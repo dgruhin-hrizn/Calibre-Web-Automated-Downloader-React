@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Edit, Trash2, Shield, Download, Upload, BookOpen, Key, Archive, Eye, RefreshCw } from 'lucide-react';
+import { Users, Plus, Edit, Trash2, Shield, Download, Upload, BookOpen, Key, Archive, Eye, RefreshCw, Settings, CheckCircle, XCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { useUserManagement } from '../hooks/useUserManagement';
 import { useRefreshThumbnails } from '../hooks/useAdminActions';
+import { useAdminSettings, useUpdateAdminSettings, useTestCalibre, useConversionStatus } from '../hooks/useAdminSettings';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/card';
 import type { User, UserDetails } from '../types/user';
@@ -17,10 +18,51 @@ const Admin: React.FC = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [deleteConfirmUser, setDeleteConfirmUser] = useState<User | null>(null);
   const [showRefreshDialog, setShowRefreshDialog] = useState(false);
+  
+  // Admin Settings State
+  const { data: appSettings, isLoading: isSettingsLoading, error: settingsError } = useAdminSettings();
+  const updateSettings = useUpdateAdminSettings();
+  const testCalibre = useTestCalibre();
+  const { data: conversionStatus, isLoading: isStatusLoading } = useConversionStatus();
+  const [showSettingsSection, setShowSettingsSection] = useState(false);
+  const [settingsSaveMessage, setSettingsSaveMessage] = useState('');
+  
+  // Local settings state for form
+  const [localSettings, setLocalSettings] = useState(appSettings);
 
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  // Update local settings when app settings change
+  useEffect(() => {
+    if (appSettings) {
+      setLocalSettings(appSettings);
+    }
+  }, [appSettings]);
+
+  // Settings handlers
+  const handleSaveSettings = async () => {
+    if (!localSettings) return;
+
+    try {
+      await updateSettings.mutateAsync(localSettings);
+      setSettingsSaveMessage('Settings saved successfully!');
+      setTimeout(() => setSettingsSaveMessage(''), 3000);
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+      setSettingsSaveMessage('Failed to save settings');
+      setTimeout(() => setSettingsSaveMessage(''), 3000);
+    }
+  };
+
+  const handleTestCalibre = async () => {
+    try {
+      await testCalibre.mutateAsync();
+    } catch (error) {
+      console.error('Calibre test failed:', error);
+    }
+  };
 
   const handleEditUser = async (user: User) => {
     // Fetch detailed user information
@@ -90,41 +132,433 @@ const Admin: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">User Administration</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+            {showSettingsSection ? 'Global Settings' : 'User Administration'}
+          </h1>
           <p className="text-sm sm:text-base text-muted-foreground">
-            Manage CWA users and their permissions
+            {showSettingsSection 
+              ? 'Configure application-wide settings and conversion options'
+              : 'Manage CWA users and their permissions'
+            }
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 self-start sm:self-auto">
           <Button
-            onClick={() => setShowRefreshDialog(true)}
+            onClick={() => setShowSettingsSection(!showSettingsSection)}
             variant="outline"
             className="flex items-center gap-2"
-            disabled={refreshThumbnails.isPending}
           >
-            <RefreshCw className={`w-4 h-4 ${refreshThumbnails.isPending ? 'animate-spin' : ''}`} />
-            Refresh Thumbnails
+            {showSettingsSection ? <Users className="w-4 h-4" /> : <Settings className="w-4 h-4" />}
+            {showSettingsSection ? 'User Management' : 'Global Settings'}
           </Button>
-          <Button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Create User
-          </Button>
+          
+          {!showSettingsSection && (
+            <>
+              <Button
+                onClick={() => setShowRefreshDialog(true)}
+                variant="outline"
+                className="flex items-center gap-2"
+                disabled={refreshThumbnails.isPending}
+              >
+                <RefreshCw className={`w-4 h-4 ${refreshThumbnails.isPending ? 'animate-spin' : ''}`} />
+                Refresh Thumbnails
+              </Button>
+              <Button
+                onClick={() => setIsCreateModalOpen(true)}
+                className="flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Create User
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
       {/* Error Display */}
-      {error && (
+      {(error || settingsError) && (
         <Card className="border-destructive">
           <CardContent className="p-4">
-            <p className="text-destructive">{error}</p>
+            <p className="text-destructive">{error || settingsError?.message}</p>
           </CardContent>
         </Card>
       )}
 
-      {/* Users Table - Desktop */}
+      {/* Global Settings Section */}
+      {showSettingsSection && (
+        <div className="space-y-6">
+          {/* Calibre Status */}
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold">Calibre Integration</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Test and monitor Calibre conversion tools
+                  </p>
+                </div>
+                <Button
+                  onClick={handleTestCalibre}
+                  variant="outline"
+                  disabled={testCalibre.isPending}
+                  className="flex items-center gap-2"
+                >
+                  {testCalibre.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <CheckCircle className="w-4 h-4" />
+                  )}
+                  Test Calibre
+                </Button>
+              </div>
+
+              {testCalibre.data && (
+                <div className={`p-3 rounded-md border ${
+                  testCalibre.data.available 
+                    ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800' 
+                    : 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800'
+                }`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    {testCalibre.data.available ? (
+                      <CheckCircle className="w-5 h-5 text-green-600" />
+                    ) : (
+                      <XCircle className="w-5 h-5 text-red-600" />
+                    )}
+                    <span className={`font-medium ${
+                      testCalibre.data.available ? 'text-green-800 dark:text-green-200' : 'text-red-800 dark:text-red-200'
+                    }`}>
+                      {testCalibre.data.message}
+                    </span>
+                  </div>
+                  {testCalibre.data.ebook_convert_version && (
+                    <p className="text-sm text-muted-foreground">
+                      {testCalibre.data.ebook_convert_version}
+                    </p>
+                  )}
+                  {testCalibre.data.calibredb_version && (
+                    <p className="text-sm text-muted-foreground">
+                      {testCalibre.data.calibredb_version}
+                    </p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Conversion Settings */}
+          {localSettings && (
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h3 className="text-lg font-semibold">Conversion Settings</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Configure automatic book format conversion
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {settingsSaveMessage && (
+                      <span className={`text-sm ${
+                        settingsSaveMessage.includes('success') ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {settingsSaveMessage}
+                      </span>
+                    )}
+                    <Button
+                      onClick={handleSaveSettings}
+                      disabled={updateSettings.isPending || isSettingsLoading}
+                      className="flex items-center gap-2"
+                    >
+                      {updateSettings.isPending ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <CheckCircle className="w-4 h-4" />
+                      )}
+                      Save Settings
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Conversion Enable/Disable */}
+                  <div className="space-y-4">
+                    <div>
+                      <label className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={localSettings.conversion?.enabled || false}
+                          onChange={(e) => setLocalSettings(prev => prev ? {
+                            ...prev,
+                            conversion: { ...prev.conversion, enabled: e.target.checked }
+                          } : prev)}
+                          className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                        />
+                        <span className="font-medium">Enable Automatic Conversion</span>
+                      </label>
+                      <p className="text-sm text-muted-foreground ml-7">
+                        Automatically convert non-EPUB books to EPUB format
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Target Format
+                      </label>
+                      <select
+                        value={localSettings.conversion?.target_format || 'epub'}
+                        onChange={(e) => setLocalSettings(prev => prev ? {
+                          ...prev,
+                          conversion: { ...prev.conversion, target_format: e.target.value }
+                        } : prev)}
+                        className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                        disabled={!localSettings.conversion?.enabled}
+                      >
+                        <option value="epub">EPUB</option>
+                        <option value="pdf">PDF</option>
+                        <option value="mobi">MOBI</option>
+                        <option value="azw3">AZW3</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Conversion Quality
+                      </label>
+                      <select
+                        value={localSettings.conversion?.quality || 'high'}
+                        onChange={(e) => setLocalSettings(prev => prev ? {
+                          ...prev,
+                          conversion: { ...prev.conversion, quality: e.target.value as 'low' | 'medium' | 'high' }
+                        } : prev)}
+                        className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                        disabled={!localSettings.conversion?.enabled}
+                      >
+                        <option value="low">Low (Faster)</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High (Better Quality)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={localSettings.conversion?.preserve_cover || false}
+                          onChange={(e) => setLocalSettings(prev => prev ? {
+                            ...prev,
+                            conversion: { ...prev.conversion, preserve_cover: e.target.checked }
+                          } : prev)}
+                          className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                          disabled={!localSettings.conversion?.enabled}
+                        />
+                        <span className="font-medium">Preserve Cover</span>
+                      </label>
+                      <p className="text-sm text-muted-foreground ml-7">
+                        Keep original book covers during conversion
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={localSettings.conversion?.preserve_metadata || false}
+                          onChange={(e) => setLocalSettings(prev => prev ? {
+                            ...prev,
+                            conversion: { ...prev.conversion, preserve_metadata: e.target.checked }
+                          } : prev)}
+                          className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                          disabled={!localSettings.conversion?.enabled}
+                        />
+                        <span className="font-medium">Preserve Metadata</span>
+                      </label>
+                      <p className="text-sm text-muted-foreground ml-7">
+                        Keep title, author, and other book information
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Conversion Timeout (seconds)
+                      </label>
+                      <input
+                        type="number"
+                        min="30"
+                        max="3600"
+                        value={localSettings.conversion?.timeout_seconds || 300}
+                        onChange={(e) => setLocalSettings(prev => prev ? {
+                          ...prev,
+                          conversion: { ...prev.conversion, timeout_seconds: parseInt(e.target.value) }
+                        } : prev)}
+                        className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                        disabled={!localSettings.conversion?.enabled}
+                      />
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Maximum time to wait for conversion (30-3600 seconds)
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Download Settings */}
+          {localSettings && (
+            <Card>
+              <CardContent className="p-6">
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold">Download Settings</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Configure download behavior and limits
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Max Concurrent Downloads
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="10"
+                        value={localSettings.downloads?.max_concurrent_downloads || 3}
+                        onChange={(e) => setLocalSettings(prev => prev ? {
+                          ...prev,
+                          downloads: { ...prev.downloads, max_concurrent_downloads: parseInt(e.target.value) }
+                        } : prev)}
+                        className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                      />
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Number of books to download simultaneously (1-10)
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Max Concurrent Conversions
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="5"
+                        value={localSettings.downloads?.max_concurrent_conversions || 2}
+                        onChange={(e) => setLocalSettings(prev => prev ? {
+                          ...prev,
+                          downloads: { ...prev.downloads, max_concurrent_conversions: parseInt(e.target.value) }
+                        } : prev)}
+                        className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                      />
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Number of books to convert simultaneously (1-5)
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Download Retry Attempts
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="10"
+                        value={localSettings.downloads?.retry_attempts || 3}
+                        onChange={(e) => setLocalSettings(prev => prev ? {
+                          ...prev,
+                          downloads: { ...prev.downloads, retry_attempts: parseInt(e.target.value) }
+                        } : prev)}
+                        className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                      />
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Number of times to retry failed downloads
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={localSettings.downloads?.cleanup_temp_files || false}
+                          onChange={(e) => setLocalSettings(prev => prev ? {
+                            ...prev,
+                            downloads: { ...prev.downloads, cleanup_temp_files: e.target.checked }
+                          } : prev)}
+                          className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                        />
+                        <span className="font-medium">Cleanup Temporary Files</span>
+                      </label>
+                      <p className="text-sm text-muted-foreground ml-7">
+                        Automatically remove temporary files after processing
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Conversion Status */}
+          {conversionStatus && (
+            <Card>
+              <CardContent className="p-6">
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold">Conversion Status</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Monitor active conversions and library statistics
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      {conversionStatus.conversion_manager_running ? (
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                      ) : (
+                        <XCircle className="w-5 h-5 text-red-600" />
+                      )}
+                      <span className="font-medium">
+                        Conversion Manager: {conversionStatus.conversion_manager_running ? 'Running' : 'Stopped'}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-sm">
+                        <span className="font-medium">Active Jobs:</span> {Object.keys(conversionStatus.active_jobs).length}
+                      </p>
+                      <p className="text-sm">
+                        <span className="font-medium">Library Books:</span> {conversionStatus.library_stats.total_books}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="font-medium mb-3">Format Distribution</h4>
+                    <div className="space-y-1">
+                      {Object.entries(conversionStatus.library_stats.formats).map(([format, count]) => (
+                        <div key={format} className="flex justify-between text-sm">
+                          <span className="uppercase">{format}:</span>
+                          <span>{count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* User Management Section */}
+      {!showSettingsSection && (
+        <>
+          {/* Users Table - Desktop */}
       <Card className="hidden md:block">
         <CardContent className="p-0">
           <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
@@ -356,6 +790,7 @@ const Admin: React.FC = () => {
             </CardContent>
           </Card>
         </div>
+        </>
       )}
 
       {/* Refresh Thumbnails Confirmation Dialog */}

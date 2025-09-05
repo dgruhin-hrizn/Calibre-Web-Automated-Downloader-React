@@ -33,6 +33,9 @@ services:
       # Override specific settings for hybrid development
       - CWA_BASE_URL=http://calibre-web-automated:8083
       - INGEST_DIR=/app/ingest
+      # Calibre configuration
+      - CALIBRE_LIBRARY_PATH=/calibre-library
+      - CALIBRE_CONFIG_DIR=/app/data/.config/calibre
       
     ports:
       - "8084:8084"

@@ -18,6 +18,10 @@ from ..infrastructure.env import INGEST_DIR, TMP_DIR, MAIN_LOOP_SLEEP_TIME, USE_
 from .models import book_queue, BookInfo, QueueStatus, SearchFilters
 from . import book_manager
 
+# Import conversion system
+from ..infrastructure.app_settings import get_app_settings
+from ..core.conversion_manager import get_conversion_manager
+
 logger = setup_logger(__name__)
 
 def _sanitize_filename(filename: str) -> str:
@@ -185,39 +189,129 @@ def _download_book_with_cancellation(book_id: str, cancel_flag: Event) -> Option
         if CUSTOM_SCRIPT:
             logger.info(f"Running custom script: {CUSTOM_SCRIPT}")
             subprocess.run([CUSTOM_SCRIPT, book_path])
-            
-        intermediate_path = INGEST_DIR / f"{book_id}.crdownload"
-        final_path = INGEST_DIR / book_name
         
         if os.path.exists(book_path):
-            logger.info(f"Moving book to ingest directory: {book_path} -> {final_path}")
-            try:
-                shutil.move(book_path, intermediate_path)
-            except Exception as e:
-                try:
-                    logger.debug(f"Error moving book: {e}, will try copying instead")
-                    shutil.move(book_path, intermediate_path)
-                except Exception as e:
-                    logger.debug(f"Error copying book: {e}, will try copying without permissions instead")
-                    shutil.copyfile(book_path, intermediate_path)
-                os.remove(book_path)
+            # Check if conversion is enabled and needed
+            settings = get_app_settings()
+            conversion_needed = (
+                settings.conversion.enabled and
+                book_path.suffix.lower().lstrip('.') != settings.conversion.target_format.lower() and
+                book_path.suffix.lower().lstrip('.') in [fmt.lower() for fmt in settings.conversion.supported_formats]
+            )
             
-            # Final cancellation check before completing
-            if cancel_flag.is_set():
-                logger.info(f"Download cancelled before final rename: {book_id}")
-                if intermediate_path.exists():
-                    intermediate_path.unlink()
-                return None
+            if conversion_needed:
+                logger.info(f"Queuing book for conversion: {book_info.title}")
                 
-            os.rename(intermediate_path, final_path)
-            logger.info(f"Download completed successfully: {book_info.title}")
+                # Check cancellation before queuing conversion
+                if cancel_flag.is_set():
+                    logger.info(f"Download cancelled before conversion queue: {book_id}")
+                    if book_path.exists():
+                        book_path.unlink()
+                    return None
+                
+                try:
+                    # Get conversion manager and queue the conversion
+                    import asyncio
+                    
+                    # Get or create event loop
+                    try:
+                        loop = asyncio.get_event_loop()
+                    except RuntimeError:
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                    
+                    conversion_manager = loop.run_until_complete(get_conversion_manager())
+                    
+                    # Create book metadata for conversion
+                    book_metadata = {
+                        'title': book_info.title,
+                        'author': book_info.author,
+                        'isbn': getattr(book_info, 'isbn', None),
+                        'published_date': getattr(book_info, 'published_date', None),
+                        'language': getattr(book_info, 'language', None),
+                        'tags': getattr(book_info, 'tags', []),
+                        'description': getattr(book_info, 'description', None),
+                        'cover_url': getattr(book_info, 'cover_url', None),
+                    }
+                    
+                    # Get user ID from current session/context (simplified for now)
+                    user_id = "admin"  # TODO: Get actual user ID from context
+                    
+                    # Queue for conversion
+                    job_id = loop.run_until_complete(conversion_manager.queue_conversion(
+                        book_id=book_id,
+                        input_file=book_path,
+                        book_metadata=book_metadata,
+                        user_id=user_id
+                    ))
+                    
+                    if job_id:
+                        logger.info(f"Book queued for conversion with job ID: {job_id}")
+                        # Return the original file path - conversion will handle library addition
+                        return str(book_path)
+                    else:
+                        logger.warning(f"Conversion not queued, falling back to direct library addition")
+                        # Fall through to direct library addition
+                        
+                except Exception as e:
+                    logger.error(f"Error queuing conversion for {book_id}: {e}")
+                    logger.info("Falling back to direct library addition without conversion")
+                    # Fall through to direct library addition
             
-        return str(final_path)
+            # Direct library addition (no conversion needed or conversion failed)
+            return _add_original_to_library(book_id, book_path, book_info, cancel_flag)
+        
+        return None
     except Exception as e:
         if cancel_flag.is_set():
             logger.info(f"Download cancelled during error handling: {book_id}")
         else:
             logger.error_trace(f"Error downloading book: {e}")
+        return None
+
+def _add_original_to_library(book_id: str, book_path: Path, book_info: BookInfo, cancel_flag: Event) -> Optional[str]:
+    """Add the original downloaded book to the library without conversion.
+    
+    This preserves the original ingest directory workflow.
+    """
+    try:
+        # Use original book name logic
+        if USE_BOOK_TITLE:
+            book_name = _sanitize_filename(book_info.title)
+        else:
+            book_name = book_id
+        book_name += f".{book_info.format}"
+        
+        intermediate_path = INGEST_DIR / f"{book_id}.crdownload"
+        final_path = INGEST_DIR / book_name
+        
+        logger.info(f"Moving book to ingest directory: {book_path} -> {final_path}")
+        
+        try:
+            shutil.move(book_path, intermediate_path)
+        except Exception as e:
+            try:
+                logger.debug(f"Error moving book: {e}, will try copying instead")
+                shutil.move(book_path, intermediate_path)
+            except Exception as e:
+                logger.debug(f"Error copying book: {e}, will try copying without permissions instead")
+                shutil.copyfile(book_path, intermediate_path)
+            os.remove(book_path)
+        
+        # Final cancellation check before completing
+        if cancel_flag.is_set():
+            logger.info(f"Download cancelled before final rename: {book_id}")
+            if intermediate_path.exists():
+                intermediate_path.unlink()
+            return None
+            
+        os.rename(intermediate_path, final_path)
+        logger.info(f"Download completed successfully: {book_info.title}")
+        
+        return str(final_path)
+        
+    except Exception as e:
+        logger.error(f"Error adding book to library: {e}")
         return None
 
 def update_download_progress(book_id: str, progress: float, speed: str = None, eta: int = None) -> None:

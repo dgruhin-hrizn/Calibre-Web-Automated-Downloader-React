@@ -45,7 +45,16 @@ RUN apt-get update && \
     libxdamage1 \
     libxrandr2 \
     libxss1 \
-    libxtst6 && \
+    libxtst6 \
+    # Additional Calibre dependencies
+    libxkbfile1 \
+    libopengl0 \
+    libxkbcommon0 \
+    libegl1 \
+    libgl1 \
+    libglx-mesa0 \
+    xz-utils \
+    binutils && \
     # Configure locale
     sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && \
     locale-gen en_US.UTF-8 && \
@@ -59,6 +68,31 @@ ENV LANG=en_US.UTF-8 \
     LC_ALL=en_US.UTF-8
 
 WORKDIR /app
+
+# Install Calibre (using same method as CWA-reference)
+ARG CALIBRE_RELEASE=8.9.0
+RUN echo "**** Installing Calibre ****" && \
+    mkdir -p /app/calibre && \
+    ARCH=$(uname -m) && \
+    if [ "$ARCH" = "x86_64" ]; then \
+        echo "Downloading Calibre for x86_64..." && \
+        curl -o /calibre.txz -L \
+        "https://download.calibre-ebook.com/${CALIBRE_RELEASE}/calibre-${CALIBRE_RELEASE}-x86_64.txz"; \
+    elif [ "$ARCH" = "aarch64" ]; then \
+        echo "Downloading Calibre for aarch64..." && \
+        curl -o /calibre.txz -L \
+        "https://download.calibre-ebook.com/${CALIBRE_RELEASE}/calibre-${CALIBRE_RELEASE}-arm64.txz"; \
+    else \
+        echo "Unsupported architecture: $ARCH" && exit 1; \
+    fi && \
+    echo "Extracting Calibre..." && \
+    tar xf /calibre.txz -C /app/calibre && \
+    rm /calibre.txz && \
+    echo "Calibre installation complete"
+
+# Set Calibre environment
+ENV PATH="/app/calibre:$PATH" \
+    CALIBRE_CONFIG_DIR=/app/data/.config/calibre
 
 # Install Python dependencies
 COPY requirements-base.txt requirements-cwa-bd.txt ./
@@ -74,8 +108,13 @@ COPY . .
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist/
 
 # Create necessary directories
-RUN mkdir -p /app/logs /app/smb_data /app/ingest && \
-    chmod 755 /app/logs /app/smb_data /app/ingest
+RUN mkdir -p /app/logs /app/smb_data /app/ingest /app/data/.config/calibre && \
+    chmod 755 /app/logs /app/smb_data /app/ingest /app/data/.config/calibre
+
+# Test Calibre installation
+RUN echo "**** Testing Calibre installation ****" && \
+    /app/calibre/ebook-convert --version && \
+    /app/calibre/calibredb --version
 
 EXPOSE 8084
 

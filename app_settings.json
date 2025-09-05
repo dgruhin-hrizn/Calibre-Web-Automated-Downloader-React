@@ -1,0 +1,27 @@
+{
+  "conversion": {
+    "enabled": false,
+    "target_format": "epub",
+    "supported_formats": [
+      "pdf",
+      "mobi",
+      "azw3",
+      "fb2",
+      "docx",
+      "txt",
+      "rtf"
+    ],
+    "quality": "high",
+    "preserve_cover": true,
+    "preserve_metadata": true,
+    "timeout_seconds": 300
+  },
+  "downloads": {
+    "max_concurrent_downloads": 3,
+    "max_concurrent_conversions": 2,
+    "retry_attempts": 3,
+    "timeout_seconds": 300,
+    "cleanup_temp_files": true
+  },
+  "calibre_library_path": "/calibre-library"
+}

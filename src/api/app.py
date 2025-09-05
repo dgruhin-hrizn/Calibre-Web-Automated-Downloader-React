@@ -16,7 +16,9 @@ import typing
 from ..infrastructure.logger import setup_logger
 from ..infrastructure.config import _SUPPORTED_BOOK_LANGUAGE, BOOK_LANGUAGE
 from ..infrastructure.env import FLASK_HOST, FLASK_PORT, APP_ENV, CWA_DB_PATH, DEBUG, USING_EXTERNAL_BYPASSER, BUILD_VERSION, RELEASE_VERSION, CALIBRE_LIBRARY_PATH, DOWNLOADS_DB_PATH, INGEST_DIR
+from ..infrastructure.app_settings import get_app_settings, update_app_settings
 from ..core import backend
+from ..core.conversion_manager import get_conversion_manager
 
 from ..integrations.cwa.client import CWAClient
 from ..integrations.cwa.settings import cwa_settings
@@ -352,18 +354,28 @@ def admin_required(f):
         if not session.get('logged_in') or not session.get('username'):
             return jsonify({"error": "Authentication required"}), 401
         
-        # Check admin status via CWA
+        username = session.get('username')
+        
+        # Check admin status directly from database
         try:
-            client = get_cwa_client()
-            if not client:
-                return jsonify({'error': 'CWA not configured'}), 400
+            from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+            cwa_db = get_cwa_db_manager()
+            
+            if not cwa_db:
+                logger.error("CWA database manager not available for admin check")
+                return jsonify({"error": "Admin verification unavailable"}), 503
                 
-            response = client.get('/admin/view')
-            if response.status_code != 200:
+            user_permissions = cwa_db.get_user_permissions(username)
+            is_admin = user_permissions.get('admin', False)
+            
+            if not is_admin:
+                logger.warning(f"User {username} attempted admin access without privileges")
                 return jsonify({"error": "Admin privileges required"}), 403
                 
+            logger.debug(f"Admin access granted for user: {username}")
+            
         except Exception as e:
-            logger.error(f"Error checking admin status: {e}")
+            logger.error(f"Error checking admin status for {username}: {e}")
             return jsonify({"error": "Admin verification failed"}), 403
             
         return f(*args, **kwargs)
@@ -634,47 +646,27 @@ def api_login() -> Union[Response, Tuple[Response, int]]:
         username = data['username']
         password = data['password']
         
-        # First, try to authenticate with CWA (authoritative source)
-        if cwa_proxy:
-            logger.info(f"Attempting CWA authentication for user: {username}")
+        # Authenticate directly against app.db database
+        logger.info(f"Attempting direct database authentication for user: {username}")
+        
+        if validate_credentials(username, password):
+            # Authentication successful - create local session
+            session['logged_in'] = True
+            session['username'] = username
+            session.permanent = True
             
-            # Create a temporary user session to test CWA login
-            from ..integrations.cwa.proxy import CWAUserSession
-            temp_session = CWAUserSession(username, password, cwa_proxy.cwa_base_url)
+            logger.info(f"User {username} logged in successfully via direct database authentication")
             
-            if cwa_proxy._login_user_session(temp_session):
-                # CWA login successful - now create our local session
-                session['logged_in'] = True
-                session['username'] = username
-                session['cwa_password'] = password  # Store for ongoing CWA requests
-                session.permanent = True
-                
-                # Store the CWA session for this user
-                with cwa_proxy.sessions_lock:
-                    cwa_proxy.user_sessions[username] = temp_session
-                
-                logger.info(f"User {username} logged in successfully via CWA")
-                
-                # Create the response
-                response = jsonify({
-                    "success": True,
-                    "user": {"username": username}
-                })
-                
-                # Create the second session cookie for CWA proxy
-                dual_session_manager.create_proxy_session_cookie(response, username, password)
-                
-                return response
-            else:
-                logger.warning(f"CWA authentication failed for user: {username}")
-                return jsonify({"error": "Invalid username or password"}), 401
+            # Create the response
+            response = jsonify({
+                "success": True,
+                "user": {"username": username}
+            })
+            
+            return response
         else:
-            # CWA proxy not available - this should be an error, not a fallback
-            logger.error("CWA proxy not available - cannot authenticate users without CWA")
-            return jsonify({
-                "error": "Authentication service unavailable",
-                "message": "CWA connection required for authentication"
-            }), 503
+            logger.warning(f"Direct database authentication failed for user: {username}")
+            return jsonify({"error": "Invalid username or password"}), 401
             
     except Exception as e:
         logger.error_trace(f"Login error: {e}")
@@ -691,12 +683,8 @@ def api_logout() -> Union[Response, Tuple[Response, int]]:
     try:
         username = session.get('username', 'unknown')
         
-        # Clear CWA session if we have one
-        if hasattr(cwa_proxy, 'user_sessions') and username != 'unknown':
-            with cwa_proxy.sessions_lock:
-                if username in cwa_proxy.user_sessions:
-                    logger.info(f"Clearing CWA session for user: {username}")
-                    del cwa_proxy.user_sessions[username]
+        # CWA proxy sessions no longer needed - using direct database authentication
+        logger.debug(f"Logging out user: {username}")
         
         session.clear()
         logger.info(f"User {username} logged out")
@@ -2070,40 +2058,22 @@ def api_admin_status():
     """Check if current user has admin privileges"""
     try:
         is_admin = False
+        username = session.get('username')
         
-        # Method 1: Try CWA client-based admin check
-        client = get_cwa_client()
-        if client:
-            try:
-                # Check admin status via CWA
-                admin_url = '/admin/view'
-                logger.info(f"Admin status check: Testing {client.base_url}{admin_url}")
-                response = client.get(admin_url)
-                logger.info(f"Admin status check: Response status = {response.status_code}")
-                is_admin = response.status_code == 200
-            except Exception as e:
-                logger.error(f"CWA client admin check failed: {e}")
-                is_admin = False
+        if username:
+            # Check admin status directly from database
+            from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+            cwa_db = get_cwa_db_manager()
+            
+            if cwa_db:
+                logger.debug(f"Admin status check: Checking database for {username}")
+                user_permissions = cwa_db.get_user_permissions(username)
+                is_admin = user_permissions.get('admin', False)
+                logger.debug(f"Admin status check: Database result = {is_admin}")
+            else:
+                logger.warning("Admin status check: CWA database not available")
         else:
-            logger.error("Admin status check: CWA client not available")
-        
-        # Method 2: Fallback to database-based admin check if client method failed
-        if not is_admin:
-            try:
-                username = session.get('username')
-                if username:
-                    from ..infrastructure.cwa_db_manager import get_cwa_db_manager
-                    cwa_db = get_cwa_db_manager()
-                    if cwa_db:
-                        logger.info(f"Admin status check: Trying database fallback for {username}")
-                        user_permissions = cwa_db.get_user_permissions(username)
-                        is_admin = user_permissions.get('admin', False)
-                        logger.info(f"Admin status check: Database result = {is_admin}")
-                    else:
-                        logger.warning("Admin status check: CWA database not available for fallback")
-            except Exception as e:
-                logger.error(f"Database admin check failed: {e}")
-                is_admin = False
+            logger.warning("Admin status check: No username in session")
         
         return jsonify({'is_admin': is_admin})
         
@@ -2625,48 +2595,23 @@ def api_admin_user_info():
         
         username = session.get('username')
         
-        # Check actual admin status via CWA
+        # Check admin status directly from database
         is_admin = False
         
-        # Method 1: Try session-based admin check
-        if cwa_proxy:
-            try:
-                # Get user session
-                with cwa_proxy.sessions_lock:
-                    user_session = cwa_proxy.user_sessions.get(username)
-                
-                logger.info(f"Admin check for {username}: user_session exists = {user_session is not None}")
-                if user_session:
-                    logger.info(f"Admin check: CWA base URL = {user_session.cwa_base_url}")
-                    admin_url = f"{user_session.cwa_base_url}/cwa-stats-show"
-                    logger.info(f"Admin check: Testing access to {admin_url}")
-                    
-                    # Test admin access by trying to access admin endpoints
-                    response = user_session.session.head(admin_url, timeout=5)
-                    logger.info(f"Admin check: Response status = {response.status_code}")
-                    is_admin = response.status_code == 200
-                else:
-                    logger.warning(f"Admin check: No user session found for {username}")
-            except Exception as e:
-                logger.error(f"Failed session-based admin check for {username}: {e}")
-                logger.error(f"Admin check exception type: {type(e).__name__}")
-                is_admin = False
-        
-        # Method 2: Fallback to database-based admin check if session method failed
-        if not is_admin:
-            try:
-                from ..infrastructure.cwa_db_manager import get_cwa_db_manager
-                cwa_db = get_cwa_db_manager()
-                if cwa_db:
-                    logger.info(f"Admin check: Trying database fallback for {username}")
-                    user_permissions = cwa_db.get_user_permissions(username)
-                    is_admin = user_permissions.get('admin', False)
-                    logger.info(f"Admin check: Database result = {is_admin}")
-                else:
-                    logger.warning("Admin check: CWA database not available for fallback")
-            except Exception as e:
-                logger.error(f"Failed database-based admin check for {username}: {e}")
-                is_admin = False
+        try:
+            from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+            cwa_db = get_cwa_db_manager()
+            
+            if cwa_db:
+                logger.debug(f"Admin check for {username}: Checking database")
+                user_permissions = cwa_db.get_user_permissions(username)
+                is_admin = user_permissions.get('admin', False)
+                logger.debug(f"Admin check: Database result = {is_admin}")
+            else:
+                logger.warning("Admin check: CWA database not available")
+        except Exception as e:
+            logger.error(f"Database admin check failed for {username}: {e}")
+            is_admin = False
         
         return jsonify({
             'authenticated': True,
@@ -2741,6 +2686,157 @@ def api_admin_bulk_delete_books():
         
     except Exception as e:
         logger.error(f"Error bulk deleting books: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# ============================================================================
+# Admin Settings API Endpoints (Global Application Settings)
+# ============================================================================
+
+@app.route('/api/admin/settings', methods=['GET'])
+@admin_required
+def api_admin_get_settings():
+    """Get global application settings (admin only)"""
+    try:
+        settings = get_app_settings()
+        
+        # Convert to dict for JSON response
+        from dataclasses import asdict
+        settings_dict = asdict(settings)
+        
+        return jsonify({
+            'success': True,
+            'settings': settings_dict
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting admin settings: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/settings', methods=['POST'])
+@admin_required
+def api_admin_update_settings():
+    """Update global application settings (admin only)"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No settings data provided'}), 400
+            
+        # Update settings
+        success = update_app_settings(data)
+        
+        if success:
+            # Get updated settings to return
+            settings = get_app_settings()
+            from dataclasses import asdict
+            settings_dict = asdict(settings)
+            
+            return jsonify({
+                'success': True,
+                'message': 'Settings updated successfully',
+                'settings': settings_dict
+            })
+        else:
+            return jsonify({'error': 'Failed to update settings'}), 500
+            
+    except Exception as e:
+        logger.error(f"Error updating admin settings: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/settings/test-conversion', methods=['POST'])
+@admin_required  
+def api_admin_test_conversion():
+    """Test if Calibre conversion tools are available (admin only)"""
+    try:
+        import subprocess
+        
+        # Test ebook-convert
+        try:
+            result = subprocess.run([
+                'ebook-convert', '--version'
+            ], capture_output=True, text=True, timeout=10)
+            
+            if result.returncode == 0:
+                version_info = result.stdout.strip()
+                
+                # Also test calibredb
+                db_result = subprocess.run([
+                    'calibredb', '--version'
+                ], capture_output=True, text=True, timeout=10)
+                
+                if db_result.returncode == 0:
+                    db_version = db_result.stdout.strip()
+                    
+                    return jsonify({
+                        'success': True,
+                        'available': True,
+                        'ebook_convert_version': version_info,
+                        'calibredb_version': db_version,
+                        'message': 'Calibre tools are available and working'
+                    })
+                else:
+                    return jsonify({
+                        'success': True,
+                        'available': False,
+                        'error': 'calibredb not available',
+                        'message': 'ebook-convert available but calibredb failed'
+                    })
+            else:
+                return jsonify({
+                    'success': True,
+                    'available': False,
+                    'error': result.stderr or 'ebook-convert failed',
+                    'message': 'Calibre tools are not available'
+                })
+                
+        except subprocess.TimeoutExpired:
+            return jsonify({
+                'success': True,
+                'available': False,
+                'error': 'Command timeout',
+                'message': 'Calibre tools test timed out'
+            })
+        except FileNotFoundError:
+            return jsonify({
+                'success': True,
+                'available': False,
+                'error': 'ebook-convert not found',
+                'message': 'Calibre tools are not installed or not in PATH'
+            })
+            
+    except Exception as e:
+        logger.error(f"Error testing Calibre conversion: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/conversion/status', methods=['GET'])
+@admin_required
+def api_admin_conversion_status():
+    """Get conversion manager status and active jobs (admin only)"""
+    try:
+        # Import asyncio to run async function
+        import asyncio
+        
+        # Get or create event loop
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        # Run async function
+        conversion_manager = loop.run_until_complete(get_conversion_manager())
+        
+        active_jobs = conversion_manager.get_active_jobs()
+        library_stats = conversion_manager.library_manager.get_library_stats()
+        
+        return jsonify({
+            'success': True,
+            'conversion_manager_running': conversion_manager.running,
+            'active_jobs': active_jobs,
+            'library_stats': library_stats
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting conversion status: {e}")
         return jsonify({'error': str(e)}), 500
 
 # ============================================================================
