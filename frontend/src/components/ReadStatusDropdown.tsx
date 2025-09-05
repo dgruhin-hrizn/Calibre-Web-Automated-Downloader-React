@@ -121,6 +121,10 @@ export function ReadStatusDropdown({
           className="min-w-[160px] bg-background border border-border rounded-md p-1 shadow-md z-50"
           sideOffset={5}
           align="end"
+          side="bottom"
+          alignOffset={-5}
+          avoidCollisions={true}
+          collisionPadding={8}
         >
           {/* Mark as Read */}
           <DropdownMenu.Item
