@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Search as SearchIcon, Upload } from 'lucide-react'
-import * as Tabs from '@radix-ui/react-tabs'
+import { Button } from '../../components/ui/Button'
 import { SearchResultModal } from '../../components/SearchResultModal'
 import { useSearchBooks, useSearchCache } from '../../hooks/useSearchCache'
 import { useDownloadBook, useDownloadStatus, type Book } from '../../hooks/useDownloads'
@@ -11,6 +11,7 @@ import { BookUpload } from './components/BookUpload'
 import { SearchForm } from './components/SearchForm'
 import { SearchResults } from './components/SearchResults'
 import { UploadHistory } from './components/UploadHistory'
+import { type SearchSortParam } from './components/SearchSortDropdown'
 
 export function Search() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -18,6 +19,8 @@ export function Search() {
   const [author, setAuthor] = useState('')
   const [language, setLanguage] = useState('')
   const [format, setFormat] = useState('')
+  const [sortParam, setSortParam] = useState<SearchSortParam>('year-asc')
+  const [currentMode, setCurrentMode] = useState<'search' | 'upload'>('search')
   const [pendingDownloads, setPendingDownloads] = useState<Set<string>>(new Set())
   const [selectedBook, setSelectedBook] = useState<any | null>(null)
   const isUpdatingFromUrl = useRef(false)
@@ -157,43 +160,58 @@ export function Search() {
     }
   }
 
+  const handleSortChange = (newSort: SearchSortParam) => {
+    setSortParam(newSort)
+  }
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Add Books</h1>
-        <p className="text-muted-foreground">
-          Search online for books or upload your own files to add to your library
-        </p>
+      {/* Header with Toggle Group */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex-1">
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Add Books</h1>
+          <p className="text-muted-foreground">
+            Search online for books or upload your own files to add to your library
+          </p>
+        </div>
+        
+        {/* Search/Upload Toggle - Styled like Library View Toggle */}
+        <div className="flex items-center border rounded-md flex-shrink-0 self-end sm:self-center ml-auto sm:ml-0">
+          <Button
+            variant={currentMode === 'search' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setCurrentMode('search')}
+            className="rounded-r-none flex items-center gap-1.5"
+            title="Search Online"
+          >
+            <SearchIcon className="h-4 w-4" />
+            <span className="text-xs sm:hidden">Search</span>
+            <span className="hidden sm:inline sr-only">Search</span>
+          </Button>
+          <Button
+            variant={currentMode === 'upload' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setCurrentMode('upload')}
+            className="rounded-l-none flex items-center gap-1.5"
+            title="Upload Books"
+          >
+            <Upload className="h-4 w-4" />
+            <span className="text-xs sm:hidden">Upload</span>
+            <span className="hidden sm:inline sr-only">Upload</span>
+          </Button>
+        </div>
       </div>
 
-      <Tabs.Root defaultValue="search" className="w-full">
-        <Tabs.List className="inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground w-full sm:w-auto">
-          <Tabs.Trigger
-            value="search"
-            className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1 sm:flex-initial"
-          >
-            <SearchIcon className="w-4 h-4 mr-1 sm:mr-2" />
-            <span className="hidden sm:inline">Search Online</span>
-            <span className="sm:hidden">Search</span>
-          </Tabs.Trigger>
-          <Tabs.Trigger
-            value="upload"
-            className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1 sm:flex-initial"
-          >
-            <Upload className="w-4 h-4 mr-1 sm:mr-2" />
-            <span className="hidden sm:inline">Upload Books</span>
-            <span className="sm:hidden">Upload</span>
-          </Tabs.Trigger>
-        </Tabs.List>
-
-        <Tabs.Content value="upload" className="mt-6 space-y-4">
-          <BookUpload 
-            onHistoryUpdate={() => setRefreshHistoryTrigger(prev => prev + 1)}
-          />
-          <UploadHistory key={refreshHistoryTrigger} />
-        </Tabs.Content>
-
-        <Tabs.Content value="search" className="mt-6 space-y-4">
+      {/* Content based on current mode */}
+      <div className="relative min-h-[400px]">
+        {/* Search Content */}
+        <div 
+          className={`space-y-0 sm:space-y-8 transition-all duration-300 ease-in-out ${
+            currentMode === 'search' 
+              ? 'opacity-100 translate-x-0 pointer-events-auto' 
+              : 'opacity-0 -translate-x-4 pointer-events-none absolute inset-0'
+          }`}
+        >
           <SearchForm
             query={query}
             setQuery={setQuery}
@@ -219,9 +237,25 @@ export function Search() {
             onDownload={handleDownload}
             onDetails={setSelectedBook}
             dataUpdatedAt={searchBooks.dataUpdatedAt}
+            sortParam={sortParam}
+            onSortChange={handleSortChange}
           />
-        </Tabs.Content>
-      </Tabs.Root>
+        </div>
+
+        {/* Upload Content */}
+        <div 
+          className={`space-y-4 transition-all duration-300 ease-in-out ${
+            currentMode === 'upload' 
+              ? 'opacity-100 translate-x-0 pointer-events-auto' 
+              : 'opacity-0 translate-x-4 pointer-events-none absolute inset-0'
+          }`}
+        >
+          <BookUpload 
+            onHistoryUpdate={() => setRefreshHistoryTrigger(prev => prev + 1)}
+          />
+          <UploadHistory key={refreshHistoryTrigger} />
+        </div>
+      </div>
 
       {/* Search Result Details Modal */}
       <SearchResultModal 
