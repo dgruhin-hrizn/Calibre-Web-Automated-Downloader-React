@@ -1611,9 +1611,10 @@ def api_metadata_series_list():
         page = int(request.args.get('page', 1))
         per_page = min(int(request.args.get('per_page', 50)), 200)
         search = request.args.get('search', '').strip()
+        starts_with = request.args.get('starts_with', '').strip()
         
         # Get series list with book counts
-        result = db_manager.get_series_with_counts(page=page, per_page=per_page, search=search)
+        result = db_manager.get_series_with_counts(page=page, per_page=per_page, search=search, starts_with=starts_with)
         
         return jsonify({
             'series': result['series'],

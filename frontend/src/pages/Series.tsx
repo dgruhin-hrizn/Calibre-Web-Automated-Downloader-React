@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Search } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Swiper, SwiperSlide } from 'swiper/react'
@@ -130,6 +130,24 @@ const swiperStyles = `
   .swiper-button-next-custom {
     z-index: 20;
   }
+  
+  /* Alphabet navigation swiper styles */
+  .alphabet-swiper {
+    overflow: visible;
+    width: 100%;
+    padding: 2px 0;
+  }
+  
+  .alphabet-swiper .swiper-wrapper {
+    display: flex;
+    align-items: center;
+  }
+  
+  .alphabet-swiper .swiper-slide {
+    flex-shrink: 0;
+    height: auto;
+    width: auto;
+  }
 `
 
 // Inject styles
@@ -181,29 +199,31 @@ export function Series() {
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [searchInput, setSearchInput] = useState('')
+  const [isSearching, setIsSearching] = useState(false)
+  const [activeLetter, setActiveLetter] = useState<string | null>(null)
+  
+  // Debounce timer ref
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  
+  // Alphabet letters for navigation
+  const alphabetLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 
   // Flatten all series from all pages
   const allSeries = useMemo(() => {
     return seriesPages.flatMap(page => page.series)
   }, [seriesPages])
 
-  // Filter series based on search
-  const filteredSeries = useMemo(() => {
-    if (!searchTerm.trim()) return allSeries
-    return allSeries.filter(series =>
-      series.name.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-  }, [allSeries, searchTerm])
-
   // Get series with their loaded books (show all series, even without books loaded)
+  // All filtering is handled server-side now
   const seriesWithBooksArray = useMemo(() => {
-    return filteredSeries
+    // No client-side filtering needed - backend handles all filtering
+    return allSeries
       .map(series => seriesWithBooks.get(series.id))
       .filter((series): series is SeriesWithBooks => series !== undefined)
-  }, [filteredSeries, seriesWithBooks])
+  }, [allSeries, seriesWithBooks])
 
   // Load a page of series
-  const loadSeriesPage = useCallback(async (page: number, isLoadMore: boolean = false) => {
+  const loadSeriesPage = useCallback(async (page: number, isLoadMore: boolean = false, overrideActiveLetter?: string | null) => {
     try {
       if (isLoadMore) {
         setLoadingMore(true)
@@ -212,9 +232,26 @@ export function Series() {
         setError(null)
       }
 
-      console.log(`📚 Fetching series page ${page}...`)
       
-      const response = await fetch(`/api/metadata/series?page=${page}&per_page=10${searchTerm ? `&search=${encodeURIComponent(searchTerm)}` : ''}`, {
+      // Build query parameters
+      const params = new URLSearchParams({
+        page: page.toString(),
+        per_page: '10'
+      })
+      
+      const currentActiveLetter = overrideActiveLetter !== undefined ? overrideActiveLetter : activeLetter
+      
+      if (currentActiveLetter && currentActiveLetter !== 'null') {
+        // Use starts_with for letter filtering
+        params.append('starts_with', currentActiveLetter)
+      } else if (searchTerm) {
+        // Use search for general text search
+        params.append('search', searchTerm)
+      }
+      
+      const url = `/api/metadata/series?${params}`
+      
+      const response = await fetch(url, {
         credentials: 'include'
       })
 
@@ -223,7 +260,6 @@ export function Series() {
       }
 
       const data = await response.json()
-      console.log(`📄 Series page ${page} response received:`, data)
       
       if (!data.series || !Array.isArray(data.series)) {
         throw new Error('Invalid series response format')
@@ -243,11 +279,8 @@ export function Series() {
         setSeriesPages([pageData])
       }
 
-
       setHasNextPage(page < (data.pages || 1))
       setCurrentPage(page)
-
-      console.log(`✅ Successfully loaded series page ${page}: ${data.series.length} series`)
 
     } catch (error) {
       console.error('❌ Failed to load series page:', error)
@@ -255,6 +288,7 @@ export function Series() {
     } finally {
       setLoading(false)
       setLoadingMore(false)
+      setIsSearching(false)
     }
   }, [searchTerm])
 
@@ -267,8 +301,6 @@ export function Series() {
 
     try {
       setLoadingSeriesBooks(prev => new Set([...prev, seriesInfo.id]))
-      
-      console.log(`📖 Lazy loading books for series: ${seriesInfo.name}`)
       
       const response = await fetch(`/api/metadata/series/${seriesInfo.id}/books?page=1&per_page=50`, {
         credentials: 'include'
@@ -313,7 +345,6 @@ export function Series() {
         }
 
       setSeriesWithBooks(prev => new Map([...prev, [seriesInfo.id, seriesWithBooksData]]))
-      console.log(`✅ Loaded ${books.length} books for series: ${seriesInfo.name}`)
       
       if (books.length === 1) {
         console.log(`⚠️ Note: Series "${seriesInfo.name}" only has 1 book, but backend said it should have ${seriesInfo.book_count}`)
@@ -331,12 +362,34 @@ export function Series() {
     }
   }, [seriesWithBooks, loadingSeriesBooks, showToast])
 
+  // Debounced search function
+  const debouncedSearch = useCallback((searchValue: string) => {
+    // Clear existing timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
+    
+    // Set new timeout
+    searchTimeoutRef.current = setTimeout(() => {
+      if (searchValue !== searchTerm) {
+        setIsSearching(true)
+        setSearchTerm(searchValue)
+        // Reset pagination and reload when searching
+        setSeriesPages([])
+        setSeriesWithBooks(new Map())
+        setCurrentPage(1)
+        setHasNextPage(true)
+        loadSeriesPage(1, false)
+      }
+    }, 500) // 500ms debounce delay
+  }, [searchTerm, loadSeriesPage])
+
   // Handle infinite scroll
   const handleLoadMore = useCallback(() => {
-    if (hasNextPage && !loadingMore && !loading) {
+    if (hasNextPage && !loadingMore && !loading && !isSearching) {
       loadSeriesPage(currentPage + 1, true)
     }
-  }, [hasNextPage, loadingMore, loading, currentPage, loadSeriesPage])
+  }, [hasNextPage, loadingMore, loading, isSearching, currentPage, loadSeriesPage])
 
   // Infinite scroll hook
   const { targetRef: loadMoreRef } = useInfiniteScroll(handleLoadMore, {
@@ -347,11 +400,35 @@ export function Series() {
 
   // Swiper handles navigation automatically, so we can remove the complex navigation logic
 
-  // Handle search button click
+  // Handle search input change with debouncing
+  const handleSearchInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    setSearchInput(value)
+    
+    // Clear active letter when user types in search box
+    if (activeLetter && value !== activeLetter) {
+      setActiveLetter(null)
+    }
+    
+    debouncedSearch(value.trim())
+  }, [debouncedSearch, activeLetter])
+
+  // Handle search button click (immediate search)
   const handleSearch = useCallback(() => {
     const trimmedInput = searchInput.trim()
+    // Clear debounce timeout and search immediately
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
     if (trimmedInput !== searchTerm) {
+      setIsSearching(true)
       setSearchTerm(trimmedInput)
+      
+      // Clear active letter when doing manual search (unless the search input is exactly the letter)
+      if (activeLetter && trimmedInput !== activeLetter) {
+        setActiveLetter(null)
+      }
+      
       // Reset pagination and reload when searching
       setSeriesPages([])
       setSeriesWithBooks(new Map())
@@ -359,7 +436,7 @@ export function Series() {
       setHasNextPage(true)
       loadSeriesPage(1, false)
     }
-  }, [searchInput, searchTerm, loadSeriesPage])
+  }, [searchInput, searchTerm, activeLetter, loadSeriesPage])
 
   // Handle Enter key press in search input
   const handleSearchKeyPress = useCallback((e: React.KeyboardEvent) => {
@@ -370,17 +447,69 @@ export function Series() {
 
   // Handle clear search
   const handleClearSearch = useCallback(() => {
-    setSearchInput('')
-    if (searchTerm !== '') {
-      setSearchTerm('')
-      // Reset pagination and reload
-      setSeriesPages([])
-      setSeriesWithBooks(new Map())
-      setCurrentPage(1)
-      setHasNextPage(true)
-      loadSeriesPage(1, false)
+    // Clear debounce timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
     }
-  }, [searchTerm, loadSeriesPage])
+    setSearchInput('')
+    setSearchTerm('')
+    setIsSearching(false)
+    
+    // If there's an active letter, keep it and reload with letter filter
+    // If no active letter, load unfiltered data
+    setSeriesPages([])
+    setSeriesWithBooks(new Map())
+    setCurrentPage(1)
+    setHasNextPage(true)
+    loadSeriesPage(1, false)
+  }, [loadSeriesPage])
+
+  // Handle alphabet letter jump
+  const handleLetterJump = useCallback((letter: string) => {
+    // Clear debounce timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
+    
+    // Letter filtering is separate from text search
+    // Don't update the search input - keep it independent
+    setActiveLetter(letter)
+    setIsSearching(true)
+    
+    // Reset pagination and reload with the specific letter
+    setSeriesPages([])
+    setSeriesWithBooks(new Map())
+    setCurrentPage(1)
+    setHasNextPage(true)
+    loadSeriesPage(1, false, letter)
+  }, [loadSeriesPage])
+
+  // Handle clear alphabet filter
+  const handleClearAlphabet = useCallback(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
+    setSearchInput('')
+    setActiveLetter(null)
+    setSearchTerm('')
+    setIsSearching(false)
+    
+    // Reset state completely like initial load, then load fresh data
+    setSeriesPages([])
+    setSeriesWithBooks(new Map())
+    setCurrentPage(1)
+    setHasNextPage(true)
+    loadSeriesPage(1, false)
+  }, [loadSeriesPage])
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
+      }
+    }
+  }, [])
 
   // Book action handlers
   const handleBookDetails = useCallback((book: UnifiedBook) => {
@@ -555,21 +684,41 @@ export function Series() {
       <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-          <Input
-            type="text"
-            placeholder="Search series..."
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onKeyPress={handleSearchKeyPress}
-            className="pl-10 h-9 sm:h-10"
-          />
+                        <Input
+                type="text"
+                placeholder="Search series..."
+                value={searchInput}
+                onChange={handleSearchInputChange}
+                onKeyPress={handleSearchKeyPress}
+                className="pl-10 h-9 sm:h-10"
+                disabled={loading}
+              />
         </div>
         <div className="flex gap-2 sm:gap-3">
-          <Button onClick={handleSearch} variant="default" size="sm" className="flex-1 sm:flex-none h-9 sm:h-10">
-            Search
+          <Button 
+            onClick={handleSearch} 
+            variant="default" 
+            size="sm" 
+            className="flex-1 sm:flex-none h-9 sm:h-10"
+                          disabled={loading || isSearching}
+          >
+            {isSearching ? (
+              <>
+                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
+                Searching...
+              </>
+            ) : (
+              'Search'
+            )}
           </Button>
           {searchTerm && (
-            <Button onClick={handleClearSearch} variant="outline" size="sm" className="flex-1 sm:flex-none h-9 sm:h-10">
+            <Button 
+              onClick={handleClearSearch} 
+              variant="outline" 
+              size="sm" 
+              className="flex-1 sm:flex-none h-9 sm:h-10"
+              disabled={loading}
+            >
               Clear
             </Button>
           )}
@@ -603,7 +752,7 @@ export function Series() {
               ))}
               
               {/* Infinite scroll trigger */}
-              {hasNextPage && (
+              {hasNextPage && !isSearching && (
                 <div ref={loadMoreRef} className="flex justify-center py-8">
                   {loadingMore ? (
                     <div className="flex items-center gap-2">
@@ -611,7 +760,7 @@ export function Series() {
                       <span>Loading more series...</span>
                     </div>
                   ) : (
-                    <Button onClick={handleLoadMore} variant="outline">
+                    <Button onClick={handleLoadMore} variant="outline" disabled={isSearching}>
                       Load More Series
                     </Button>
                   )}
@@ -619,6 +768,58 @@ export function Series() {
               )}
             </div>
           )}
+      </div>
+      
+      {/* Mobile-only bottom padding to account for fixed alphabet footer */}
+      <div className="h-20 md:hidden" />
+      
+      {/* Mobile Alphabet Navigation Footer */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/90 border-t border-border">
+        <div className="px-2 py-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-medium text-muted-foreground px-2">Jump to Letter</span>
+            {activeLetter && (
+              <Button
+                onClick={handleClearAlphabet}
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs"
+              >
+                Clear ({activeLetter})
+              </Button>
+            )}
+          </div>
+          
+          {/* Swipeable Alphabet Letters */}
+          <Swiper
+            modules={[FreeMode]}
+            spaceBetween={4}
+            slidesPerView="auto"
+            freeMode={{
+              enabled: true,
+              sticky: false,
+            }}
+            className="alphabet-swiper"
+          >
+            {alphabetLetters.map((letter) => (
+              <SwiperSlide key={letter} className="!w-auto">
+                <Button
+                  onClick={() => handleLetterJump(letter)}
+                  variant={activeLetter === letter ? "default" : "outline"}
+                  size="sm"
+                  className={`h-8 w-8 p-0 text-xs font-semibold ${
+                    activeLetter === letter 
+                      ? 'bg-primary text-primary-foreground' 
+                      : 'hover:bg-accent hover:text-accent-foreground'
+                  }`}
+                  disabled={isSearching}
+                >
+                  {letter}
+                </Button>
+              </SwiperSlide>
+            ))}
+          </Swiper>
+        </div>
       </div>
       
       <ToastContainer />

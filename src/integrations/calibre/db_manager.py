@@ -807,7 +807,7 @@ class CalibreDBManager:
         finally:
             self.close_session(session)
     
-    def get_series_with_counts(self, page: int = 1, per_page: int = 50, search: str = None) -> Dict[str, Any]:
+    def get_series_with_counts(self, page: int = 1, per_page: int = 50, search: str = None, starts_with: str = None) -> Dict[str, Any]:
         """Get series list with book counts (only series with multiple books)"""
         session = self.get_session()
         try:
@@ -823,8 +823,13 @@ class CalibreDBManager:
              .having(func.count(books_series_link.c.book) > 1) \
              .order_by(Series.sort)
             
-            # Apply search filter if provided
-            if search:
+            # Apply search filters if provided
+            if starts_with:
+                # For alphabetical filtering - starts with the letter
+                starts_with_term = f"{starts_with}%"
+                query = query.filter(Series.name.like(starts_with_term))
+            elif search:
+                # For general search - contains the term anywhere
                 search_term = f"%{search}%"
                 query = query.filter(Series.name.like(search_term))
             
