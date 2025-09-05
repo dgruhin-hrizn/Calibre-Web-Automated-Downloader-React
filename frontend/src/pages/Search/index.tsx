@@ -206,7 +206,7 @@ export function Search() {
       <div className="relative min-h-[400px]">
         {/* Search Content */}
         <div 
-          className={`space-y-0 sm:space-y-8 transition-all duration-300 ease-in-out ${
+          className={`space-y-6 sm:space-y-8 transition-all duration-300 ease-in-out ${
             currentMode === 'search' 
               ? 'opacity-100 translate-x-0 pointer-events-auto' 
               : 'opacity-0 -translate-x-4 pointer-events-none absolute inset-0'

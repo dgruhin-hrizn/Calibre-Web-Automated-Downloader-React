@@ -96,38 +96,77 @@ export function SearchResults({
       <div className="space-y-6">
         {/* Themed Results Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          {/* Results Info Box - Themed with Teal */}
-          <div className="bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 rounded-lg px-4 py-3">
-            <div className="flex items-center gap-3">
-              <div className="w-2 h-2 bg-primary rounded-full"></div>
-              <div className="flex items-center gap-3">
-                <h2 className="text-lg font-semibold text-foreground">
-                  {displayResults.length} {displayResults.length === 1 ? 'Book' : 'Books'} Found
-                </h2>
-                {cachedResults && !results && (
-                  <span className="text-sm text-primary/80 font-medium">(cached results)</span>
-                )}
-                {dataUpdatedAt && (
-                  <span className="text-sm text-muted-foreground">
-                    Updated {new Date(dataUpdatedAt).toLocaleTimeString('en-US', { 
-                      hour: '2-digit', 
-                      minute: '2-digit',
-                      hour12: false 
-                    })}
-                  </span>
-                )}
+          {/* Mobile Layout */}
+          <div className="flex sm:hidden items-center gap-2">
+            {/* Results Info Box - Mobile Half Width */}
+            <div className="bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 rounded-lg px-3 py-3 flex-1">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-primary rounded-full flex-shrink-0"></div>
+                <div className="flex items-center gap-2 min-w-0">
+                  <h2 className="text-sm font-semibold text-foreground truncate">
+                    {displayResults.length} {displayResults.length === 1 ? 'Book' : 'Books'} Found
+                  </h2>
+                  {cachedResults && !results && (
+                    <span className="text-xs text-primary/80 font-medium whitespace-nowrap">(cached)</span>
+                  )}
+                  {dataUpdatedAt && (
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      {new Date(dataUpdatedAt).toLocaleTimeString('en-US', { 
+                        hour: '2-digit', 
+                        minute: '2-digit',
+                        hour12: false 
+                      })}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
+            
+            {/* Sort Controls - Mobile */}
+            <div className="flex items-center">
+              <SearchSortDropdown
+                sortParam={sortParam}
+                onSortChange={onSortChange}
+                disabled={isLoading}
+              />
+            </div>
           </div>
-          
-          {/* Sort Controls */}
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground hidden sm:inline">Sort by:</span>
-            <SearchSortDropdown
-              sortParam={sortParam}
-              onSortChange={onSortChange}
-              disabled={isLoading}
-            />
+
+          {/* Desktop Layout */}
+          <div className="hidden sm:flex sm:items-center sm:justify-between sm:w-full sm:gap-4">
+            {/* Results Info Box - Desktop */}
+            <div className="bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 rounded-lg px-4 py-3">
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 bg-primary rounded-full"></div>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-lg font-semibold text-foreground">
+                    {displayResults.length} {displayResults.length === 1 ? 'Book' : 'Books'} Found
+                  </h2>
+                  {cachedResults && !results && (
+                    <span className="text-sm text-primary/80 font-medium">(cached results)</span>
+                  )}
+                  {dataUpdatedAt && (
+                    <span className="text-sm text-muted-foreground">
+                      Updated {new Date(dataUpdatedAt).toLocaleTimeString('en-US', { 
+                        hour: '2-digit', 
+                        minute: '2-digit',
+                        hour12: false 
+                      })}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            {/* Sort Controls - Desktop */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Sort by:</span>
+              <SearchSortDropdown
+                sortParam={sortParam}
+                onSortChange={onSortChange}
+                disabled={isLoading}
+              />
+            </div>
           </div>
         </div>
         
