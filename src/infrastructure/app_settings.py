@@ -1,218 +1,137 @@
-"""
-Application Settings Management
+# Legacy compatibility layer - redirects to new database-based settings
+# This maintains backward compatibility while using the new Inkdrop settings system
 
-Handles global application settings stored in app_settings.json.
-These are admin-only settings that affect the entire application.
-"""
-
-import json
-import os
 import logging
-from typing import Dict, Any, Optional
-from dataclasses import dataclass, asdict
-from pathlib import Path
+from dataclasses import dataclass, field
+from typing import Optional
+
+from .inkdrop_settings_manager import get_inkdrop_settings_manager, ConversionSettings as InkdropConversionSettings, DownloadSettings as InkdropDownloadSettings
 
 logger = logging.getLogger(__name__)
 
-
+# Legacy dataclasses for backward compatibility
 @dataclass
 class ConversionSettings:
-    """Settings for book format conversion"""
     enabled: bool = False
     target_format: str = "epub"
-    supported_formats: list = None
-    quality: str = "high"  # low, medium, high
+    quality: str = "high"
     preserve_cover: bool = True
     preserve_metadata: bool = True
-    timeout_seconds: int = 300  # 5 minutes
-    
-    def __post_init__(self):
-        if self.supported_formats is None:
-            self.supported_formats = ["pdf", "mobi", "azw3", "fb2", "docx", "txt", "rtf"]
-
+    timeout_seconds: int = 300
+    supported_formats: list[str] = field(default_factory=lambda: ["azw", "azw3", "mobi", "pdf", "rtf", "txt", "html", "htm", "fb2", "lit", "lrf", "pdb", "pml", "rb", "snb", "tcr", "zip"])
 
 @dataclass
 class DownloadSettings:
-    """Settings for download behavior"""
     max_concurrent_downloads: int = 3
     max_concurrent_conversions: int = 2
     retry_attempts: int = 3
-    timeout_seconds: int = 300
     cleanup_temp_files: bool = True
-
 
 @dataclass
 class AppSettings:
-    """Global application settings"""
-    conversion: ConversionSettings = None
-    downloads: DownloadSettings = None
-    calibre_library_path: str = "/calibre-library"
-    
-    def __post_init__(self):
-        if self.conversion is None:
-            self.conversion = ConversionSettings()
-        if self.downloads is None:
-            self.downloads = DownloadSettings()
+    conversion: ConversionSettings = field(default_factory=ConversionSettings)
+    downloads: DownloadSettings = field(default_factory=DownloadSettings)
 
+def _convert_from_inkdrop(inkdrop_settings) -> AppSettings:
+    """Convert Inkdrop settings to legacy AppSettings format"""
+    conversion = ConversionSettings(
+        enabled=inkdrop_settings.conversion.enabled,
+        target_format=inkdrop_settings.conversion.target_format,
+        quality=inkdrop_settings.conversion.quality,
+        preserve_cover=inkdrop_settings.conversion.preserve_cover,
+        preserve_metadata=inkdrop_settings.conversion.preserve_metadata,
+        timeout_seconds=inkdrop_settings.conversion.timeout_seconds,
+        supported_formats=inkdrop_settings.conversion.supported_formats
+    )
+    
+    downloads = DownloadSettings(
+        max_concurrent_downloads=inkdrop_settings.downloads.max_concurrent_downloads,
+        max_concurrent_conversions=inkdrop_settings.downloads.max_concurrent_conversions,
+        retry_attempts=inkdrop_settings.downloads.retry_attempts,
+        cleanup_temp_files=inkdrop_settings.downloads.cleanup_temp_files
+    )
+    
+    return AppSettings(conversion=conversion, downloads=downloads)
 
-class AppSettingsManager:
-    """Manages loading, saving, and validation of application settings"""
+def _convert_to_inkdrop(app_settings: AppSettings):
+    """Convert legacy AppSettings to Inkdrop format"""
+    inkdrop_conversion = InkdropConversionSettings(
+        enabled=app_settings.conversion.enabled,
+        target_format=app_settings.conversion.target_format,
+        quality=app_settings.conversion.quality,
+        preserve_cover=app_settings.conversion.preserve_cover,
+        preserve_metadata=app_settings.conversion.preserve_metadata,
+        timeout_seconds=app_settings.conversion.timeout_seconds,
+        supported_formats=app_settings.conversion.supported_formats
+    )
     
-    def __init__(self, settings_file: str = "app_settings.json"):
-        self.settings_file = Path(settings_file)
-        self._settings: Optional[AppSettings] = None
-        
-    def load_settings(self) -> AppSettings:
-        """Load settings from file, create defaults if file doesn't exist"""
-        try:
-            if self.settings_file.exists():
-                logger.info(f"Loading app settings from {self.settings_file}")
-                with open(self.settings_file, 'r') as f:
-                    data = json.load(f)
-                
-                # Convert nested dicts back to dataclasses
-                if 'conversion' in data and isinstance(data['conversion'], dict):
-                    data['conversion'] = ConversionSettings(**data['conversion'])
-                if 'downloads' in data and isinstance(data['downloads'], dict):
-                    data['downloads'] = DownloadSettings(**data['downloads'])
-                    
-                self._settings = AppSettings(**data)
-                logger.info("App settings loaded successfully")
-            else:
-                logger.info("No app settings file found, creating defaults")
-                self._settings = AppSettings()
-                self.save_settings()  # Save defaults
-                
-        except Exception as e:
-            logger.error(f"Error loading app settings: {e}")
-            logger.info("Using default settings")
-            self._settings = AppSettings()
-            
-        return self._settings
+    inkdrop_downloads = InkdropDownloadSettings(
+        max_concurrent_downloads=app_settings.downloads.max_concurrent_downloads,
+        max_concurrent_conversions=app_settings.downloads.max_concurrent_conversions,
+        retry_attempts=app_settings.downloads.retry_attempts,
+        cleanup_temp_files=app_settings.downloads.cleanup_temp_files
+    )
     
-    def save_settings(self, settings: Optional[AppSettings] = None) -> bool:
-        """Save settings to file"""
-        try:
-            if settings:
-                self._settings = settings
-            elif not self._settings:
-                logger.error("No settings to save")
-                return False
-                
-            # Convert to dict, handling nested dataclasses
-            data = asdict(self._settings)
-            
-            # Ensure parent directory exists
-            self.settings_file.parent.mkdir(parents=True, exist_ok=True)
-            
-            # Write with pretty formatting
-            with open(self.settings_file, 'w') as f:
-                json.dump(data, f, indent=2)
-                
-            logger.info(f"App settings saved to {self.settings_file}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error saving app settings: {e}")
-            return False
-    
-    def get_settings(self) -> AppSettings:
-        """Get current settings, loading from file if not already loaded"""
-        if self._settings is None:
-            return self.load_settings()
-        return self._settings
-    
-    def update_settings(self, updates: Dict[str, Any]) -> bool:
-        """Update settings with partial data"""
-        try:
-            current = self.get_settings()
-            
-            # Deep merge the updates
-            updated_data = self._deep_merge(asdict(current), updates)
-            
-            # Validate the updated settings
-            if not self._validate_settings(updated_data):
-                return False
-                
-            # Convert back to dataclasses
-            if 'conversion' in updated_data and isinstance(updated_data['conversion'], dict):
-                updated_data['conversion'] = ConversionSettings(**updated_data['conversion'])
-            if 'downloads' in updated_data and isinstance(updated_data['downloads'], dict):
-                updated_data['downloads'] = DownloadSettings(**updated_data['downloads'])
-                
-            new_settings = AppSettings(**updated_data)
-            return self.save_settings(new_settings)
-            
-        except Exception as e:
-            logger.error(f"Error updating app settings: {e}")
-            return False
-    
-    def _deep_merge(self, base: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:
-        """Deep merge two dictionaries"""
-        result = base.copy()
-        
-        for key, value in updates.items():
-            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-                result[key] = self._deep_merge(result[key], value)
-            else:
-                result[key] = value
-                
-        return result
-    
-    def _validate_settings(self, data: Dict[str, Any]) -> bool:
-        """Validate settings data"""
-        try:
-            # Validate conversion settings
-            if 'conversion' in data:
-                conv = data['conversion']
-                if 'target_format' in conv and conv['target_format'] not in ['epub', 'pdf', 'mobi', 'azw3']:
-                    logger.error(f"Invalid target format: {conv['target_format']}")
-                    return False
-                    
-                if 'quality' in conv and conv['quality'] not in ['low', 'medium', 'high']:
-                    logger.error(f"Invalid quality setting: {conv['quality']}")
-                    return False
-                    
-                if 'timeout_seconds' in conv and (conv['timeout_seconds'] < 30 or conv['timeout_seconds'] > 3600):
-                    logger.error(f"Invalid timeout: {conv['timeout_seconds']} (must be 30-3600 seconds)")
-                    return False
-            
-            # Validate download settings
-            if 'downloads' in data:
-                dl = data['downloads']
-                if 'max_concurrent_downloads' in dl and (dl['max_concurrent_downloads'] < 1 or dl['max_concurrent_downloads'] > 10):
-                    logger.error(f"Invalid max concurrent downloads: {dl['max_concurrent_downloads']} (must be 1-10)")
-                    return False
-                    
-                if 'max_concurrent_conversions' in dl and (dl['max_concurrent_conversions'] < 1 or dl['max_concurrent_conversions'] > 5):
-                    logger.error(f"Invalid max concurrent conversions: {dl['max_concurrent_conversions']} (must be 1-5)")
-                    return False
-            
-            # Validate library path
-            if 'calibre_library_path' in data:
-                path = data['calibre_library_path']
-                if not isinstance(path, str) or not path:
-                    logger.error("Invalid calibre_library_path")
-                    return False
-                    
-            return True
-            
-        except Exception as e:
-            logger.error(f"Settings validation error: {e}")
-            return False
-
-
-# Global instance
-_settings_manager = AppSettingsManager()
+    return inkdrop_conversion, inkdrop_downloads
 
 def get_app_settings() -> AppSettings:
-    """Get global app settings"""
-    return _settings_manager.get_settings()
+    """Get app settings using new database-based system"""
+    try:
+        settings_manager = get_inkdrop_settings_manager()
+        inkdrop_settings = settings_manager.get_all_settings()
+        return _convert_from_inkdrop(inkdrop_settings)
+    except Exception as e:
+        logger.error(f"Error loading settings from database: {e}")
+        return AppSettings()  # Return defaults
 
-def save_app_settings(settings: AppSettings) -> bool:
-    """Save global app settings"""
-    return _settings_manager.save_settings(settings)
+def update_app_settings(new_settings_data: dict) -> bool:
+    """Update app settings using new database-based system"""
+    try:
+        settings_manager = get_inkdrop_settings_manager()
+        current_settings = get_app_settings()
+        
+        # Update conversion settings
+        if 'conversion' in new_settings_data:
+            for key, value in new_settings_data['conversion'].items():
+                if hasattr(current_settings.conversion, key):
+                    setattr(current_settings.conversion, key, value)
+        
+        # Update download settings
+        if 'downloads' in new_settings_data:
+            for key, value in new_settings_data['downloads'].items():
+                if hasattr(current_settings.downloads, key):
+                    setattr(current_settings.downloads, key, value)
+        
+        # Convert and save to database
+        inkdrop_conversion, inkdrop_downloads = _convert_to_inkdrop(current_settings)
+        
+        success = True
+        success &= settings_manager.update_conversion_settings(inkdrop_conversion)
+        success &= settings_manager.update_download_settings(inkdrop_downloads)
+        
+        logger.info("App settings updated successfully using database")
+        return success
+        
+    except Exception as e:
+        logger.error(f"Error updating settings in database: {e}")
+        return False
 
-def update_app_settings(updates: Dict[str, Any]) -> bool:
-    """Update global app settings with partial data"""
-    return _settings_manager.update_settings(updates)
+# Legacy functions for backward compatibility
+def load_settings() -> AppSettings:
+    """Legacy function - redirects to get_app_settings()"""
+    return get_app_settings()
+
+def save_settings(settings: AppSettings) -> bool:
+    """Legacy function - converts to new format and saves"""
+    try:
+        settings_manager = get_inkdrop_settings_manager()
+        inkdrop_conversion, inkdrop_downloads = _convert_to_inkdrop(settings)
+        
+        success = True
+        success &= settings_manager.update_conversion_settings(inkdrop_conversion)
+        success &= settings_manager.update_download_settings(inkdrop_downloads)
+        
+        return success
+    except Exception as e:
+        logger.error(f"Error saving settings: {e}")
+        return False

@@ -1,25 +1,25 @@
 services:
-  # Official Calibre-Web-Automated
-  calibre-web-automated:
-    image: crocodilestick/calibre-web-automated:latest
-    container_name: cwa-official
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=America/New_York
-      # Docker Desktop on macOS breaks inotify events between host and container
-      # This forces CWA to use polling instead of inotify for reliable file detection
-      - NETWORK_SHARE_MODE=true
-    ports:
-      - "8083:8083"
-    volumes:
-      # Use local directories for easy access
-      - ./cwa-data/config:/config
-      - ./cwa-data/library:/calibre-library
-      - ./ingest:/cwa-book-ingest
-    restart: unless-stopped
-    networks:
-      - cwa-network
+  # Official Calibre-Web-Automated - COMMENTED OUT FOR TESTING INDEPENDENCE
+  # calibre-web-automated:
+  #   image: crocodilestick/calibre-web-automated:latest
+  #   container_name: cwa-official
+  #   environment:
+  #     - PUID=1000
+  #     - PGID=1000
+  #     - TZ=America/New_York
+  #     # Docker Desktop on macOS breaks inotify events between host and container
+  #     # This forces CWA to use polling instead of inotify for reliable file detection
+  #     - NETWORK_SHARE_MODE=true
+  #   ports:
+  #     - "8083:8083"
+  #   volumes:
+  #     # Use local directories for easy access
+  #     - ./cwa-data/config:/config
+  #     - ./cwa-data/library:/calibre-library
+  #     - ./ingest:/cwa-book-ingest
+  #   restart: unless-stopped
+  #   networks:
+  #     - cwa-network
 
   # Our Flask API (backend only)
   cwa-downloader-api:
@@ -30,8 +30,8 @@ services:
     env_file:
       - dev.env
     environment:
-      # Override specific settings for hybrid development
-      - CWA_BASE_URL=http://calibre-web-automated:8083
+      # Override specific settings for hybrid development - INDEPENDENT MODE
+      # - CWA_BASE_URL=http://calibre-web-automated:8083  # REMOVED - No longer needed
       - INGEST_DIR=/app/ingest
       # Calibre configuration
       - CALIBRE_LIBRARY_PATH=/calibre-library
@@ -52,8 +52,8 @@ services:
       - ./cwa-data/config:/config
       
     restart: unless-stopped
-    depends_on:
-      - calibre-web-automated
+    # depends_on:  # REMOVED - No longer depends on CWA container
+    #   - calibre-web-automated
     networks:
       - cwa-network
 

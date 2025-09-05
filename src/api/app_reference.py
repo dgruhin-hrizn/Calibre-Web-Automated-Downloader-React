@@ -1,0 +1,4315 @@
+"""Flask web application for book download service with URL rewrite support."""
+
+import logging
+import io, re, os
+import sqlite3
+import requests
+from functools import wraps
+from flask import Flask, request, jsonify, render_template, send_file, send_from_directory, session
+from flask_cors import CORS
+from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.security import check_password_hash
+from werkzeug.wrappers import Response
+from flask import url_for as flask_url_for
+import typing
+
+from ..infrastructure.logger import setup_logger
+from ..infrastructure.config import _SUPPORTED_BOOK_LANGUAGE, BOOK_LANGUAGE
+from ..infrastructure.env import FLASK_HOST, FLASK_PORT, APP_ENV, CWA_DB_PATH, DEBUG, USING_EXTERNAL_BYPASSER, BUILD_VERSION, RELEASE_VERSION, CALIBRE_LIBRARY_PATH, DOWNLOADS_DB_PATH, INGEST_DIR
+from ..infrastructure.app_settings import get_app_settings, update_app_settings
+from ..infrastructure.inkdrop_settings_manager import get_inkdrop_settings_manager
+from ..core.kindle_sender import get_kindle_sender
+from ..core import backend
+from ..core.conversion_manager import get_conversion_manager
+
+# CWA proxy imports removed - using direct database access instead
+from ..integrations.calibre.db_manager import CalibreDBManager
+from ..integrations.calibre.read_status_manager import get_read_status_manager
+from ..infrastructure.downloads_db import DownloadsDBManager
+from ..infrastructure.uploads_db import UploadsDBManager
+from ..utils.rate_limiter import get_rate_limiter_stats
+
+from ..core.models import SearchFilters
+
+logger = setup_logger(__name__)
+app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app)  # type: ignore
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable caching
+app.config['APPLICATION_ROOT'] = '/'
+
+# Configure Flask sessions - Primary app session
+app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'cwa-downloader-secret-key-change-in-production')
+app.config['SESSION_COOKIE_NAME'] = 'cwa_app_session'  # Main application session
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['PERMANENT_SESSION_LIFETIME'] = 86400  # 24 hours
+
+# Enable CORS for React frontend
+# In production, CORS isn't needed since frontend is served from same origin
+# In development, allow localhost origins for Vite dev server
+cors_origins = []
+if APP_ENV in ['development', 'dev']:
+    cors_origins = [
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
+        # Add specific local network IPs as needed
+        'http://192.168.1.129:5173',
+        # You can add more IPs here for other devices
+    ]
+
+if APP_ENV in ['development', 'dev']:
+    # Development: Allow local network origins with pattern matching
+    CORS(app, 
+         origins=cors_origins,
+         supports_credentials=True,
+         allow_headers=['Content-Type', 'Authorization'],
+         methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
+    
+    # Add a custom CORS handler for more flexibility
+    @app.after_request
+    def after_request(response):
+        origin = request.headers.get('Origin')
+        if origin:
+            # Check if origin is from local network
+            import re
+            if (origin.startswith('http://localhost:') or 
+                origin.startswith('http://127.0.0.1:') or
+                re.match(r'http://192\.168\.\d+\.\d+:\d+', origin) or
+                re.match(r'http://10\.\d+\.\d+\.\d+:\d+', origin) or
+                re.match(r'http://172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+:\d+', origin)):
+                
+                response.headers['Access-Control-Allow-Origin'] = origin
+                response.headers['Access-Control-Allow-Credentials'] = 'true'
+                response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+                response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+        return response
+else:
+    # Production: No CORS needed (same origin)
+    pass
+
+# Initialize Calibre DB manager for direct database access
+calibre_db_manager = None
+
+# Initialize Downloads DB manager for per-user download tracking
+downloads_db_manager = None
+
+# Initialize Read Status Manager for user reading status
+read_status_manager = None
+
+# Flask logger
+app.logger.handlers = logger.handlers
+app.logger.setLevel(logger.level)
+# Also handle Werkzeug's logger
+werkzeug_logger = logging.getLogger('werkzeug')
+werkzeug_logger.handlers = logger.handlers
+werkzeug_logger.setLevel(logger.level)
+
+# CWA proxy session management removed - using simple Flask sessions only
+
+# Helper function for getting project root path
+def get_project_root():
+    """Get the project root directory (two levels up from src/api/)"""
+    return os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+
+# Initialize CWA client with settings
+# CWA client getter removed - using direct database access instead
+
+def get_calibre_db_manager():
+    """Get or create Calibre DB manager instance"""
+    global calibre_db_manager
+    if calibre_db_manager is None:
+        metadata_db_path = CALIBRE_LIBRARY_PATH / 'metadata.db'
+        if metadata_db_path.exists():
+            calibre_db_manager = CalibreDBManager(str(metadata_db_path))
+        else:
+            logger.warning(f"Calibre metadata.db not found at {metadata_db_path}")
+    return calibre_db_manager
+
+def get_downloads_db_manager():
+    """Get or create Downloads DB manager instance"""
+    global downloads_db_manager
+    if downloads_db_manager is None:
+        try:
+            downloads_db_manager = DownloadsDBManager(DOWNLOADS_DB_PATH)
+            logger.info(f"Downloads database connected: {DOWNLOADS_DB_PATH}")
+            
+            # Perform startup cleanup of phantom downloads
+            phantom_count = downloads_db_manager.cleanup_phantom_downloads_on_startup()
+            if phantom_count > 0:
+                logger.info(f"Startup cleanup completed: {phantom_count} phantom downloads cancelled")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize downloads database: {e}")
+            return None
+    return downloads_db_manager
+
+def get_read_status_manager_instance():
+    """Get or initialize read status manager"""
+    global read_status_manager
+    if read_status_manager is None:
+        try:
+            # Use CWA's app.db for read status tracking
+            from ..infrastructure.env import CWA_USER_DB_PATH
+            if CWA_USER_DB_PATH.exists():
+                read_status_manager = get_read_status_manager(str(CWA_USER_DB_PATH))
+                logger.info(f"Read status manager connected: {CWA_USER_DB_PATH}")
+            else:
+                logger.warning(f"CWA app.db not found at {CWA_USER_DB_PATH}")
+        except Exception as e:
+            logger.error(f"Failed to initialize read status manager: {e}")
+            read_status_manager = None
+    return read_status_manager
+
+def enrich_books_with_read_status(books_data, username=None):
+    """Enrich book data with read status information for the current user"""
+    if not username or not books_data:
+        return books_data
+    
+    try:
+        rs_manager = get_read_status_manager_instance()
+        if not rs_manager:
+            return books_data
+        
+        # Get user ID
+        user_id = rs_manager.get_or_create_user(username)
+        
+        # Extract book IDs
+        book_ids = [book['id'] for book in books_data if 'id' in book]
+        if not book_ids:
+            return books_data
+        
+        # Get read status for all books
+        read_statuses = rs_manager.get_multiple_books_read_status(book_ids, user_id)
+        
+        # Enrich each book with read status
+        for book in books_data:
+            book_id = book.get('id')
+            if book_id and book_id in read_statuses:
+                status_info = read_statuses[book_id]
+                book['read_status'] = {
+                    'is_read': status_info['is_read'],
+                    'is_in_progress': status_info['is_in_progress'],
+                    'status_code': status_info['read_status'],
+                    'last_modified': status_info['last_modified'],
+                    'times_started_reading': status_info['times_started_reading']
+                }
+            else:
+                # Default to unread if no status found
+                book['read_status'] = {
+                    'is_read': False,
+                    'is_in_progress': False,
+                    'status_code': 0,
+                    'last_modified': None,
+                    'times_started_reading': 0
+                }
+        
+        return books_data
+        
+    except Exception as e:
+        logger.error(f"Error enriching books with read status: {e}")
+        return books_data
+
+# Global uploads DB manager instance
+uploads_db_manager = None
+
+def get_uploads_db_manager():
+    """Get or create Uploads DB manager instance"""
+    global uploads_db_manager
+    if uploads_db_manager is None:
+        try:
+            uploads_db_path = DOWNLOADS_DB_PATH.parent / "uploads.db"
+            uploads_db_manager = UploadsDBManager(uploads_db_path)
+            logger.info(f"Uploads database connected: {uploads_db_path}")
+        except Exception as e:
+            logger.error(f"Failed to initialize uploads database: {e}")
+            return None
+    return uploads_db_manager
+
+# CWA proxy initialization removed - using direct database access instead
+cwa_client = None
+cwa_proxy = None
+
+# CWA client decorator removed - using direct database access instead
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Always allow frontend routes (for serving React app)
+        if request.endpoint in ['index', 'catch_all', 'react_assets']:
+            return f(*args, **kwargs)
+            
+        # Skip authentication if DISABLE_AUTH is set (for testing/development)
+        disable_auth = os.environ.get('DISABLE_AUTH', 'false').lower()
+        if disable_auth == 'true':
+            return f(*args, **kwargs)
+            
+        # If the CWA database doesn't exist yet, allow any credentials (first run)
+        if not CWA_DB_PATH.exists():
+            logger.info(f"CWA database not found at {CWA_DB_PATH} - allowing any credentials for first run")
+            # Don't return error - let it fall through to session check
+        
+        # Check if user is logged in via session
+        if not session.get('logged_in') or not session.get('username'):
+            return jsonify({"error": "Authentication required"}), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # First check if user is logged in
+        if not session.get('logged_in') or not session.get('username'):
+            return jsonify({"error": "Authentication required"}), 401
+        
+        username = session.get('username')
+        
+        # Check admin status directly from database
+        try:
+            from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+            cwa_db = get_cwa_db_manager()
+            
+            if not cwa_db:
+                logger.error("CWA database manager not available for admin check")
+                return jsonify({"error": "Admin verification unavailable"}), 503
+                
+            user_permissions = cwa_db.get_user_permissions(username)
+            is_admin = user_permissions.get('admin', False)
+            
+            if not is_admin:
+                logger.warning(f"User {username} attempted admin access without privileges")
+                return jsonify({"error": "Admin privileges required"}), 403
+                
+            logger.debug(f"Admin access granted for user: {username}")
+            
+        except Exception as e:
+            logger.error(f"Error checking admin status for {username}: {e}")
+            return jsonify({"error": "Admin verification failed"}), 403
+            
+        return f(*args, **kwargs)
+    return decorated_function
+
+def register_dual_routes(app : Flask) -> None:
+    """
+    Register each route both with and without the /request prefix.
+    This function should be called after all routes are defined.
+    """
+    # Store original url_map rules
+    rules = list(app.url_map.iter_rules())
+    
+    # Add /request prefix to each rule
+    for rule in rules:
+        if rule.rule != '/request/' and rule.rule != '/request':  # Skip if it's already a request route
+            # Create new routes with /request prefix, both with and without trailing slash
+            base_rule = rule.rule[:-1] if rule.rule.endswith('/') else rule.rule
+            if base_rule == '':  # Special case for root path
+                app.add_url_rule('/request', f"root_request", 
+                               view_func=app.view_functions[rule.endpoint],
+                               methods=rule.methods)
+                app.add_url_rule('/request/', f"root_request_slash", 
+                               view_func=app.view_functions[rule.endpoint],
+                               methods=rule.methods)
+            else:
+                app.add_url_rule(f"/request{base_rule}", 
+                               f"{rule.endpoint}_request",
+                               view_func=app.view_functions[rule.endpoint],
+                               methods=rule.methods)
+                app.add_url_rule(f"/request{base_rule}/", 
+                               f"{rule.endpoint}_request_slash",
+                               view_func=app.view_functions[rule.endpoint],
+                               methods=rule.methods)
+    app.jinja_env.globals['url_for'] = url_for_with_request
+
+def url_for_with_request(endpoint : str, **values : typing.Any) -> str:
+    """Generate URLs with /request prefix by default."""
+    if endpoint == 'static':
+        # For static files, add /request prefix
+        url = flask_url_for(endpoint, **values)
+        return f"/request{url}"
+    return flask_url_for(endpoint, **values)
+
+# Initialize downloads database on module load
+try:
+    downloads_db_startup = get_downloads_db_manager()
+    if downloads_db_startup:
+        logger.info("Downloads database initialized successfully on startup")
+    else:
+        logger.warning("Downloads database failed to initialize on startup")
+except Exception as e:
+    logger.error(f"Error initializing downloads database on startup: {e}")
+
+@app.route('/')
+def index():
+    """
+    Serve React frontend for the root route (Library page).
+    Note: No @login_required decorator - authentication is handled by React ProtectedRoute
+    """
+    return serve_react_app()
+
+# Helper function for serving React app
+def serve_react_app():
+    """Helper function to serve the React app"""
+    project_root = get_project_root()
+    react_build_path = os.path.join(project_root, 'frontend', 'dist', 'index.html')
+    
+    if os.path.exists(react_build_path):
+        return send_file(react_build_path)
+    
+    # Fallback to 404 if no React build found
+    logger.error(f"Frontend not built - React build not found at: {react_build_path}")
+    return "Frontend not built", 404
+
+# React page routes - each corresponds to a route in App.tsx
+# Note: No @login_required decorator - authentication is handled by React ProtectedRoute
+@app.route('/stats')
+def stats_page():
+    """Serve React app for /stats page"""
+    return serve_react_app()
+
+@app.route('/search')
+def search_page():
+    """Serve React app for /search page"""
+    return serve_react_app()
+
+@app.route('/library')
+def library_page():
+    """Serve React app for /library page"""
+    return serve_react_app()
+
+@app.route('/series')
+def series_page():
+    """Serve React app for /series page"""
+    return serve_react_app()
+
+@app.route('/my-books')
+def my_books_page():
+    """Serve React app for /my-books page"""
+    return serve_react_app()
+
+@app.route('/top10')
+def top10_page():
+    """Serve React app for /top10 page"""
+    return serve_react_app()
+
+@app.route('/hot')
+def hot_page():
+    """Serve React app for /hot page"""
+    return serve_react_app()
+
+@app.route('/downloads')
+def downloads_page():
+    """Serve React app for /downloads page"""
+    return serve_react_app()
+
+@app.route('/settings')
+def settings_page():
+    """Serve React app for /settings page"""
+    return serve_react_app()
+
+@app.route('/profile')
+def profile_page():
+    """Serve React app for /profile page"""
+    return serve_react_app()
+
+@app.route('/admin')
+def admin_page():
+    """Serve React app for /admin page"""
+    return serve_react_app()
+
+# Serve React static files
+@app.route('/assets/<path:filename>')
+def react_assets(filename):
+    """Serve React build assets."""
+    # Use project root for correct path
+    assets_path = os.path.join(get_project_root(), 'frontend', 'dist', 'assets')
+    return send_from_directory(assets_path, filename)
+
+# Serve static files from static/media directory
+@app.route('/static/media/<path:filename>')
+@app.route('/request/static/media/<path:filename>')
+def static_media(filename):
+    """Serve static media files (images, icons, etc.)"""
+    # Use project root for correct path
+    static_media_path = os.path.join(get_project_root(), 'static', 'media')
+    return send_from_directory(static_media_path, filename)
+
+# Serve files directly from root (for legacy compatibility)
+@app.route('/<filename>')
+@app.route('/request/<filename>')
+def root_static_files(filename):
+    """Serve static files directly from root for legacy compatibility (like droplet.png)"""
+    logger.info(f"Static file requested: {filename}")
+    
+    # Only serve specific file types to avoid conflicts with SPA routing
+    if not filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.ico', '.svg', '.css', '.js')):
+        logger.info(f"File type not allowed for static serving: {filename}")
+        return "Not Found", 404
+    
+    # Check static/media directory first
+    static_media_path = os.path.join(get_project_root(), 'static', 'media')
+    static_file_path = os.path.join(static_media_path, filename)
+    
+    logger.info(f"Checking static/media path: {static_file_path}")
+    if os.path.exists(static_file_path):
+        logger.info(f"Serving from static/media: {filename}")
+        return send_from_directory(static_media_path, filename)
+    
+    # Check frontend/public directory
+    frontend_public_path = os.path.join(get_project_root(), 'frontend', 'public')
+    public_file_path = os.path.join(frontend_public_path, filename)
+    
+    logger.info(f"Checking frontend/public path: {public_file_path}")
+    if os.path.exists(public_file_path):
+        logger.info(f"Serving from frontend/public: {filename}")
+        return send_from_directory(frontend_public_path, filename)
+    
+    logger.warning(f"Static file not found: {filename}")
+    return "Not Found", 404
+
+@app.route('/favicon.ico')
+@app.route('/droplet.png')
+@app.route('/favico<path:_>')
+@app.route('/request/favico<path:_>')
+@app.route('/request/static/favico<path:_>')
+def favicon(_ : typing.Any = None) -> Response:
+    """Serve favicon - always serve droplet.png for consistency"""
+    return send_from_directory(os.path.join(get_project_root(), 'frontend', 'dist'),
+        'droplet.png', mimetype='image/png')
+
+from typing import Union, Tuple
+
+if DEBUG:
+    import subprocess
+    import time
+    if USING_EXTERNAL_BYPASSER:
+        STOP_GUI = lambda: None  # No-op for external bypasser
+    else:
+        from ..utils.cloudflare.bypasser import _reset_driver as STOP_GUI
+    @app.route('/debug', methods=['GET'])
+    @login_required
+    def debug() -> Union[Response, Tuple[Response, int]]:
+        """
+        This will run the /app/debug.sh script, which will generate a debug zip with all the logs
+        The file will be named /tmp/cwa-book-downloader-debug.zip
+        And then return it to the user
+        """
+        try:
+            # Run the debug script
+            STOP_GUI()
+            time.sleep(1)
+            result = subprocess.run(['/app/genDebug.sh'], capture_output=True, text=True, check=True)
+            if result.returncode != 0:
+                raise Exception(f"Debug script failed: {result.stderr}")
+            logger.info(f"Debug script executed: {result.stdout}")
+            debug_file_path = result.stdout.strip().split('\n')[-1]
+            if not os.path.exists(debug_file_path):
+                logger.error("Debug zip file not found after running debug script")
+                return jsonify({"error": "Failed to generate debug information"}), 500
+                
+            # Return the file to the user
+            return send_file(
+                debug_file_path,
+                mimetype='application/zip',
+                download_name=os.path.basename(debug_file_path),
+                as_attachment=True
+            )
+        except subprocess.CalledProcessError as e:
+            logger.error_trace(f"Debug script error: {e}, stdout: {e.stdout}, stderr: {e.stderr}")
+            return jsonify({"error": f"Debug script failed: {e.stderr}"}), 500
+        except Exception as e:
+            logger.error_trace(f"Debug endpoint error: {e}")
+            return jsonify({"error": str(e)}), 500
+
+if DEBUG:
+    @app.route('/api/restart', methods=['GET'])
+    @login_required
+    def restart() -> Union[Response, Tuple[Response, int]]:
+        """
+        Restart the application
+        """
+        os._exit(0)
+
+@app.route('/api/login', methods=['POST'])
+def api_login() -> Union[Response, Tuple[Response, int]]:
+    """
+    Login endpoint that authenticates with CWA first, then creates local session.
+    
+    Expected JSON body:
+    {
+        "username": "user",
+        "password": "pass"
+    }
+    
+    Returns:
+        JSON with login status and user info
+    """
+    try:
+        # Clear any existing session first (handles invalid sessions from rebuilds)
+        session.clear()
+        
+        data = request.get_json()
+        if not data or not data.get('username') or not data.get('password'):
+            return jsonify({"error": "Username and password required"}), 400
+        
+        username = data['username']
+        password = data['password']
+        
+        # Authenticate directly against app.db database
+        logger.info(f"Attempting direct database authentication for user: {username}")
+        
+        if validate_credentials(username, password):
+            # Authentication successful - create local session
+            session['logged_in'] = True
+            session['username'] = username
+            session.permanent = True
+            
+            logger.info(f"User {username} logged in successfully via direct database authentication")
+            
+            # Create the response
+            response = jsonify({
+                "success": True,
+                "user": {"username": username}
+            })
+            
+            return response
+        else:
+            logger.warning(f"Direct database authentication failed for user: {username}")
+            return jsonify({"error": "Invalid username or password"}), 401
+            
+    except Exception as e:
+        logger.error_trace(f"Login error: {e}")
+        return jsonify({"error": "Login failed"}), 500
+
+@app.route('/api/logout', methods=['POST'])
+def api_logout() -> Union[Response, Tuple[Response, int]]:
+    """
+    Logout endpoint to clear session.
+    
+    Returns:
+        JSON with logout status
+    """
+    try:
+        username = session.get('username', 'unknown')
+        
+        # CWA proxy sessions no longer needed - using direct database authentication
+        logger.debug(f"Logging out user: {username}")
+        
+        session.clear()
+        logger.info(f"User {username} logged out")
+        
+        # Create response - Flask handles session cookie clearing automatically
+        response = jsonify({"success": True})
+        
+        return response
+    except Exception as e:
+        logger.error_trace(f"Logout error: {e}")
+        return jsonify({"error": "Logout failed"}), 500
+
+@app.route('/api/auth/check', methods=['GET'])
+def api_auth_check() -> Union[Response, Tuple[Response, int]]:
+    """
+    Lightweight authentication check endpoint.
+    
+    Returns:
+        JSON with authentication status and user info
+    """
+    try:
+        if session.get('logged_in') and session.get('username'):
+            return jsonify({
+                "authenticated": True,
+                "user": {"username": session.get('username')}
+            })
+        else:
+            return jsonify({"authenticated": False}), 401
+    except Exception as e:
+        logger.error_trace(f"Auth check error: {e}")
+        return jsonify({"authenticated": False}), 401
+
+@app.route('/api/debug/session', methods=['GET'])
+@login_required
+def debug_session() -> Union[Response, Tuple[Response, int]]:
+    """
+    Debug endpoint to check session state.
+    """
+    try:
+        session_data = {
+            "logged_in": session.get('logged_in'),
+            "username": session.get('username'),
+            "session_keys": list(session.keys())
+        }
+        return jsonify(session_data)
+    except Exception as e:
+        logger.error_trace(f"Session debug error: {e}")
+        return jsonify({"error": "Session debug failed"}), 500
+
+@app.route('/api/search', methods=['GET'])
+@login_required
+def api_search() -> Union[Response, Tuple[Response, int]]:
+    """
+    Search for books matching the provided query.
+
+    Query Parameters:
+        query (str): Search term (ISBN, title, author, etc.)
+        isbn (str): Book ISBN
+        author (str): Book Author
+        title (str): Book Title
+        lang (str): Book Language
+        sort (str): Order to sort results
+        content (str): Content type of book
+        format (str): File format filter (pdf, epub, mobi, azw3, fb2, djvu, cbz, cbr)
+
+    Returns:
+        flask.Response: JSON array of matching books or error response.
+    """
+    query = request.args.get('query', '')
+
+    filters = SearchFilters(
+        isbn = request.args.getlist('isbn'),
+        author = request.args.getlist('author'),
+        title = request.args.getlist('title'),
+        lang = request.args.getlist('lang'),
+        sort = request.args.get('sort'),
+        content = request.args.getlist('content'),
+        format = request.args.getlist('format'),
+    )
+
+    if not query and not any(vars(filters).values()):
+        return jsonify([])
+
+    try:
+        books = backend.search_books(query, filters)
+        return jsonify(books)
+    except Exception as e:
+        logger.error_trace(f"Search error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/info', methods=['GET'])
+@login_required
+def api_info() -> Union[Response, Tuple[Response, int]]:
+    """
+    Get detailed book information.
+
+    Query Parameters:
+        id (str): Book identifier (MD5 hash)
+
+    Returns:
+        flask.Response: JSON object with book details, or an error message.
+    """
+    book_id = request.args.get('id', '')
+    if not book_id:
+        return jsonify({"error": "No book ID provided"}), 400
+
+    try:
+        book = backend.get_book_info(book_id)
+        if book:
+            return jsonify(book)
+        return jsonify({"error": "Book not found"}), 404
+    except Exception as e:
+        logger.error_trace(f"Info error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/settings/google-books', methods=['GET', 'POST'])
+@login_required
+def api_google_books_settings() -> Union[Response, Tuple[Response, int]]:
+    """
+    Get or set Google Books API settings.
+    
+    GET: Returns current Google Books API settings
+    POST: Updates Google Books API settings
+    
+    Returns:
+        flask.Response: JSON object with settings or confirmation message
+    """
+    if request.method == 'GET':
+        try:
+            settings = backend.get_google_books_settings()
+            return jsonify(settings)
+        except Exception as e:
+            logger.error_trace(f"Error getting Google Books settings: {e}")
+            return jsonify({"error": str(e)}), 500
+    
+    elif request.method == 'POST':
+        try:
+            data = request.get_json()
+            api_key = data.get('apiKey', '')
+            is_valid = data.get('isValid', False)
+            
+            backend.save_google_books_settings(api_key, is_valid)
+            return jsonify({"message": "Google Books API settings saved successfully"})
+        except Exception as e:
+            logger.error_trace(f"Error saving Google Books settings: {e}")
+            return jsonify({"error": str(e)}), 500
+
+@app.route('/api/settings/google-books/test', methods=['POST'])
+@login_required
+def api_test_google_books_key() -> Union[Response, Tuple[Response, int]]:
+    """
+    Test Google Books API key validity.
+    
+    Returns:
+        flask.Response: JSON object with validity status
+    """
+    try:
+        data = request.get_json()
+        api_key = data.get('apiKey', '')
+        
+        is_valid = backend.test_google_books_api_key(api_key)
+        return jsonify({"valid": is_valid})
+    except Exception as e:
+        logger.error_trace(f"Error testing Google Books API key: {e}")
+        return jsonify({"valid": False, "error": str(e)}), 500
+
+@app.route('/api/google-books/search', methods=['POST'])
+@login_required
+def api_google_books_search() -> Union[Response, Tuple[Response, int]]:
+    """
+    Search Google Books API for book information.
+    
+    Returns:
+        flask.Response: JSON object with Google Books data
+    """
+    try:
+        data = request.get_json()
+        title = data.get('title', '')
+        author = data.get('author', '')
+        max_results = data.get('maxResults', 1)
+        
+        logger.info(f"Google Books search request: title='{title}', author='{author}', maxResults={max_results}")
+        
+        google_data = backend.search_google_books(title, author, max_results=max_results)
+        if google_data:
+            logger.info(f"Google Books search successful for '{title}'")
+            return jsonify(google_data)
+        else:
+            logger.info(f"No Google Books data found for '{title}'")
+            return jsonify({"error": "No Google Books data found"}), 404
+    except Exception as e:
+        logger.error_trace(f"Error searching Google Books: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/google-books/volume/<volume_id>', methods=['GET'])
+@login_required
+def api_google_books_volume_details(volume_id: str) -> Union[Response, Tuple[Response, int]]:
+    """
+    Get detailed Google Books volume information by volume ID.
+    
+    Returns:
+        flask.Response: JSON object with detailed Google Books volume data
+    """
+    try:
+        logger.info(f"Google Books volume details request for ID: {volume_id}")
+        
+        volume_data = backend.get_google_books_volume_details(volume_id)
+        if volume_data:
+            logger.info(f"Google Books volume details successful for '{volume_id}'")
+            return jsonify(volume_data)
+        else:
+            logger.info(f"No Google Books volume data found for '{volume_id}'")
+            return jsonify({"error": "No Google Books volume data found"}), 404
+    except Exception as e:
+        logger.error_trace(f"Error getting Google Books volume details: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/book-details/<book_id>', methods=['GET', 'POST'])
+@login_required
+def api_enhanced_book_details(book_id: str) -> Union[Response, Tuple[Response, int]]:
+    """
+    Get enhanced book details with Google Books API data.
+    
+    Args:
+        book_id: Book identifier (MD5 hash)
+    
+    Returns:
+        flask.Response: JSON object with enhanced book details
+    """
+    try:
+        # Check if basic book info is provided in POST body to avoid re-fetching
+        basic_book_info = None
+        if request.method == 'POST':
+            data = request.get_json()
+            if data and 'basicBookInfo' in data:
+                basic_book_info = data['basicBookInfo']
+                logger.info("Using provided basic book info from request body")
+        
+        enhanced_details = backend.get_enhanced_book_details(book_id, basic_book_info)
+        if enhanced_details:
+            return jsonify(enhanced_details)
+        return jsonify({"error": "Book not found"}), 404
+    except Exception as e:
+        logger.error_trace(f"Error getting enhanced book details: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+
+@app.route('/api/download', methods=['GET'])
+@login_required
+def api_download() -> Union[Response, Tuple[Response, int]]:
+    """
+    Queue a book for download.
+
+    Query Parameters:
+        id (str): Book identifier (MD5 hash)
+        cover_url (str, optional): Book cover image URL from search results
+
+    Returns:
+        flask.Response: JSON status object indicating success or failure.
+    """
+    book_id = request.args.get('id', '')
+    if not book_id:
+        return jsonify({"error": "No book ID provided"}), 400
+
+    try:
+        priority = int(request.args.get('priority', 0))
+        username = session.get('username')  # Get current user
+        search_url = request.args.get('search_url', '')  # Optional search URL
+        cover_url = request.args.get('cover_url', '')  # Optional cover URL from frontend
+        
+        success = backend.queue_book(book_id, priority, username, search_url, cover_url)
+        if success:
+            return jsonify({"status": "queued", "priority": priority})
+        return jsonify({"error": "Failed to queue book"}), 500
+    except Exception as e:
+        logger.error_trace(f"Download error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# ============================================================================
+# User-specific Download Tracking Endpoints
+# ============================================================================
+
+@app.route('/api/downloads/history', methods=['GET'])
+@login_required
+def api_user_download_history():
+    """Get user's download history"""
+    try:
+        username = session.get('username')
+        if not username:
+            return jsonify({"error": "Not authenticated"}), 401
+        
+        downloads_db = get_downloads_db_manager()
+        if not downloads_db:
+            return jsonify({"error": "Downloads database not available"}), 503
+        
+        # Get query parameters
+        status = request.args.get('status')  # Filter by status
+        limit = min(int(request.args.get('limit', 50)), 100)
+        offset = int(request.args.get('offset', 0))
+        
+        downloads = downloads_db.get_user_downloads(username, status, limit, offset)
+        return jsonify({"downloads": downloads})
+        
+    except Exception as e:
+        logger.error(f"Error getting user download history: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/downloads/status', methods=['GET'])
+@login_required
+def api_user_download_status():
+    """Get user's downloads grouped by status with real-time progress data"""
+    try:
+        username = session.get('username')
+        if not username:
+            return jsonify({"error": "Not authenticated"}), 401
+        
+        downloads_db = get_downloads_db_manager()
+        if not downloads_db:
+            return jsonify({"error": "Downloads database not available"}), 503
+        
+        # Get user's database records for active statuses
+        downloads_by_status = downloads_db.get_user_downloads_by_status(username)
+        
+        # Get global queue status for real-time progress data
+        global_status = backend.queue_status()
+        
+        # Get all active book IDs from the in-memory queue
+        # Include 'available' to handle the brief window before cleanup
+        active_queue_book_ids = set()
+        for queue_status in ['queued', 'downloading', 'processing', 'waiting', 'available']:
+            if queue_status in global_status:
+                active_queue_book_ids.update(global_status[queue_status].keys())
+        
+        # Enrich user's active downloads with real-time data from global queue
+        for status in ['queued', 'downloading', 'processing', 'waiting']:
+            if status in downloads_by_status:
+                enriched_downloads = []
+                for db_record in downloads_by_status[status]:
+                    book_id = db_record['book_id']
+                    
+                    # Start with database record
+                    enriched_record = {
+                        'id': book_id,
+                        'title': db_record['book_title'],
+                        'author': db_record['book_author'], 
+                        'format': db_record['book_format'],
+                        'cover_url': db_record['cover_url'],
+                        'preview': db_record['cover_url'],  # Alias for compatibility
+                        'progress': 0,
+                        'status': status
+                    }
+                    
+                    # Enrich with real-time data from global queue if available
+                    queue_status_key = status if status != 'error' else 'error'
+                    if queue_status_key in global_status and book_id in global_status[queue_status_key]:
+                        queue_data = global_status[queue_status_key][book_id]  # This is a BookInfo object
+                        
+                        # Only enrich with queue data if it has valid metadata
+                        # Prevent corrupted/incomplete queue data from overriding good database data
+                        queue_title = getattr(queue_data, 'title', None)
+                        queue_author = getattr(queue_data, 'author', None)
+                        
+                        # Update progress and real-time data regardless
+                        enriched_record.update({
+                            'progress': getattr(queue_data, 'progress', 0),
+                            'download_speed': getattr(queue_data, 'download_speed', None),
+                            'eta_seconds': getattr(queue_data, 'eta_seconds', None),
+                            'wait_time': getattr(queue_data, 'wait_time', None),
+                            'wait_start': getattr(queue_data, 'wait_start', None),
+                            'error': getattr(queue_data, 'error', None)
+                        })
+                        
+                        # Only override title/author if queue has better data than database
+                        if queue_title and queue_title.strip() and queue_title != 'Unknown':
+                            enriched_record['title'] = queue_title
+                        if queue_author and queue_author.strip() and queue_author != 'Unknown Author':
+                            enriched_record['author'] = queue_author
+                    
+                    enriched_downloads.append(enriched_record)
+                
+                downloads_by_status[status] = enriched_downloads
+        
+        # Filter out completed/error/cancelled downloads that are still active in the queue
+        # This prevents duplication during the brief window when items are transitioning
+        for status in ['completed', 'error', 'cancelled']:
+            if status in downloads_by_status:
+                filtered_downloads = []
+                for db_record in downloads_by_status[status]:
+                    book_id = db_record['book_id']
+                    
+                    # Only include if NOT still active in the queue
+                    if book_id not in active_queue_book_ids:
+                        enriched_record = {
+                            'id': book_id,
+                            'title': db_record['book_title'],
+                            'author': db_record['book_author'], 
+                            'format': db_record['book_format'],
+                            'cover_url': db_record['cover_url'],
+                            'preview': db_record['cover_url'],  # Alias for compatibility
+                            'progress': 100 if status == 'completed' else 0,
+                            'status': status
+                        }
+                        filtered_downloads.append(enriched_record)
+                
+                downloads_by_status[status] = filtered_downloads
+        
+        return jsonify(downloads_by_status)
+        
+    except Exception as e:
+        logger.error(f"Error getting user download status: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/downloads/stats', methods=['GET'])
+@login_required
+def api_user_download_stats():
+    """Get user's download statistics"""
+    try:
+        username = session.get('username')
+        if not username:
+            return jsonify({"error": "Not authenticated"}), 401
+        
+        downloads_db = get_downloads_db_manager()
+        if not downloads_db:
+            return jsonify({"error": "Downloads database not available"}), 503
+        
+        stats = downloads_db.get_user_stats(username)
+        return jsonify(stats)
+        
+    except Exception as e:
+        logger.error(f"Error getting user download stats: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/downloads/redownloadable', methods=['GET'])
+@login_required
+def api_get_redownloadable():
+    """Get list of books that can be re-downloaded directly"""
+    try:
+        username = session.get('username')
+        if not username:
+            return jsonify({"error": "Not authenticated"}), 401
+        
+        downloads_db = get_downloads_db_manager()
+        if not downloads_db:
+            return jsonify({"error": "Downloads database not available"}), 503
+        
+        book_id = request.args.get('book_id')  # Optional filter by book_id
+        books = downloads_db.get_redownloadable_books(username, book_id)
+        return jsonify({"redownloadable_books": books})
+        
+    except Exception as e:
+        logger.error(f"Error getting redownloadable books: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/downloads/redownload/<int:download_id>', methods=['POST'])
+@login_required
+def api_redownload_direct(download_id: int):
+    """Re-download a book using stored direct URL"""
+    try:
+        username = session.get('username')
+        if not username:
+            return jsonify({"error": "Not authenticated"}), 401
+        
+        downloads_db = get_downloads_db_manager()
+        if not downloads_db:
+            return jsonify({"error": "Downloads database not available"}), 503
+        
+        # Verify user owns this download record (secure version)
+        record = downloads_db.get_download_record(download_id, username)
+        if not record:
+            return jsonify({"error": "Download not found or access denied"}), 404
+            
+        if not record['final_download_url']:
+            return jsonify({"error": "No direct download URL available"}), 400
+            
+        # Generate target path in ingest directory
+        from ..infrastructure.env import INGEST_DIR
+        from pathlib import Path
+        filename = f"{record['book_title']}.{record['book_format']}" if record['book_format'] else f"{record['book_title']}.epub"
+        # Sanitize filename
+        filename = "".join(c for c in filename if c.isalnum() or c in (' ', '.', '_', '-')).rstrip()
+        target_path = Path(INGEST_DIR) / filename
+        
+        # Attempt direct re-download
+        success = downloads_db.direct_redownload(download_id, target_path)
+        
+        if success:
+            return jsonify({
+                "success": True, 
+                "message": "Re-download completed successfully",
+                "file_path": str(target_path)
+            })
+        else:
+            return jsonify({
+                "error": "Re-download failed - URL may be expired",
+                "suggestion": "Try downloading from Anna's Archive search instead"
+            }), 400
+            
+    except Exception as e:
+        logger.error(f"Direct redownload error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/status', methods=['GET'])
+def api_status() -> Union[Response, Tuple[Response, int]]:
+    """
+    Get current download queue status.
+
+    Returns:
+        flask.Response: JSON object with queue status.
+    """
+    try:
+        status = backend.queue_status()
+        return jsonify(status)
+    except Exception as e:
+        logger.error_trace(f"Status error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/localdownload', methods=['GET'])
+@login_required
+def api_local_download() -> Union[Response, Tuple[Response, int]]:
+    """
+    Download an EPUB file from local storage if available.
+
+    Query Parameters:
+        id (str): Book identifier (MD5 hash)
+
+    Returns:
+        flask.Response: The EPUB file if found, otherwise an error response.
+    """
+    book_id = request.args.get('id', '')
+    if not book_id:
+        return jsonify({"error": "No book ID provided"}), 400
+
+    try:
+        file_data, book_info = backend.get_book_data(book_id)
+        if file_data is None:
+            # Book data not found or not available
+            return jsonify({"error": "File not found"}), 404
+        # Santize the file name
+        file_name = book_info.title
+        file_name = re.sub(r'[\\/:*?"<>|]', '_', file_name.strip())[:245]
+        file_extension = book_info.format
+        # Prepare the file for sending to the client
+        data = io.BytesIO(file_data)
+        return send_file(
+            data,
+            download_name=f"{file_name}.{file_extension}",
+            as_attachment=True
+        )
+
+    except Exception as e:
+        logger.error_trace(f"Local download error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/download/<book_id>/cancel', methods=['DELETE'])
+@login_required
+def api_cancel_download(book_id: str) -> Union[Response, Tuple[Response, int]]:
+    """
+    Cancel a download.
+
+    Path Parameters:
+        book_id (str): Book identifier to cancel
+
+    Returns:
+        flask.Response: JSON status indicating success or failure.
+    """
+    try:
+        success = backend.cancel_download(book_id)
+        if success:
+            return jsonify({"status": "cancelled", "book_id": book_id})
+        return jsonify({"error": "Failed to cancel download or book not found"}), 404
+    except Exception as e:
+        logger.error_trace(f"Cancel download error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/download/<book_id>/force-cancel', methods=['DELETE'])
+@login_required
+def api_force_cancel_download(book_id: str) -> Union[Response, Tuple[Response, int]]:
+    """
+    Force cancel a stuck download regardless of status.
+
+    Path Parameters:
+        book_id (str): Book identifier to force cancel
+
+    Returns:
+        flask.Response: JSON status indicating success or failure.
+    """
+    try:
+        success = backend.force_cancel_download(book_id)
+        if success:
+            return jsonify({"status": "force_cancelled", "book_id": book_id})
+        return jsonify({"error": "Book not found in queue"}), 404
+    except Exception as e:
+        logger.error_trace(f"Force cancel download error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/download/<book_id>/remove-tracking', methods=['DELETE'])
+@login_required
+def api_remove_tracking(book_id: str) -> Union[Response, Tuple[Response, int]]:
+    """
+    Remove a book from all tracking (for phantom/stuck entries).
+    This always succeeds and clears the book from any internal tracking.
+    Also handles database-only entries that aren't in the queue.
+
+    Path Parameters:
+        book_id (str): Book identifier to remove from tracking (can be book hash or database ID)
+
+    Returns:
+        flask.Response: JSON status indicating success.
+    """
+    try:
+        username = session.get('username')
+        if not username:
+            return jsonify({"error": "User not logged in"}), 401
+            
+        downloads_db = get_downloads_db_manager()
+        if not downloads_db:
+            return jsonify({"error": "Downloads database not available"}), 503
+        
+        # Handle both database ID (numeric) and book hash ID cases
+        cancelled_count = 0
+        actual_book_id = book_id
+        
+        if book_id.isdigit():
+            # This is a database ID, get the actual book_id from the record
+            logger.info(f"Received database ID {book_id}, looking up actual book_id")
+            with downloads_db._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT book_id FROM download_history WHERE id = ? AND username = ?", (int(book_id), username))
+                result = cursor.fetchone()
+                if result:
+                    actual_book_id = result[0]
+                    logger.info(f"Found actual book_id: {actual_book_id}")
+                    
+                    # Cancel this specific database record
+                    cursor.execute("""
+                        UPDATE download_history 
+                        SET status = 'cancelled', 
+                            completed_at = CURRENT_TIMESTAMP,
+                            updated_at = CURRENT_TIMESTAMP,
+                            error_message = 'Manually cancelled via remove tracking'
+                        WHERE id = ? AND username = ?
+                    """, (int(book_id), username))
+                    cancelled_count = cursor.rowcount
+                    conn.commit()
+                else:
+                    return jsonify({"error": f"Database record {book_id} not found or not owned by user"}), 404
+        else:
+            # This is a book hash, use the phantom downloads method
+            cancelled_count = downloads_db.cancel_phantom_downloads(book_id)
+        
+        # Remove from queue manager (if exists) - use actual book_id
+        backend.remove_from_tracking(actual_book_id)
+        
+        logger.info(f"Removed tracking for {actual_book_id} (original ID: {book_id}), cancelled {cancelled_count} database entries")
+        
+        return jsonify({
+            "status": "removed_from_tracking", 
+            "book_id": actual_book_id,
+            "original_id": book_id,
+            "cancelled_count": cancelled_count,
+            "message": f"Removed from both queue and database ({cancelled_count} records cancelled)"
+        })
+    except Exception as e:
+        logger.error_trace(f"Remove tracking error for {book_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/queue/<book_id>/priority', methods=['PUT'])
+@login_required
+def api_set_priority(book_id: str) -> Union[Response, Tuple[Response, int]]:
+    """
+    Set priority for a queued book.
+
+    Path Parameters:
+        book_id (str): Book identifier
+
+    Request Body:
+        priority (int): New priority level (lower number = higher priority)
+
+    Returns:
+        flask.Response: JSON status indicating success or failure.
+    """
+    try:
+        data = request.get_json()
+        if not data or 'priority' not in data:
+            return jsonify({"error": "Priority not provided"}), 400
+            
+        priority = int(data['priority'])
+        success = backend.set_book_priority(book_id, priority)
+        
+        if success:
+            return jsonify({"status": "updated", "book_id": book_id, "priority": priority})
+        return jsonify({"error": "Failed to update priority or book not found"}), 404
+    except ValueError:
+        return jsonify({"error": "Invalid priority value"}), 400
+    except Exception as e:
+        logger.error_trace(f"Set priority error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/queue/reorder', methods=['POST'])
+@login_required
+def api_reorder_queue() -> Union[Response, Tuple[Response, int]]:
+    """
+    Bulk reorder queue by setting new priorities.
+
+    Request Body:
+        book_priorities (dict): Mapping of book_id to new priority
+
+    Returns:
+        flask.Response: JSON status indicating success or failure.
+    """
+    try:
+        data = request.get_json()
+        if not data or 'book_priorities' not in data:
+            return jsonify({"error": "book_priorities not provided"}), 400
+            
+        book_priorities = data['book_priorities']
+        if not isinstance(book_priorities, dict):
+            return jsonify({"error": "book_priorities must be a dictionary"}), 400
+            
+        # Validate all priorities are integers
+        for book_id, priority in book_priorities.items():
+            if not isinstance(priority, int):
+                return jsonify({"error": f"Invalid priority for book {book_id}"}), 400
+                
+        success = backend.reorder_queue(book_priorities)
+        
+        if success:
+            return jsonify({"status": "reordered", "updated_count": len(book_priorities)})
+        return jsonify({"error": "Failed to reorder queue"}), 500
+    except Exception as e:
+        logger.error_trace(f"Reorder queue error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/queue/order', methods=['GET'])
+@login_required
+def api_queue_order() -> Union[Response, Tuple[Response, int]]:
+    """
+    Get current queue order for display.
+
+    Returns:
+        flask.Response: JSON array of queued books with their order and priorities.
+    """
+    try:
+        queue_order = backend.get_queue_order()
+        return jsonify({"queue": queue_order})
+    except Exception as e:
+        logger.error_trace(f"Queue order error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/downloads/active', methods=['GET'])
+@login_required
+def api_active_downloads() -> Union[Response, Tuple[Response, int]]:
+    """
+    Get list of currently active downloads.
+
+    Returns:
+        flask.Response: JSON array of active download book IDs.
+    """
+    try:
+        active_downloads = backend.get_active_downloads()
+        return jsonify({"active_downloads": active_downloads})
+    except Exception as e:
+        logger.error_trace(f"Active downloads error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/queue/clear', methods=['DELETE'])
+@login_required
+def api_clear_completed() -> Union[Response, Tuple[Response, int]]:
+    """
+    Clear all completed, errored, or cancelled books from tracking.
+
+    Returns:
+        flask.Response: JSON with count of removed books.
+    """
+    try:
+        removed_count = backend.clear_completed()
+        return jsonify({"status": "cleared", "removed_count": removed_count})
+    except Exception as e:
+        logger.error_trace(f"Clear completed error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/queue/cleanup-phantom', methods=['POST'])
+@login_required
+def api_cleanup_phantom_entries() -> Union[Response, Tuple[Response, int]]:
+    """
+    Clean up phantom queue entries with incomplete metadata.
+    
+    Returns:
+        flask.Response: JSON with count of cleaned entries.
+    """
+    try:
+        cleaned_count = backend.cleanup_phantom_entries()
+        return jsonify({
+            "status": "cleaned",
+            "cleaned_count": cleaned_count,
+            "message": f"Cleaned up {cleaned_count} phantom entries"
+        })
+    except Exception as e:
+        logger.error_trace(f"Cleanup phantom entries error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/downloads/cleanup-phantom', methods=['POST'])
+@login_required
+def api_cleanup_phantom_downloads() -> Union[Response, Tuple[Response, int]]:
+    """Clean up downloads with missing or invalid metadata"""
+    try:
+        username = get_current_user()
+        downloads_db = get_downloads_db_manager()
+        if not downloads_db:
+            return jsonify({'error': 'Downloads database not available'}), 500
+        
+        cleaned_count = downloads_db.cleanup_phantom_downloads(username)
+        return jsonify({
+            'status': 'cleaned',
+            'cleaned_count': cleaned_count,
+            'message': f'Cleaned up {cleaned_count} phantom download records'
+        })
+    except Exception as e:
+        logger.error_trace(f"Error cleaning up phantom downloads: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/debug/queue-status', methods=['GET'])
+@login_required  
+def api_debug_queue_status() -> Union[Response, Tuple[Response, int]]:
+    """Debug endpoint to see raw queue status"""
+    try:
+        username = get_current_user()
+        downloads_db = get_downloads_db_manager()
+        
+        # Get raw queue status
+        global_status = backend.queue_status()
+        
+        # Get database status
+        db_status = downloads_db.get_user_downloads_by_status(username) if downloads_db else {}
+        
+        return jsonify({
+            'queue_status': global_status,
+            'database_status': db_status,
+            'username': username
+        })
+    except Exception as e:
+        logger.error_trace(f"Error getting debug queue status: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/notifications/recent', methods=['GET'])
+@login_required
+def api_get_recent_notifications() -> Union[Response, Tuple[Response, int]]:
+    """
+    Get recent notifications for the current user.
+    
+    Returns:
+        flask.Response: JSON with recent notifications.
+    """
+    try:
+        from ..infrastructure.notification_manager import NotificationManager
+        
+        limit = int(request.args.get('limit', 10))
+        notification_manager = NotificationManager.get_instance()
+        notifications = notification_manager.get_recent_notifications(limit)
+        
+        return jsonify({
+            "notifications": notifications,
+            "count": len(notifications)
+        })
+    except Exception as e:
+        logger.error_trace(f"Get notifications error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/downloads/history/clear', methods=['DELETE'])
+@login_required
+def api_clear_download_history() -> Union[Response, Tuple[Response, int]]:
+    """
+    Clear all download history for the current user.
+
+    Returns:
+        flask.Response: JSON response with count of cleared records.
+    """
+    try:
+        username = session.get('username')
+        if not username:
+            return jsonify({"error": "User not logged in"}), 401
+        
+        downloads_db = get_downloads_db_manager()
+        if not downloads_db:
+            return jsonify({"error": "Downloads database not available"}), 503
+        
+        cleared_count = downloads_db.clear_user_download_history(username)
+        return jsonify({
+            "cleared": cleared_count,
+            "message": f"Cleared {cleared_count} download history records"
+        })
+    except Exception as e:
+        logger.error_trace(f"Clear download history error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# Calibre check endpoints removed - using CWA proxy instead
+
+@app.errorhandler(404)
+def not_found_error(error: Exception) -> Union[Response, Tuple[Response, int]]:
+    """
+    Handle 404 (Not Found) errors.
+
+    Args:
+        error (HTTPException): The 404 error raised by Flask.
+
+    Returns:
+        flask.Response: JSON error message with 404 status.
+    """
+    logger.warning(f"404 error: {request.url} : {error}")
+    return jsonify({"error": "Resource not found"}), 404
+
+@app.errorhandler(500)
+def internal_error(error: Exception) -> Union[Response, Tuple[Response, int]]:
+    """
+    Handle 500 (Internal Server) errors.
+
+    Args:
+        error (HTTPException): The 500 error raised by Flask.
+
+    Returns:
+        flask.Response: JSON error message with 500 status.
+    """
+    logger.error_trace(f"500 error: {error}")
+    return jsonify({"error": "Internal server error"}), 500
+
+def validate_credentials(username: str, password: str) -> bool:
+    """
+    Helper function that validates credentials
+    against a Calibre-Web app.db SQLite database
+
+    Database structure:
+    - Table 'user' with columns: 'name' (username), 'password'
+    """
+
+    # If the database doesn't exist, allow any credentials
+    if not CWA_DB_PATH:
+        return True
+
+    # Look for app.db in the same directory as cwa.db for authentication
+    try:
+        # First, try to find app.db in the same directory as cwa.db
+        cwa_dir = CWA_DB_PATH.parent
+        app_db_path = cwa_dir / "app.db"
+        
+        if app_db_path.exists():
+            # Use app.db for authentication
+            db_path = os.fspath(app_db_path)
+            logger.info(f"Using app.db for authentication: {app_db_path}")
+        else:
+            # Fall back to cwa.db and check if it has user table
+            db_path = os.fspath(CWA_DB_PATH)
+            logger.info(f"No app.db found, checking cwa.db for user table: {CWA_DB_PATH}")
+        
+        # Open database in true read-only mode to avoid journal/WAL writes on RO mounts
+        db_uri = f"file:{db_path}?mode=ro&immutable=1"
+        conn = sqlite3.connect(db_uri, uri=True)
+        cur = conn.cursor()
+        
+        # Check if user table exists first
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='user'")
+        if not cur.fetchone():
+            # No user table exists, so no authentication required
+            conn.close()
+            logger.info("No user table found - authentication bypassed")
+            return True
+        
+        cur.execute("SELECT password FROM user WHERE name = ?", (username,))
+        row = cur.fetchone()
+        conn.close()
+
+        # Check if user exists and password is correct
+        if not row or not row[0] or not check_password_hash(row[0], password):
+            logger.error("User not found or password check failed")
+            return False
+
+    except Exception as e:
+        logger.error_trace(f"Authentication error: {e}")
+        return False
+
+    logger.info(f"Authentication successful for user {username}")
+    return True
+
+# Register all routes with /request prefix
+register_dual_routes(app)
+
+# ============================================================================
+# Metadata Database API Endpoints (Direct Access)
+# ============================================================================
+
+@app.route('/api/metadata/books', methods=['GET'])
+def api_metadata_books():
+    """Get books from metadata.db with pagination and filtering"""
+    try:
+        db_manager = get_calibre_db_manager()
+        if not db_manager:
+            return jsonify({'error': 'Metadata database not available'}), 503
+            
+        # Get query parameters - support both page/per_page and offset/limit styles
+        if 'offset' in request.args:
+            # Frontend is using offset/limit style
+            offset = int(request.args.get('offset', 0))
+            per_page = min(int(request.args.get('limit', 20)), 100)
+            page = (offset // per_page) + 1
+        else:
+            # Using page/per_page style
+            page = int(request.args.get('page', 1))
+            per_page = min(int(request.args.get('per_page', 20)), 100)
+            
+        search = request.args.get('search', '').strip()
+        sort_by = request.args.get('sort', 'timestamp')
+        sort_order = request.args.get('order', 'desc')
+        
+        # Get books with pagination
+        result = db_manager.get_books(
+            page=page,
+            per_page=per_page,
+            search=search,
+            sort=sort_by
+        )
+        
+        # Enrich with read status if user is authenticated
+        username = session.get('username')
+        if username:
+            result['books'] = enrich_books_with_read_status(result['books'], username)
+        
+        return jsonify({
+            'books': result['books'],
+            'total': result['total'],
+            'page': result['page'],
+            'per_page': result['per_page'],
+            'pages': result['pages']
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching metadata books: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/metadata/books/<int:book_id>')
+def api_metadata_book_details(book_id):
+    """Get detailed book information from metadata.db"""
+    try:
+        db_manager = get_calibre_db_manager()
+        if not db_manager:
+            return jsonify({'error': 'Metadata database not available'}), 503
+            
+        book = db_manager.get_book_details(book_id)
+        if not book:
+            return jsonify({'error': 'Book not found'}), 404
+        
+        # Enrich with read status if user is authenticated
+        username = session.get('username')
+        if username:
+            enriched_books = enrich_books_with_read_status([book], username)
+            book = enriched_books[0] if enriched_books else book
+            
+        return jsonify(book)
+        
+    except Exception as e:
+        logger.error(f"Error fetching metadata book details: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/metadata/books/<int:book_id>/cover')
+def api_metadata_book_cover(book_id):
+    """Get book cover from metadata.db"""
+    try:
+        db_manager = get_calibre_db_manager()
+        if not db_manager:
+            return jsonify({'error': 'Metadata database not available'}), 503
+            
+        cover_data = db_manager.get_book_cover(book_id)
+        if not cover_data:
+            return jsonify({'error': 'Cover not found'}), 404
+            
+        return send_file(
+            io.BytesIO(cover_data),
+            mimetype='image/jpeg',
+            as_attachment=False
+        )
+        
+    except Exception as e:
+        logger.error(f"Error fetching metadata book cover: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/metadata/stats')
+def api_metadata_stats():
+    """Get library statistics from metadata.db"""
+    try:
+        db_manager = get_calibre_db_manager()
+        if not db_manager:
+            return jsonify({'error': 'Metadata database not available'}), 503
+            
+        stats = db_manager.get_library_stats()
+        return jsonify(stats)
+        
+    except Exception as e:
+        logger.error(f"Error fetching metadata stats: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# Old hot books endpoint removed - replaced with CWA user database implementation below
+
+@app.route('/api/metadata/new-books')
+def api_metadata_new_books():
+    """Get recently added books (equivalent to OPDS /new)"""
+    try:
+        db_manager = get_calibre_db_manager()
+        if not db_manager:
+            return jsonify({'error': 'Metadata database not available'}), 503
+        
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 20)), 100)
+        
+        # Get new books sorted by timestamp desc
+        result = db_manager.get_books(page=page, per_page=per_page, sort='new')
+        
+        return jsonify({
+            'books': result['books'],
+            'total': result['total'],
+            'page': result['page'],
+            'per_page': result['per_page'],
+            'pages': result['pages']
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching new books: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/metadata/discover-books')
+def api_metadata_discover_books():
+    """Get random books for discovery (equivalent to OPDS /discover)"""
+    try:
+        db_manager = get_calibre_db_manager()
+        if not db_manager:
+            return jsonify({'error': 'Metadata database not available'}), 503
+        
+        # Get per_page parameter (no pagination for random books)
+        per_page = min(int(request.args.get('per_page', 20)), 100)
+        
+        # Get random books
+        result = db_manager.get_random_books(limit=per_page)
+        
+        return jsonify({
+            'books': result['books'],
+            'total': result['total'],
+            'page': 1,
+            'per_page': per_page,
+            'pages': 1
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching random books: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/metadata/rated-books')
+def api_metadata_rated_books():
+    """Get best rated books (equivalent to OPDS /rated)"""
+    try:
+        db_manager = get_calibre_db_manager()
+        if not db_manager:
+            return jsonify({'error': 'Metadata database not available'}), 503
+        
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 20)), 100)
+        
+        # Get highly rated books (rating > 4.5 stars, which is 9/10 in Calibre)
+        result = db_manager.get_rated_books(page=page, per_page=per_page)
+        
+        return jsonify({
+            'books': result['books'],
+            'total': result['total'],
+            'page': result['page'],
+            'per_page': result['per_page'],
+            'pages': result['pages']
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching rated books: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/metadata/authors')
+def api_metadata_authors_list():
+    """Get list of all authors (equivalent to OPDS /author)"""
+    try:
+        db_manager = get_calibre_db_manager()
+        if not db_manager:
+            return jsonify({'error': 'Metadata database not available'}), 503
+        
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 50)), 200)
+        search = request.args.get('search', '').strip()
+        
+        # Get authors list with book counts
+        result = db_manager.get_authors_with_counts(page=page, per_page=per_page, search=search)
+        
+        return jsonify({
+            'authors': result['authors'],
+            'total': result['total'],
+            'page': result['page'],
+            'per_page': result['per_page'],
+            'pages': result['pages']
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching authors: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/metadata/authors/<int:author_id>/books')
+def api_metadata_author_books(author_id):
+    """Get books by specific author"""
+    try:
+        db_manager = get_calibre_db_manager()
+        if not db_manager:
+            return jsonify({'error': 'Metadata database not available'}), 503
+        
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 20)), 100)
+        
+        # Get books by author
+        result = db_manager.get_books_by_author(author_id, page=page, per_page=per_page)
+        
+        return jsonify({
+            'books': result['books'],
+            'author': result['author'],
+            'total': result['total'],
+            'page': result['page'],
+            'per_page': result['per_page'],
+            'pages': result['pages']
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching books by author: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/metadata/series')
+def api_metadata_series_list():
+    """Get list of all series (equivalent to OPDS /series)"""
+    try:
+        db_manager = get_calibre_db_manager()
+        if not db_manager:
+            return jsonify({'error': 'Metadata database not available'}), 503
+        
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 50)), 200)
+        search = request.args.get('search', '').strip()
+        starts_with = request.args.get('starts_with', '').strip()
+        
+        # Get series list with book counts
+        result = db_manager.get_series_with_counts(page=page, per_page=per_page, search=search, starts_with=starts_with)
+        
+        return jsonify({
+            'series': result['series'],
+            'total': result['total'],
+            'page': result['page'],
+            'per_page': result['per_page'],
+            'pages': result['pages']
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching series: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/metadata/series/<int:series_id>/books')
+def api_metadata_series_books(series_id):
+    """Get books in specific series"""
+    try:
+        db_manager = get_calibre_db_manager()
+        if not db_manager:
+            return jsonify({'error': 'Metadata database not available'}), 503
+        
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 20)), 100)
+        
+        # Get books in series
+        result = db_manager.get_books_in_series(series_id, page=page, per_page=per_page)
+        
+        return jsonify({
+            'books': result['books'],
+            'series': result['series'],
+            'total': result['total'],
+            'page': result['page'],
+            'per_page': result['per_page'],
+            'pages': result['pages']
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching books in series: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/metadata/tags')
+def api_metadata_tags_list():
+    """Get list of all tags/categories (equivalent to OPDS /category)"""
+    try:
+        db_manager = get_calibre_db_manager()
+        if not db_manager:
+            return jsonify({'error': 'Metadata database not available'}), 503
+        
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 50)), 200)
+        search = request.args.get('search', '').strip()
+        
+        # Get tags list with book counts
+        result = db_manager.get_tags_with_counts(page=page, per_page=per_page, search=search)
+        
+        return jsonify({
+            'tags': result['tags'],
+            'total': result['total'],
+            'page': result['page'],
+            'per_page': result['per_page'],
+            'pages': result['pages']
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching tags: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/metadata/tags/<int:tag_id>/books')
+def api_metadata_tag_books(tag_id):
+    """Get books with specific tag"""
+    try:
+        db_manager = get_calibre_db_manager()
+        if not db_manager:
+            return jsonify({'error': 'Metadata database not available'}), 503
+        
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 20)), 100)
+        
+        # Get books with tag
+        result = db_manager.get_books_by_tag(tag_id, page=page, per_page=per_page)
+        
+        return jsonify({
+            'books': result['books'],
+            'tag': result['tag'],
+            'total': result['total'],
+            'page': result['page'],
+            'per_page': result['per_page'],
+            'pages': result['pages']
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching books by tag: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# ============================================================================
+# Admin API Endpoints (Direct Database Management)
+# ============================================================================
+
+@app.route('/api/admin/status')
+@login_required
+def api_admin_status():
+    """Check if current user has admin privileges"""
+    try:
+        is_admin = False
+        username = session.get('username')
+        
+        if username:
+            # Check admin status directly from database
+            from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+            cwa_db = get_cwa_db_manager()
+            
+            if cwa_db:
+                logger.debug(f"Admin status check: Checking database for {username}")
+                user_permissions = cwa_db.get_user_permissions(username)
+                is_admin = user_permissions.get('admin', False)
+                logger.debug(f"Admin status check: Database result = {is_admin}")
+            else:
+                logger.warning("Admin status check: CWA database not available")
+        else:
+            logger.warning("Admin status check: No username in session")
+        
+        return jsonify({'is_admin': is_admin})
+        
+    except Exception as e:
+        logger.error(f"Error checking admin status: {e}")
+        logger.error(f"Admin status check exception type: {type(e).__name__}")
+        return jsonify({'is_admin': False})
+
+@app.route('/api/admin/rate-limiter/status')
+@login_required
+def api_rate_limiter_status():
+    """Get rate limiter statistics (admin only)"""
+    try:
+        # Get rate limiter stats
+        stats = get_rate_limiter_stats()
+        
+        return jsonify({
+            'rate_limiter': stats,
+            'message': 'Rate limiter statistics retrieved successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting rate limiter status: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# Direct CWA Database User Management
+@app.route('/api/useradmin/users', methods=['GET'])
+@login_required
+def api_get_users() -> Union[Response, Tuple[Response, int]]:
+    """Get all CWA users via direct database access"""
+    try:
+        from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+        cwa_db = get_cwa_db_manager()
+        if not cwa_db:
+            return jsonify({"error": "CWA database not available"}), 503
+        
+        users = cwa_db.get_all_users()
+        return jsonify({
+            'users': users,
+            'total': len(users)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching users: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/useradmin/users/<int:user_id>', methods=['GET'])
+@login_required
+def api_get_user_details(user_id: int) -> Union[Response, Tuple[Response, int]]:
+    """Get detailed information for a specific user"""
+    try:
+        from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+        cwa_db = get_cwa_db_manager()
+        if not cwa_db:
+            return jsonify({"error": "CWA database not available"}), 503
+        
+        user = cwa_db.get_user_by_id(user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        return jsonify(user)
+        
+    except Exception as e:
+        logger.error(f"Error fetching user {user_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/useradmin/users', methods=['POST'])
+@login_required
+def api_create_user() -> Union[Response, Tuple[Response, int]]:
+    """Create a new CWA user"""
+    try:
+        from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+        cwa_db = get_cwa_db_manager()
+        if not cwa_db:
+            return jsonify({"error": "CWA database not available"}), 503
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        # Validate required fields
+        username = data.get('username', '').strip()
+        email = data.get('email', '').strip()
+        password = data.get('password', '').strip()
+        
+        if not username:
+            return jsonify({"error": "Username is required"}), 400
+        if not email:
+            return jsonify({"error": "Email is required"}), 400
+        if not password:
+            return jsonify({"error": "Password is required"}), 400
+        
+        # Check if user already exists
+        if cwa_db.user_exists(username):
+            return jsonify({"error": "User already exists"}), 400
+        
+        # Create user
+        success = cwa_db.create_user(
+            username=username,
+            email=email,
+            password=password,
+            kindle_email=data.get('kindle_email', ''),
+            locale=data.get('locale', 'en'),
+            default_language=data.get('default_language', 'en'),
+            permissions=data.get('permissions', {})
+        )
+        
+        if success:
+            return jsonify({
+                "success": True,
+                "message": "User created successfully"
+            })
+        else:
+            return jsonify({"error": "Failed to create user"}), 500
+            
+    except Exception as e:
+        logger.error(f"Error creating user: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/useradmin/users/<int:user_id>', methods=['PUT'])
+@login_required
+def api_update_user(user_id: int) -> Union[Response, Tuple[Response, int]]:
+    """Update user permissions and details"""
+    try:
+        from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+        cwa_db = get_cwa_db_manager()
+        if not cwa_db:
+            return jsonify({"error": "CWA database not available"}), 503
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        # Update user
+        success = cwa_db.update_user(
+            user_id=user_id,
+            username=data.get('username'),
+            email=data.get('email'),
+            kindle_email=data.get('kindle_email'),
+            locale=data.get('locale'),
+            default_language=data.get('default_language'),
+            permissions=data.get('permissions')
+        )
+        
+        if success:
+            return jsonify({
+                "success": True,
+                "message": "User updated successfully"
+            })
+        else:
+            return jsonify({"error": "Failed to update user or user not found"}), 404
+            
+    except Exception as e:
+        logger.error(f"Error updating user {user_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/useradmin/users/<int:user_id>', methods=['DELETE'])
+@login_required
+def api_delete_user(user_id: int) -> Union[Response, Tuple[Response, int]]:
+    """Delete a CWA user"""
+    try:
+        from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+        cwa_db = get_cwa_db_manager()
+        if not cwa_db:
+            return jsonify({"error": "CWA database not available"}), 503
+        
+        success = cwa_db.delete_user(user_id)
+        
+        if success:
+            return jsonify({
+                "success": True,
+                "message": "User deleted successfully"
+            })
+        else:
+            return jsonify({"error": "Failed to delete user or user not found"}), 404
+            
+    except Exception as e:
+        logger.error(f"Error deleting user {user_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# User Profile Management (for current user only)
+@app.route('/api/profile', methods=['GET'])
+@login_required
+def api_get_current_user_profile() -> Union[Response, Tuple[Response, int]]:
+    """Get current user's profile information"""
+    try:
+        from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+        cwa_db = get_cwa_db_manager()
+        if not cwa_db:
+            return jsonify({"error": "CWA database not available"}), 503
+        
+        username = session.get('username')
+        if not username:
+            return jsonify({"error": "User not authenticated"}), 401
+        
+        # Get user by username
+        with cwa_db._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, name, email, kindle_mail, locale, default_language, role
+                FROM user WHERE name = ? AND name != 'Guest'
+            """, (username,))
+            row = cursor.fetchone()
+            
+            if not row:
+                return jsonify({"error": "User not found"}), 404
+            
+            user_data = {
+                'id': row['id'],
+                'username': row['name'],
+                'email': row['email'],
+                'kindle_email': row['kindle_mail'] or '',
+                'locale': row['locale'] or 'en',
+                'default_language': row['default_language'] or 'en',
+                'permissions': cwa_db._role_to_permissions(row['role'])
+            }
+            
+            return jsonify(user_data)
+            
+    except Exception as e:
+        logger.error(f"Error fetching profile for user {username}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/profile', methods=['PUT'])
+@login_required
+def api_update_current_user_profile() -> Union[Response, Tuple[Response, int]]:
+    """Update current user's profile (limited fields, no permissions)"""
+    try:
+        from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+        cwa_db = get_cwa_db_manager()
+        if not cwa_db:
+            return jsonify({"error": "CWA database not available"}), 503
+        
+        username = session.get('username')
+        if not username:
+            return jsonify({"error": "User not authenticated"}), 401
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        # Get current user ID
+        with cwa_db._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM user WHERE name = ? AND name != 'Guest'", (username,))
+            row = cursor.fetchone()
+            
+            if not row:
+                return jsonify({"error": "User not found"}), 404
+            
+            user_id = row['id']
+        
+        # Only allow updating specific fields (not permissions)
+        allowed_fields = {
+            'email': data.get('email'),
+            'kindle_email': data.get('kindle_email'),
+            'default_language': data.get('default_language')
+        }
+        
+        # Filter out None values
+        update_data = {k: v for k, v in allowed_fields.items() if v is not None}
+        
+        if not update_data:
+            return jsonify({"error": "No valid fields to update"}), 400
+        
+        # Update user profile (without permissions)
+        success = cwa_db.update_user(
+            user_id=user_id,
+            email=update_data.get('email'),
+            kindle_email=update_data.get('kindle_email'),
+            default_language=update_data.get('default_language')
+        )
+        
+        if success:
+            return jsonify({
+                "success": True,
+                "message": "Profile updated successfully"
+            })
+        else:
+            return jsonify({"error": "Failed to update profile"}), 500
+            
+    except Exception as e:
+        logger.error(f"Error updating profile for user {username}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/profile/password', methods=['PUT'])
+@login_required  
+def api_change_password() -> Union[Response, Tuple[Response, int]]:
+    """Change current user's password"""
+    try:
+        from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+        from werkzeug.security import generate_password_hash, check_password_hash
+        
+        cwa_db = get_cwa_db_manager()
+        if not cwa_db:
+            return jsonify({"error": "CWA database not available"}), 503
+        
+        username = session.get('username')
+        if not username:
+            return jsonify({"error": "User not authenticated"}), 401
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        current_password = data.get('current_password')
+        new_password = data.get('new_password')
+        
+        if not current_password or not new_password:
+            return jsonify({"error": "Both current and new passwords are required"}), 400
+        
+        if len(new_password) < 4:
+            return jsonify({"error": "New password must be at least 4 characters long"}), 400
+        
+        # Get current user and verify current password
+        with cwa_db._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, password FROM user WHERE name = ? AND name != 'Guest'
+            """, (username,))
+            row = cursor.fetchone()
+            
+            if not row:
+                return jsonify({"error": "User not found"}), 404
+            
+            # Verify current password
+            if not check_password_hash(row['password'], current_password):
+                return jsonify({"error": "Current password is incorrect"}), 400
+            
+            # Update password
+            new_password_hash = generate_password_hash(new_password)
+            cursor.execute("""
+                UPDATE user SET password = ? WHERE id = ?
+            """, (new_password_hash, row['id']))
+            
+            conn.commit()
+            
+            return jsonify({
+                "success": True,
+                "message": "Password changed successfully"
+            })
+            
+    except Exception as e:
+        logger.error(f"Error changing password for user {username}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# Download Tracking APIs
+@app.route('/api/admin/downloads', methods=['GET'])
+@login_required
+def api_get_download_history() -> Union[Response, Tuple[Response, int]]:
+    """Get download history from CWA database (admin only)"""
+    try:
+        # Check if user is admin
+        username = session.get('username')
+        if not username:
+            return jsonify({"error": "User not authenticated"}), 401
+            
+        from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+        cwa_db = get_cwa_db_manager()
+        if not cwa_db:
+            return jsonify({"error": "CWA database not available"}), 503
+        
+        # Check if user is admin
+        user_permissions = cwa_db.get_user_permissions(username)
+        if not user_permissions.get('admin', False):
+            return jsonify({"error": "Admin access required"}), 403
+        
+        # Get query parameters
+        target_username = request.args.get('username')
+        limit = min(int(request.args.get('limit', 100)), 500)  # Max 500 records
+        
+        downloads = cwa_db.get_user_downloads(target_username, limit)
+        
+        return jsonify({
+            'downloads': downloads,
+            'total_returned': len(downloads)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching download history: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/download-stats', methods=['GET'])
+@login_required
+def api_get_download_stats() -> Union[Response, Tuple[Response, int]]:
+    """Get download statistics (admin only)"""
+    try:
+        # Check if user is admin
+        username = session.get('username')
+        if not username:
+            return jsonify({"error": "User not authenticated"}), 401
+            
+        from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+        cwa_db = get_cwa_db_manager()
+        if not cwa_db:
+            return jsonify({"error": "CWA database not available"}), 503
+        
+        # Check if user is admin
+        user_permissions = cwa_db.get_user_permissions(username)
+        if not user_permissions.get('admin', False):
+            return jsonify({"error": "Admin access required"}), 403
+        
+        stats = cwa_db.get_download_stats()
+        
+        return jsonify(stats)
+        
+    except Exception as e:
+        logger.error(f"Error fetching download stats: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/profile/downloads', methods=['GET'])
+@login_required
+def api_get_my_downloads() -> Union[Response, Tuple[Response, int]]:
+    """Get current user's download history"""
+    try:
+        username = session.get('username')
+        if not username:
+            return jsonify({"error": "User not authenticated"}), 401
+            
+        from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+        cwa_db = get_cwa_db_manager()
+        if not cwa_db:
+            return jsonify({"error": "CWA database not available"}), 503
+        
+        # Get query parameters
+        limit = min(int(request.args.get('limit', 50)), 100)  # Max 100 for personal downloads
+        
+        downloads = cwa_db.get_user_downloads(username, limit)
+        
+        return jsonify({
+            'downloads': downloads,
+            'total_returned': len(downloads)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching user downloads for {username}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/metadata/hot-books', methods=['GET'])
+@login_required
+def api_get_hot_books() -> Union[Response, Tuple[Response, int]]:
+    """Get hot books based on actual download statistics"""
+    try:
+        from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+        cwa_db = get_cwa_db_manager()
+        if not cwa_db:
+            return jsonify({"error": "CWA database not available"}), 503
+        
+        # Get query parameters
+        limit = min(int(request.args.get('per_page', 50)), 100)  # Max 100 books
+        
+        # Get hot books from download statistics
+        hot_books_data = cwa_db.get_hot_books(limit)
+        
+        if not hot_books_data:
+            # Return empty result if no download data
+            return jsonify({
+                'books': [],
+                'total': 0,
+                'page': 1,
+                'per_page': limit,
+                'total_pages': 0
+            })
+        
+        # Get book metadata for each hot book
+        enriched_books = []
+        
+        for book_data in hot_books_data:
+            book_id = book_data['book_id']
+            download_count = book_data['download_count']
+            
+            try:
+                # Fetch book metadata from the direct metadata API
+                metadata_response = requests.get(
+                    f'http://localhost:8084/api/metadata/books/{book_id}',
+                    headers={'User-Agent': 'Inkdrop-HotBooks/1.0'},
+                    timeout=5
+                )
+                
+                if metadata_response.status_code == 200:
+                    book_metadata = metadata_response.json()
+                    
+                    # Enrich with download count
+                    book_metadata['download_count'] = download_count
+                    book_metadata['popularity_rank'] = len(enriched_books) + 1
+                    
+                    enriched_books.append(book_metadata)
+                else:
+                    logger.warning(f"Failed to get metadata for book {book_id}: {metadata_response.status_code}")
+                    
+            except Exception as e:
+                logger.warning(f"Error fetching metadata for book {book_id}: {e}")
+                continue
+        
+        logger.info(f"Successfully enriched {len(enriched_books)} hot books with metadata")
+        
+        return jsonify({
+            'books': enriched_books,
+            'total': len(enriched_books),
+            'page': 1,
+            'per_page': limit,
+            'total_pages': 1
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching hot books: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/user-info')
+def api_admin_user_info():
+    """Get current user info and admin status - simple version for auth checking"""
+    try:
+        # Check if user is logged in
+        if not session.get('logged_in') or not session.get('username'):
+            return jsonify({
+                'authenticated': False,
+                'is_admin': False
+            }), 401
+        
+        username = session.get('username')
+        
+        # Check admin status directly from database
+        is_admin = False
+        
+        try:
+            from ..infrastructure.cwa_db_manager import get_cwa_db_manager
+            cwa_db = get_cwa_db_manager()
+            
+            if cwa_db:
+                logger.debug(f"Admin check for {username}: Checking database")
+                user_permissions = cwa_db.get_user_permissions(username)
+                is_admin = user_permissions.get('admin', False)
+                logger.debug(f"Admin check: Database result = {is_admin}")
+            else:
+                logger.warning("Admin check: CWA database not available")
+        except Exception as e:
+            logger.error(f"Database admin check failed for {username}: {e}")
+            is_admin = False
+        
+        return jsonify({
+            'authenticated': True,
+            'username': username,
+            'is_admin': is_admin
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in user info endpoint: {e}")
+        return jsonify({
+            'authenticated': False,
+            'is_admin': False
+        }), 500
+
+
+@app.route('/api/admin/duplicates')
+@login_required
+def api_admin_duplicates():
+    """Find duplicate books in the library"""
+    try:
+        db_manager = get_calibre_db_manager()
+        if not db_manager:
+            return jsonify({'error': 'Metadata database not available'}), 503
+            
+        duplicates = db_manager.find_duplicates()
+        return jsonify({'duplicates': duplicates})
+        
+    except Exception as e:
+        logger.error(f"Error finding duplicates: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/books/<int:book_id>', methods=['DELETE'])
+@login_required
+def api_admin_delete_book(book_id):
+    """Delete a book from the library"""
+    try:
+        db_manager = get_calibre_db_manager()
+        if not db_manager:
+            return jsonify({'error': 'Metadata database not available'}), 503
+            
+        success, message = db_manager.delete_book(book_id)
+        if success:
+            return jsonify({'success': True, 'message': message or f'Book {book_id} deleted successfully'})
+        else:
+            return jsonify({'error': message or 'Failed to delete book'}), 500
+            
+    except Exception as e:
+        logger.error(f"Error deleting book {book_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/books/bulk-delete', methods=['DELETE'])
+@admin_required
+def api_admin_bulk_delete_books():
+    """Delete multiple books from the library"""
+    try:
+        data = request.get_json()
+        book_ids = data.get('book_ids', [])
+        
+        if not book_ids:
+            return jsonify({'error': 'No book IDs provided'}), 400
+            
+        db_manager = get_calibre_db_manager()
+        if not db_manager:
+            return jsonify({'error': 'Metadata database not available'}), 503
+            
+        deleted_count = db_manager.bulk_delete_books(book_ids)
+        return jsonify({
+            'success': True, 
+            'message': f'Successfully deleted {deleted_count} books',
+            'deleted_count': deleted_count
+        })
+        
+    except Exception as e:
+        logger.error(f"Error bulk deleting books: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# ============================================================================
+# Admin Settings API Endpoints (Global Application Settings)
+# ============================================================================
+
+@app.route('/api/admin/settings', methods=['GET'])
+@admin_required
+def api_admin_get_settings():
+    """Get global application settings (admin only)"""
+    try:
+        settings = get_app_settings()
+        
+        # Convert to dict for JSON response
+        from dataclasses import asdict
+        settings_dict = asdict(settings)
+        
+        return jsonify({
+            'success': True,
+            'settings': settings_dict
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting admin settings: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/settings', methods=['POST'])
+@admin_required
+def api_admin_update_settings():
+    """Update global application settings (admin only)"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No settings data provided'}), 400
+            
+        # Update settings
+        success = update_app_settings(data)
+        
+        if success:
+            # Get updated settings to return
+            settings = get_app_settings()
+            from dataclasses import asdict
+            settings_dict = asdict(settings)
+            
+            return jsonify({
+                'success': True,
+                'message': 'Settings updated successfully',
+                'settings': settings_dict
+            })
+        else:
+            return jsonify({'error': 'Failed to update settings'}), 500
+            
+    except Exception as e:
+        logger.error(f"Error updating admin settings: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/settings/test-conversion', methods=['POST'])
+@admin_required  
+def api_admin_test_conversion():
+    """Test if Calibre conversion tools are available (admin only)"""
+    try:
+        import subprocess
+        
+        # Test ebook-convert
+        try:
+            result = subprocess.run([
+                'ebook-convert', '--version'
+            ], capture_output=True, text=True, timeout=10)
+            
+            if result.returncode == 0:
+                version_info = result.stdout.strip()
+                
+                # Also test calibredb
+                db_result = subprocess.run([
+                    'calibredb', '--version'
+                ], capture_output=True, text=True, timeout=10)
+                
+                if db_result.returncode == 0:
+                    db_version = db_result.stdout.strip()
+                    
+                    return jsonify({
+                        'success': True,
+                        'available': True,
+                        'ebook_convert_version': version_info,
+                        'calibredb_version': db_version,
+                        'message': 'Calibre tools are available and working'
+                    })
+                else:
+                    return jsonify({
+                        'success': True,
+                        'available': False,
+                        'error': 'calibredb not available',
+                        'message': 'ebook-convert available but calibredb failed'
+                    })
+            else:
+                return jsonify({
+                    'success': True,
+                    'available': False,
+                    'error': result.stderr or 'ebook-convert failed',
+                    'message': 'Calibre tools are not available'
+                })
+                
+        except subprocess.TimeoutExpired:
+            return jsonify({
+                'success': True,
+                'available': False,
+                'error': 'Command timeout',
+                'message': 'Calibre tools test timed out'
+            })
+        except FileNotFoundError:
+            return jsonify({
+                'success': True,
+                'available': False,
+                'error': 'ebook-convert not found',
+                'message': 'Calibre tools are not installed or not in PATH'
+            })
+            
+    except Exception as e:
+        logger.error(f"Error testing Calibre conversion: {e}")
+        return jsonify({'error': str(e)}), 500
+
+        @app.route('/api/admin/conversion/status', methods=['GET'])
+        @admin_required
+        def api_admin_conversion_status():
+            """Get conversion manager status and active jobs (admin only)"""
+            try:
+                # Import asyncio to run async function
+                import asyncio
+                
+                # Get or create event loop
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                
+                # Run async function
+                conversion_manager = loop.run_until_complete(get_conversion_manager())
+                
+                active_jobs = conversion_manager.get_active_jobs()
+                library_stats = conversion_manager.library_manager.get_library_stats()
+                
+                return jsonify({
+                    'success': True,
+                    'conversion_manager_running': conversion_manager.running,
+                    'active_jobs': active_jobs,
+                    'library_stats': library_stats
+                })
+                
+            except Exception as e:
+                logger.error(f"Error getting conversion status: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        # ============================================================================
+        # SMTP Settings API Endpoints (Admin Only)
+        # ============================================================================
+
+        @app.route('/api/admin/smtp/settings', methods=['GET'])
+        @admin_required
+        def api_admin_get_smtp_settings():
+            """Get SMTP settings for Send to Kindle (admin only)"""
+            try:
+                settings_manager = get_inkdrop_settings_manager()
+                smtp_settings = settings_manager.get_smtp_settings()
+                
+                # Don't return the password for security
+                response_data = {
+                    'mail_server': smtp_settings.mail_server,
+                    'mail_port': smtp_settings.mail_port,
+                    'mail_use_ssl': smtp_settings.mail_use_ssl,
+                    'mail_login': smtp_settings.mail_login,
+                    'mail_from': smtp_settings.mail_from,
+                    'mail_size': smtp_settings.mail_size,
+                    'mail_server_type': smtp_settings.mail_server_type,
+                    'has_password': bool(smtp_settings.mail_password)
+                }
+                
+                return jsonify({
+                    'success': True,
+                    'smtp_settings': response_data
+                })
+                
+            except Exception as e:
+                logger.error(f"Error getting SMTP settings: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @app.route('/api/admin/smtp/settings', methods=['POST'])
+        @admin_required
+        def api_admin_update_smtp_settings():
+            """Update SMTP settings for Send to Kindle (admin only)"""
+            try:
+                data = request.get_json()
+                if not data:
+                    return jsonify({'error': 'No SMTP settings data provided'}), 400
+                
+                settings_manager = get_inkdrop_settings_manager()
+                current_smtp = settings_manager.get_smtp_settings()
+                
+                # Update fields
+                if 'mail_server' in data:
+                    current_smtp.mail_server = data['mail_server']
+                if 'mail_port' in data:
+                    current_smtp.mail_port = int(data['mail_port'])
+                if 'mail_use_ssl' in data:
+                    current_smtp.mail_use_ssl = bool(data['mail_use_ssl'])
+                if 'mail_login' in data:
+                    current_smtp.mail_login = data['mail_login']
+                if 'mail_password' in data and data['mail_password']:
+                    current_smtp.mail_password = data['mail_password']
+                if 'mail_from' in data:
+                    current_smtp.mail_from = data['mail_from']
+                if 'mail_size' in data:
+                    current_smtp.mail_size = int(data['mail_size'])
+                if 'mail_server_type' in data:
+                    current_smtp.mail_server_type = int(data['mail_server_type'])
+                
+                # Save settings
+                if settings_manager.update_smtp_settings(current_smtp):
+                    return jsonify({
+                        'success': True,
+                        'message': 'SMTP settings updated successfully'
+                    })
+                else:
+                    return jsonify({'error': 'Failed to update SMTP settings'}), 500
+                    
+            except Exception as e:
+                logger.error(f"Error updating SMTP settings: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @app.route('/api/admin/smtp/test', methods=['POST'])
+        @admin_required
+        def api_admin_test_smtp():
+            """Test SMTP connection (admin only)"""
+            try:
+                kindle_sender = get_kindle_sender()
+                result = kindle_sender.test_smtp_connection()
+                
+                if result['success']:
+                    return jsonify(result)
+                else:
+                    return jsonify(result), 400
+                    
+            except Exception as e:
+                logger.error(f"Error testing SMTP: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        # ============================================================================
+        # Send to Kindle API Endpoints
+        # ============================================================================
+
+        @app.route('/api/kindle/send/<book_id>', methods=['POST'])
+        @login_required
+        def api_send_to_kindle(book_id):
+            """Send a downloaded book to user's Kindle"""
+            try:
+                username = session.get('username')
+                if not username:
+                    return jsonify({'error': 'User not authenticated'}), 401
+                
+                data = request.get_json() or {}
+                user_message = data.get('message', '')
+                
+                # Find the book file in ingest directory
+                from pathlib import Path
+                ingest_dir = Path(INGEST_DIR)
+                
+                # Look for book file with this book_id
+                book_files = list(ingest_dir.glob(f"{book_id}.*"))
+                if not book_files:
+                    # Also try looking by title if USE_BOOK_TITLE is enabled
+                    book_files = list(ingest_dir.glob(f"*{book_id}*"))
+                
+                if not book_files:
+                    return jsonify({'error': 'Book file not found'}), 404
+                
+                book_path = book_files[0]  # Use first match
+                book_title = data.get('title', book_path.stem)
+                
+                # Send to Kindle
+                kindle_sender = get_kindle_sender()
+                result = kindle_sender.send_book_to_kindle(
+                    username=username,
+                    book_path=book_path,
+                    book_title=book_title,
+                    user_message=user_message
+                )
+                
+                if result['success']:
+                    return jsonify(result)
+                else:
+                    return jsonify(result), 400
+                    
+            except Exception as e:
+                logger.error(f"Error sending book to Kindle: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @app.route('/api/kindle/send/library/<int:book_id>', methods=['POST'])
+        @login_required
+        def api_send_library_book_to_kindle(book_id):
+            """Send a library book to user's Kindle"""
+            try:
+                username = session.get('username')
+                if not username:
+                    return jsonify({'error': 'User not authenticated'}), 401
+                
+                data = request.get_json() or {}
+                user_message = data.get('message', '')
+                
+                # Get book from Calibre library
+                calibre_db = get_calibre_db_manager()
+                if not calibre_db:
+                    return jsonify({'error': 'Calibre library not available'}), 503
+                
+                book_info = calibre_db.get_book_by_id(book_id)
+                if not book_info:
+                    return jsonify({'error': 'Book not found in library'}), 404
+                
+                # Find book file (prefer EPUB, then MOBI, then any format)
+                book_formats = book_info.get('formats', {})
+                preferred_formats = ['EPUB', 'MOBI', 'AZW3', 'PDF']
+                
+                book_path = None
+                book_format = None
+                
+                for fmt in preferred_formats:
+                    if fmt in book_formats:
+                        book_path = Path(book_formats[fmt])
+                        book_format = fmt
+                        break
+                
+                if not book_path or not book_path.exists():
+                    # Try any available format
+                    for fmt, path in book_formats.items():
+                        if Path(path).exists():
+                            book_path = Path(path)
+                            book_format = fmt
+                            break
+                
+                if not book_path or not book_path.exists():
+                    return jsonify({'error': 'No readable book file found'}), 404
+                
+                book_title = book_info.get('title', f'Book {book_id}')
+                
+                # Send to Kindle
+                kindle_sender = get_kindle_sender()
+                result = kindle_sender.send_book_to_kindle(
+                    username=username,
+                    book_path=book_path,
+                    book_title=book_title,
+                    user_message=user_message
+                )
+                
+                if result['success']:
+                    result['format'] = book_format
+                    return jsonify(result)
+                else:
+                    return jsonify(result), 400
+                    
+            except Exception as e:
+                logger.error(f"Error sending library book to Kindle: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @app.route('/api/user/kindle-email', methods=['GET'])
+        @login_required
+        def api_get_user_kindle_email():
+            """Get current user's Kindle email"""
+            try:
+                username = session.get('username')
+                if not username:
+                    return jsonify({'error': 'User not authenticated'}), 401
+                
+                kindle_sender = get_kindle_sender()
+                kindle_email = kindle_sender.get_user_kindle_email(username)
+                
+                return jsonify({
+                    'success': True,
+                    'kindle_email': kindle_email or '',
+                    'has_kindle_email': bool(kindle_email)
+                })
+                
+            except Exception as e:
+                logger.error(f"Error getting user Kindle email: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @app.route('/api/user/kindle-email', methods=['POST'])
+        @login_required
+        def api_update_user_kindle_email():
+            """Update current user's Kindle email"""
+            try:
+                username = session.get('username')
+                if not username:
+                    return jsonify({'error': 'User not authenticated'}), 401
+                
+                data = request.get_json()
+                if not data or 'kindle_email' not in data:
+                    return jsonify({'error': 'Kindle email required'}), 400
+                
+                kindle_email = data['kindle_email'].strip()
+                
+                # Update in database
+                cwa_db = get_cwa_db_manager()
+                if not cwa_db:
+                    return jsonify({'error': 'Database not available'}), 503
+                
+                user_info = cwa_db.get_user_by_username(username)
+                if not user_info:
+                    return jsonify({'error': 'User not found'}), 404
+                
+                success = cwa_db.update_user(
+                    user_id=user_info['id'],
+                    kindle_email=kindle_email
+                )
+                
+                if success:
+                    return jsonify({
+                        'success': True,
+                        'message': 'Kindle email updated successfully',
+                        'kindle_email': kindle_email
+                    })
+                else:
+                    return jsonify({'error': 'Failed to update Kindle email'}), 500
+                    
+            except Exception as e:
+                logger.error(f"Error updating user Kindle email: {e}")
+                return jsonify({'error': str(e)}), 500
+
+# ============================================================================
+# Read Status API Endpoints (User Reading Status)
+# ============================================================================
+
+@app.route('/api/books/<int:book_id>/read-status', methods=['GET'])
+@login_required
+def api_get_book_read_status(book_id):
+    """Get read status for a specific book for the current user"""
+    try:
+        rs_manager = get_read_status_manager_instance()
+        if not rs_manager:
+            return jsonify({'error': 'Read status manager not available'}), 503
+        
+        # Get current user info from session
+        username = session.get('username')
+        if not username:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        # Get or create user ID
+        user_id = rs_manager.get_or_create_user(username)
+        
+        # Get read status
+        status = rs_manager.get_book_read_status(book_id, user_id)
+        
+        return jsonify(status)
+        
+    except Exception as e:
+        logger.error(f"Error getting read status for book {book_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/books/<int:book_id>/read-status', methods=['POST'])
+@login_required
+def api_set_book_read_status(book_id):
+    """Set read status for a specific book for the current user"""
+    try:
+        rs_manager = get_read_status_manager_instance()
+        if not rs_manager:
+            return jsonify({'error': 'Read status manager not available'}), 503
+        
+        # Get current user info from session
+        username = session.get('username')
+        if not username:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        # Get request data
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Get or create user ID
+        user_id = rs_manager.get_or_create_user(username)
+        
+        # Handle different actions
+        action = data.get('action')
+        if action == 'toggle':
+            status = rs_manager.toggle_book_read_status(book_id, user_id)
+        elif action == 'mark_read':
+            rs_manager.mark_as_read(book_id, user_id)
+            status = rs_manager.get_book_read_status(book_id, user_id)
+        elif action == 'mark_unread':
+            rs_manager.mark_as_unread(book_id, user_id)
+            status = rs_manager.get_book_read_status(book_id, user_id)
+        elif action == 'mark_in_progress':
+            rs_manager.mark_as_in_progress(book_id, user_id)
+            status = rs_manager.get_book_read_status(book_id, user_id)
+        elif action == 'mark_want_to_read':
+            rs_manager.mark_as_want_to_read(book_id, user_id)
+            status = rs_manager.get_book_read_status(book_id, user_id)
+        else:
+            return jsonify({'error': 'Invalid action. Use: toggle, mark_read, mark_unread, mark_in_progress, mark_want_to_read'}), 400
+        
+        return jsonify(status)
+        
+    except Exception as e:
+        logger.error(f"Error setting read status for book {book_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/books/read-status', methods=['POST'])
+@login_required
+def api_get_multiple_books_read_status():
+    """Get read status for multiple books for the current user"""
+    try:
+        rs_manager = get_read_status_manager_instance()
+        if not rs_manager:
+            return jsonify({'error': 'Read status manager not available'}), 503
+        
+        # Get current user info from session
+        username = session.get('username')
+        if not username:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        # Get request data
+        data = request.get_json()
+        if not data or 'book_ids' not in data:
+            return jsonify({'error': 'book_ids array required'}), 400
+        
+        book_ids = data['book_ids']
+        if not isinstance(book_ids, list):
+            return jsonify({'error': 'book_ids must be an array'}), 400
+        
+        # Get or create user ID
+        user_id = rs_manager.get_or_create_user(username)
+        
+        # Get read status for all books
+        statuses = rs_manager.get_multiple_books_read_status(book_ids, user_id)
+        
+        return jsonify({'book_statuses': statuses})
+        
+    except Exception as e:
+        logger.error(f"Error getting multiple books read status: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/user/reading-stats', methods=['GET'])
+@login_required
+def api_get_user_reading_stats():
+    """Get reading statistics for the current user"""
+    try:
+        rs_manager = get_read_status_manager_instance()
+        if not rs_manager:
+            return jsonify({'error': 'Read status manager not available'}), 503
+        
+        # Get current user info from session
+        username = session.get('username')
+        if not username:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        # Get or create user ID
+        user_id = rs_manager.get_or_create_user(username)
+        
+        # Get reading stats
+        stats = rs_manager.get_user_reading_stats(user_id)
+        
+        return jsonify(stats)
+        
+    except Exception as e:
+        logger.error(f"Error getting user reading stats: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/user/books/<status>', methods=['GET'])
+@login_required
+def api_get_user_books_by_status(status):
+    """Get books by read status for the current user"""
+    try:
+        rs_manager = get_read_status_manager_instance()
+        if not rs_manager:
+            return jsonify({'error': 'Read status manager not available'}), 503
+        
+        # Get current user info from session
+        username = session.get('username')
+        if not username:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        # Get or create user ID
+        user_id = rs_manager.get_or_create_user(username)
+        
+        # Get limit and offset from query params
+        limit = request.args.get('limit', 50, type=int)
+        offset = request.args.get('offset', 0, type=int)
+        
+        if status == 'all':
+            # Use efficient pagination for all user books
+            book_ids, total_books = rs_manager.get_all_user_books_paginated(user_id, limit, offset)
+        else:
+            # Map status string to constant
+            status_map = {
+                'read': rs_manager.STATUS_FINISHED,
+                'unread': rs_manager.STATUS_UNREAD,
+                'in_progress': rs_manager.STATUS_IN_PROGRESS,
+                'want_to_read': rs_manager.STATUS_WANT_TO_READ
+            }
+            
+            if status not in status_map:
+                return jsonify({'error': 'Invalid status. Use: read, unread, in_progress, want_to_read, all'}), 400
+            
+            # Use efficient pagination for single status
+            total_books = rs_manager.get_books_count_by_status(user_id, status_map[status])
+            book_ids = rs_manager.get_books_by_read_status(user_id, status_map[status], limit, offset)
+        
+        if not book_ids:
+            return jsonify({'books': [], 'status': status, 'total': 0})
+        
+        # Get full book metadata from Calibre
+        calibre_manager = get_calibre_db_manager()
+        if not calibre_manager:
+            return jsonify({'error': 'Calibre database not available'}), 503
+            
+        books = []
+        for book_id in book_ids:
+            try:
+                book_data = calibre_manager.get_book_details(book_id)
+                if book_data:
+                    books.append(book_data)
+            except Exception as e:
+                logger.warning(f"Could not get book data for ID {book_id}: {e}")
+                continue
+        
+        # Enrich with read status for authenticated users
+        if books:
+            books = enrich_books_with_read_status(books, username)
+        
+        return jsonify({'books': books, 'status': status, 'total': total_books})
+        
+    except Exception as e:
+        logger.error(f"Error getting user books by status {status}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# ============================================================================
+# ============================================================================
+# CWA-Compatible API Endpoints - Direct Database Implementation
+# ============================================================================
+# These endpoints provide the same interface as CWA proxy but use direct
+# database access for complete independence from external CWA instances.
+# ============================================================================
+
+@app.route('/api/cwa/status')
+@login_required
+def api_cwa_status():
+    """CWA status check - returns system health using direct database access"""
+    try:
+        # Check database connections
+        calibre_db = get_calibre_db_manager()
+        cwa_db = get_cwa_db_manager()
+        
+        # Get basic library stats
+        library_healthy = False
+        book_count = 0
+        
+        if calibre_db:
+            try:
+                stats = calibre_db.get_library_stats()
+                book_count = stats.get('total_books', 0)
+                library_healthy = True
+            except Exception as e:
+                logger.warning(f"Library stats error: {e}")
+        
+        # Check user database
+        users_healthy = cwa_db is not None
+        
+        return jsonify({
+            'status': 'healthy' if (library_healthy and users_healthy) else 'degraded',
+            'library': {
+                'healthy': library_healthy,
+                'book_count': book_count
+            },
+            'database': {
+                'healthy': users_healthy
+            },
+            'version': BUILD_VERSION,
+            'independent': True  # We're independent now!
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting CWA status: {e}")
+        return jsonify({
+            'status': 'error',
+            'error': str(e),
+            'independent': True
+        }), 500
+
+@app.route('/api/cwa/health')
+@login_required
+def api_cwa_health():
+    """CWA health check - simple ping response"""
+    return jsonify({
+        'status': 'ok',
+        'timestamp': datetime.now().isoformat(),
+        'independent': True
+    })
+
+@app.route('/api/cwa/books')
+@login_required
+def api_cwa_books():
+    """Get books from library using direct Calibre database access"""
+    try:
+        calibre_db = get_calibre_db_manager()
+        if not calibre_db:
+            return jsonify({'error': 'Library not available'}), 503
+        
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 25))
+        sort = request.args.get('sort', 'new')
+        search = request.args.get('search', '')
+        
+        # Convert sort parameter to Calibre DB format
+        sort_mapping = {
+            'new': 'timestamp',
+            'old': 'timestamp_asc', 
+            'title': 'title',
+            'author': 'author',
+            'rating': 'rating'
+        }
+        calibre_sort = sort_mapping.get(sort, 'timestamp')
+        
+        # Get books
+        books_data = calibre_db.get_books(
+            page=page,
+            per_page=per_page,
+            sort=calibre_sort,
+            search=search
+        )
+        
+        if not books_data:
+            return jsonify({
+                'books': [],
+                'total': 0,
+                'page': page,
+                'per_page': per_page
+            })
+        
+        # Format response to match CWA format
+        formatted_books = []
+        for book in books_data.get('books', []):
+            formatted_book = {
+                'id': book.get('id'),
+                'title': book.get('title', ''),
+                'authors': book.get('authors', []),
+                'author_sort': book.get('author_sort', ''),
+                'timestamp': book.get('timestamp', ''),
+                'pubdate': book.get('pubdate', ''),
+                'series_index': book.get('series_index', 0),
+                'tags': book.get('tags', []),
+                'formats': book.get('formats', {}),
+                'has_cover': book.get('has_cover', False),
+                'rating': book.get('rating', 0),
+                'languages': book.get('languages', [])
+            }
+            formatted_books.append(formatted_book)
+        
+        return jsonify({
+            'books': formatted_books,
+            'total': books_data.get('total', 0),
+            'page': page,
+            'per_page': per_page
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting books: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cwa/search')
+@login_required
+def api_cwa_search():
+    """Search books in library using direct Calibre database access"""
+    try:
+        calibre_db = get_calibre_db_manager()
+        if not calibre_db:
+            return jsonify({'error': 'Library not available'}), 503
+        
+        # Get search parameters
+        query = request.args.get('query', request.args.get('q', ''))
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 25))
+        
+        if not query:
+            return jsonify({
+                'books': [],
+                'total': 0,
+                'page': page,
+                'per_page': per_page,
+                'query': query
+            })
+        
+        # Search books
+        search_results = calibre_db.search_books(
+            query=query,
+            page=page,
+            per_page=per_page
+        )
+        
+        if not search_results:
+            return jsonify({
+                'books': [],
+                'total': 0,
+                'page': page,
+                'per_page': per_page,
+                'query': query
+            })
+        
+        # Format response to match CWA format
+        formatted_books = []
+        for book in search_results.get('books', []):
+            formatted_book = {
+                'id': book.get('id'),
+                'title': book.get('title', ''),
+                'authors': book.get('authors', []),
+                'author_sort': book.get('author_sort', ''),
+                'timestamp': book.get('timestamp', ''),
+                'pubdate': book.get('pubdate', ''),
+                'series_index': book.get('series_index', 0),
+                'tags': book.get('tags', []),
+                'formats': book.get('formats', {}),
+                'has_cover': book.get('has_cover', False),
+                'rating': book.get('rating', 0),
+                'languages': book.get('languages', [])
+            }
+            formatted_books.append(formatted_book)
+        
+        return jsonify({
+            'books': formatted_books,
+            'total': search_results.get('total', 0),
+            'page': page,
+            'per_page': per_page,
+            'query': query
+        })
+        
+    except Exception as e:
+        logger.error(f"Error searching books: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cwa/book/<int:book_id>')
+@login_required
+def api_cwa_book_details(book_id):
+    """Get book details using direct Calibre database access"""
+    try:
+        calibre_db = get_calibre_db_manager()
+        if not calibre_db:
+            return jsonify({'error': 'Library not available'}), 503
+        
+        book = calibre_db.get_book_by_id(book_id)
+        if not book:
+            return jsonify({'error': 'Book not found'}), 404
+        
+        # Format response to match CWA format
+        formatted_book = {
+            'id': book.get('id'),
+            'title': book.get('title', ''),
+            'authors': book.get('authors', []),
+            'author_sort': book.get('author_sort', ''),
+            'timestamp': book.get('timestamp', ''),
+            'pubdate': book.get('pubdate', ''),
+            'series': book.get('series', []),
+            'series_index': book.get('series_index', 0),
+            'tags': book.get('tags', []),
+            'formats': book.get('formats', {}),
+            'has_cover': book.get('has_cover', False),
+            'rating': book.get('rating', 0),
+            'languages': book.get('languages', []),
+            'comments': book.get('comments', ''),
+            'publisher': book.get('publisher', ''),
+            'isbn': book.get('identifiers', {}).get('isbn', ''),
+            'identifiers': book.get('identifiers', {}),
+            'last_modified': book.get('last_modified', ''),
+            'path': book.get('path', '')
+        }
+        
+        return jsonify(formatted_book)
+        
+    except Exception as e:
+        logger.error(f"Error getting book {book_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cwa/book/<int:book_id>/formats')
+@login_required
+def api_cwa_book_formats(book_id):
+    """Get available formats for a book"""
+    try:
+        calibre_db = get_calibre_db_manager()
+        if not calibre_db:
+            return jsonify({'error': 'Library not available'}), 503
+        
+        book = calibre_db.get_book_by_id(book_id)
+        if not book:
+            return jsonify({'error': 'Book not found'}), 404
+        
+        formats = book.get('formats', {})
+        
+        return jsonify({
+            'book_id': book_id,
+            'formats': formats
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting book formats {book_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cwa/book/<int:book_id>/cover')
+@login_required
+def api_cwa_book_cover(book_id):
+    """Get book cover using direct Calibre database access"""
+    try:
+        calibre_db = get_calibre_db_manager()
+        if not calibre_db:
+            return jsonify({'error': 'Library not available'}), 503
+        
+        # Get cover data
+        cover_data = calibre_db.get_book_cover(book_id)
+        if not cover_data:
+            return jsonify({'error': 'Cover not found'}), 404
+        
+        # Return cover image
+        return Response(
+            cover_data,
+            mimetype='image/jpeg',
+            headers={'Cache-Control': 'public, max-age=3600'}
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting book cover {book_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cwa/authors')
+@login_required
+def api_cwa_authors():
+    """Get all authors from library using direct Calibre database access"""
+    try:
+        calibre_db = get_calibre_db_manager()
+        if not calibre_db:
+            return jsonify({'error': 'Library not available'}), 503
+        
+        authors = calibre_db.get_all_authors()
+        
+        # Format response to match CWA format
+        formatted_authors = []
+        for author in authors or []:
+            formatted_authors.append({
+                'id': author.get('id'),
+                'name': author.get('name', ''),
+                'sort': author.get('sort', ''),
+                'book_count': author.get('book_count', 0)
+            })
+        
+        return jsonify(formatted_authors)
+        
+    except Exception as e:
+        logger.error(f"Error getting authors: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cwa/series')
+@login_required
+def api_cwa_series():
+    """Get all series from library using direct Calibre database access"""
+    try:
+        calibre_db = get_calibre_db_manager()
+        if not calibre_db:
+            return jsonify({'error': 'Library not available'}), 503
+        
+        series = calibre_db.get_all_series()
+        
+        # Format response to match CWA format
+        formatted_series = []
+        for s in series or []:
+            formatted_series.append({
+                'id': s.get('id'),
+                'name': s.get('name', ''),
+                'sort': s.get('sort', ''),
+                'book_count': s.get('book_count', 0)
+            })
+        
+        return jsonify(formatted_series)
+        
+    except Exception as e:
+        logger.error(f"Error getting series: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cwa/categories')
+@login_required
+def api_cwa_categories():
+    """Get all tags/categories from library using direct Calibre database access"""
+    try:
+        calibre_db = get_calibre_db_manager()
+        if not calibre_db:
+            return jsonify({'error': 'Library not available'}), 503
+        
+        tags = calibre_db.get_all_tags()
+        
+        # Format response to match CWA format
+        formatted_tags = []
+        for tag in tags or []:
+            formatted_tags.append({
+                'id': tag.get('id'),
+                'name': tag.get('name', ''),
+                'book_count': tag.get('book_count', 0)
+            })
+        
+        return jsonify(formatted_tags)
+        
+    except Exception as e:
+        logger.error(f"Error getting categories: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# ============================================================================
+# CWA Library Action Endpoints
+# ============================================================================
+
+@app.route('/api/cwa/library/books/<int:book_id>/download/<format>')
+@login_required
+def api_cwa_library_download_book(book_id, format):
+    """Download a book from library in specified format"""
+    try:
+        calibre_db = get_calibre_db_manager()
+        if not calibre_db:
+            return jsonify({'error': 'Library not available'}), 503
+        
+        # Get book details
+        book = calibre_db.get_book_by_id(book_id)
+        if not book:
+            return jsonify({'error': 'Book not found'}), 404
+        
+        # Check if format is available
+        formats = book.get('formats', {})
+        format_upper = format.upper()
+        
+        if format_upper not in formats:
+            return jsonify({'error': f'Format {format} not available for this book'}), 404
+        
+        file_path = formats[format_upper]
+        
+        # Check if file exists
+        from pathlib import Path
+        book_file = Path(file_path)
+        if not book_file.exists():
+            return jsonify({'error': 'Book file not found on disk'}), 404
+        
+        # Send file
+        return send_file(
+            str(book_file),
+            as_attachment=True,
+            download_name=f"{book.get('title', 'book')}.{format.lower()}",
+            mimetype='application/octet-stream'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error downloading book {book_id} in format {format}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cwa/library/books/<int:book_id>/send-to-kindle', methods=['POST'])
+@login_required
+def api_cwa_library_send_to_kindle_direct(book_id):
+    """Send book from library to user's Kindle using direct implementation"""
+    try:
+        username = session.get('username')
+        if not username:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        data = request.get_json() or {}
+        user_message = data.get('message', '')
+        
+        # Get book from Calibre library
+        calibre_db = get_calibre_db_manager()
+        if not calibre_db:
+            return jsonify({'error': 'Library not available'}), 503
+        
+        book = calibre_db.get_book_by_id(book_id)
+        if not book:
+            return jsonify({'error': 'Book not found'}), 404
+        
+        # Find best format for Kindle (prefer EPUB, then MOBI, then any)
+        formats = book.get('formats', {})
+        preferred_formats = ['EPUB', 'MOBI', 'AZW3', 'PDF']
+        
+        book_path = None
+        book_format = None
+        
+        for fmt in preferred_formats:
+            if fmt in formats:
+                from pathlib import Path
+                book_path = Path(formats[fmt])
+                book_format = fmt
+                break
+        
+        if not book_path or not book_path.exists():
+            # Try any available format
+            for fmt, path in formats.items():
+                from pathlib import Path
+                if Path(path).exists():
+                    book_path = Path(path)
+                    book_format = fmt
+                    break
+        
+        if not book_path or not book_path.exists():
+            return jsonify({'error': 'No readable book file found'}), 404
+        
+        book_title = book.get('title', f'Book {book_id}')
+        
+        # Send to Kindle using our direct implementation
+        kindle_sender = get_kindle_sender()
+        result = kindle_sender.send_book_to_kindle(
+            username=username,
+            book_path=book_path,
+            book_title=book_title,
+            user_message=user_message
+        )
+        
+        if result['success']:
+            result['format'] = book_format
+            return jsonify(result)
+        else:
+            return jsonify(result), 400
+            
+    except Exception as e:
+        logger.error(f"Error sending library book to Kindle: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cwa/book/<int:book_id>/download/<format>')
+@login_required
+def api_cwa_download_book(book_id, format):
+    """Download a book in specified format (alias for library download)"""
+    return api_cwa_library_download_book(book_id, format)
+
+@app.route('/api/cwa/book/<int:book_id>/reader')
+@login_required
+def api_cwa_reader_url(book_id):
+    """Get reader URL for a book (for web reader integration)"""
+    try:
+        calibre_db = get_calibre_db_manager()
+        if not calibre_db:
+            return jsonify({'error': 'Library not available'}), 503
+        
+        book = calibre_db.get_book_by_id(book_id)
+        if not book:
+            return jsonify({'error': 'Book not found'}), 404
+        
+        # Check for EPUB format (best for web reader)
+        formats = book.get('formats', {})
+        if 'EPUB' in formats:
+            reader_url = f"/reader/{book_id}/epub"
+        elif 'PDF' in formats:
+            reader_url = f"/reader/{book_id}/pdf"
+        else:
+            return jsonify({'error': 'No readable format available'}), 404
+        
+        return jsonify({
+            'book_id': book_id,
+            'reader_url': reader_url,
+            'title': book.get('title', ''),
+            'available_formats': list(formats.keys())
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting reader URL for book {book_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# ============================================================================
+# Book Metadata Editing Endpoints
+# ============================================================================
+
+@app.route('/api/cwa/library/books/<int:book_id>/edit', methods=['GET'])
+@login_required
+def api_cwa_get_book_edit_form(book_id):
+    """Get book metadata for editing"""
+    try:
+        calibre_db = get_calibre_db_manager()
+        if not calibre_db:
+            return jsonify({'error': 'Library not available'}), 503
+        
+        book = calibre_db.get_book_by_id(book_id)
+        if not book:
+            return jsonify({'error': 'Book not found'}), 404
+        
+        # Return editable metadata
+        edit_data = {
+            'id': book.get('id'),
+            'title': book.get('title', ''),
+            'authors': book.get('authors', []),
+            'series': book.get('series', []),
+            'series_index': book.get('series_index', 0),
+            'tags': book.get('tags', []),
+            'rating': book.get('rating', 0),
+            'pubdate': book.get('pubdate', ''),
+            'publisher': book.get('publisher', ''),
+            'comments': book.get('comments', ''),
+            'languages': book.get('languages', []),
+            'identifiers': book.get('identifiers', {}),
+            'has_cover': book.get('has_cover', False)
+        }
+        
+        return jsonify(edit_data)
+        
+    except Exception as e:
+        logger.error(f"Error getting book edit data {book_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cwa/library/books/<int:book_id>/edit', methods=['POST'])
+@admin_required  # Only admins can edit metadata
+def api_cwa_update_book_metadata(book_id):
+    """Update book metadata"""
+    try:
+        calibre_db = get_calibre_db_manager()
+        if not calibre_db:
+            return jsonify({'error': 'Library not available'}), 503
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Update book metadata
+        success = calibre_db.update_book_metadata(book_id, data)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Book metadata updated successfully',
+                'book_id': book_id
+            })
+        else:
+            return jsonify({'error': 'Failed to update book metadata'}), 500
+            
+    except Exception as e:
+        logger.error(f"Error updating book metadata {book_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# ============================================================================
+# Additional CWA Compatibility Endpoints
+# ============================================================================
+
+@app.route('/api/cwa/user/permissions')
+@login_required
+def api_cwa_user_permissions():
+    """Get current user's permissions"""
+    try:
+        username = session.get('username')
+        if not username:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        cwa_db = get_cwa_db_manager()
+        if not cwa_db:
+            return jsonify({'error': 'Database not available'}), 503
+        
+        permissions = cwa_db.get_user_permissions(username)
+        
+        return jsonify({
+            'username': username,
+            'permissions': permissions,
+            'is_admin': permissions.get('admin', False)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting user permissions: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cwa/stats')
+@login_required
+def api_cwa_stats():
+    """Get library statistics"""
+    try:
+        calibre_db = get_calibre_db_manager()
+        if not calibre_db:
+            return jsonify({'error': 'Library not available'}), 503
+        
+        stats = calibre_db.get_library_stats()
+        
+        # Add additional stats
+        enhanced_stats = {
+            'library': stats,
+            'system': {
+                'version': BUILD_VERSION,
+                'independent': True,
+                'database_type': 'direct'
+            },
+            'features': {
+                'send_to_kindle': True,
+                'format_conversion': True,
+                'direct_download': True,
+                'metadata_editing': True
+            }
+        }
+        
+        return jsonify(enhanced_stats)
+        
+    except Exception as e:
+        logger.error(f"Error getting stats: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# ============================================================================
+
+@app.route('/api/cwa/books')
+@login_required
+def api_cwa_books():
+    """Get books from CWA library"""
+    try:
+        client = get_cwa_client()
+        if not client:
+            return jsonify({'error': 'CWA integration is disabled'}), 503
+            
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 20, type=int)
+        sort = request.args.get('sort', 'new')
+        
+        books = client.get_books(page=page, per_page=per_page, sort=sort)
+        if books is None:
+            return jsonify({'error': 'Failed to fetch books from CWA'}), 500
+            
+        return jsonify(books)
+    except Exception as e:
+        logger.error(f"Error fetching CWA books: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cwa/search')
+@login_required
+def api_cwa_search():
+    """Search books in CWA library"""
+    try:
+        query = request.args.get('query', '')
+        page = request.args.get('page', 1, type=int)
+        
+        if not query:
+            return jsonify({'error': 'Query parameter is required'}), 400
+            
+        results = cwa_client.search_books(query=query, page=page)
+        if results is None:
+            return jsonify({'error': 'Failed to search CWA library'}), 500
+            
+        return jsonify(results)
+    except Exception as e:
+        logger.error(f"Error searching CWA library: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cwa/book/<int:book_id>')
+@login_required
+def api_cwa_book_details(book_id):
+    """Get detailed information about a CWA book"""
+    try:
+        book_details = cwa_client.get_book_details(book_id)
+        if book_details is None:
+            return jsonify({'error': 'Book not found or failed to fetch details'}), 404
+            
+        return jsonify(book_details)
+    except Exception as e:
+        logger.error(f"Error fetching CWA book details: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cwa/book/<int:book_id>/formats')
+@login_required
+def api_cwa_book_formats(book_id):
+    """Get available formats for a CWA book"""
+    try:
+        formats = cwa_client.get_book_formats(book_id)
+        if formats is None:
+            return jsonify({'error': 'Failed to fetch book formats'}), 500
+            
+        return jsonify({'formats': formats})
+    except Exception as e:
+        logger.error(f"Error fetching CWA book formats: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cwa/book/<int:book_id>/download/<format>')
+@login_required
+def api_cwa_download_book(book_id, format):
+    """Download a book from CWA in specified format"""
+    try:
+        book_data = cwa_client.download_book(book_id, format)
+        if book_data is None:
+            return jsonify({'error': 'Failed to download book'}), 500
+            
+        # Get book details for filename
+        book_details = cwa_client.get_book_details(book_id)
+        filename = f"book_{book_id}.{format}"
+        if book_details and 'title' in book_details:
+            safe_title = "".join(c for c in book_details['title'] if c.isalnum() or c in (' ', '-', '_')).rstrip()
+            filename = f"{safe_title}.{format}"
+            
+        return send_file(
+            io.BytesIO(book_data),
+            as_attachment=True,
+            download_name=filename,
+            mimetype=f'application/{format}'
+        )
+    except Exception as e:
+        logger.error(f"Error downloading book from CWA: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cwa/book/<int:book_id>/reader')
+@login_required
+def api_cwa_reader_url(book_id):
+    """Get CWA reader URL for a book"""
+    try:
+        format = request.args.get('format', 'epub')
+        reader_url = cwa_client.get_reader_url(book_id, format)
+        
+        return jsonify({
+            'reader_url': reader_url,
+            'book_id': book_id,
+            'format': format
+        })
+    except Exception as e:
+        logger.error(f"Error getting CWA reader URL: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cwa/book/<int:book_id>/cover')
+@login_required
+def api_cwa_book_cover(book_id):
+    """Get CWA book cover URL"""
+    try:
+        cover_url = cwa_client.get_cover_url(book_id)
+        
+        return jsonify({
+            'cover_url': cover_url,
+            'book_id': book_id
+        })
+    except Exception as e:
+        logger.error(f"Error getting CWA book cover: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cwa/authors')
+@login_required
+def api_cwa_authors():
+    """Get authors from CWA library"""
+    try:
+        authors = cwa_client.get_authors()
+        if authors is None:
+            return jsonify({'error': 'Failed to fetch authors'}), 500
+            
+        return jsonify({'authors': authors})
+    except Exception as e:
+        logger.error(f"Error fetching CWA authors: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cwa/series')
+@login_required
+def api_cwa_series():
+    """Get series from CWA library"""
+    try:
+        series = cwa_client.get_series()
+        if series is None:
+            return jsonify({'error': 'Failed to fetch series'}), 500
+            
+        return jsonify({'series': series})
+    except Exception as e:
+        logger.error(f"Error fetching CWA series: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cwa/categories')
+@login_required
+def api_cwa_categories():
+    """Get categories from CWA library"""
+    try:
+        categories = cwa_client.get_categories()
+        if categories is None:
+            return jsonify({'error': 'Failed to fetch categories'}), 500
+            
+        return jsonify({'categories': categories})
+    except Exception as e:
+        logger.error(f"Error fetching CWA categories: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# Library-specific endpoints (for books already in CWA library)
+@app.route('/api/cwa/library/books/<int:book_id>/download/<format>')
+@login_required
+def api_cwa_library_download_book(book_id, format):
+    """Download book from CWA library"""
+    try:
+        client = get_cwa_client()
+        if not client:
+            return jsonify({'error': 'CWA not configured'}), 400
+        
+        # Proxy the download request to CWA
+        response = client.get_raw(f'/download/{book_id}/{format}')
+        
+        if response.status_code == 200:
+            return send_file(
+                io.BytesIO(response.content),
+                mimetype='application/octet-stream',
+                as_attachment=True,
+                download_name=f'book_{book_id}.{format.lower()}'
+            )
+        else:
+            return jsonify({'error': 'Failed to download book from CWA'}), response.status_code
+            
+    except Exception as e:
+        logger.error(f"Error downloading book from CWA library: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cwa/library/books/<int:book_id>/send-to-kindle', methods=['POST'])
+@login_required  
+def api_cwa_library_send_to_kindle(book_id):
+    """Send book from CWA library to Kindle - redirect to CWA proxy route"""
+    try:
+        if not cwa_proxy:
+            return jsonify({'error': 'CWA proxy not available'}), 503
+            
+        data = request.get_json() or {}
+        format_type = data.get('format', 'EPUB').upper()
+        convert = 0  # No conversion needed for EPUB
+        
+        # Make internal request to the CWA proxy route
+        from flask import url_for
+        import requests
+        
+        # Build the internal URL for the CWA proxy send endpoint
+        internal_url = f"http://localhost:{FLASK_PORT}/api/cwa/library/books/{book_id}/send/{format_type}/{convert}"
+        
+        # Forward the request with the same session cookies
+        response = requests.post(
+            internal_url,
+            cookies=request.cookies,
+            headers={'Content-Type': 'application/json'},
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            result_data = response.json()
+            # Convert CWA response format to our expected format
+            if isinstance(result_data, list) and len(result_data) > 0:
+                first_result = result_data[0]
+                if first_result.get('type') == 'success':
+                    return jsonify({
+                        'success': True, 
+                        'message': first_result.get('message', 'Book sent to Kindle successfully')
+                    })
+                else:
+                    return jsonify({
+                        'error': first_result.get('message', 'Failed to send book to Kindle')
+                    }), 400
+            else:
+                return jsonify({'error': 'Unexpected response format from CWA'}), 500
+        else:
+            # Forward the error response
+            try:
+                error_data = response.json()
+                return jsonify(error_data), response.status_code
+            except:
+                return jsonify({'error': f'CWA request failed: {response.status_code}'}), response.status_code
+            
+    except Exception as e:
+        logger.error(f"Error sending book to Kindle: {e}")
+        return jsonify({'error': f'Failed to send book to Kindle: {str(e)}'}), 500
+
+@app.route('/api/ingest/upload', methods=['POST'])
+@login_required
+def api_ingest_upload():
+    """Upload book files to the ingest directory with history tracking."""
+    import uuid
+    
+    try:
+        if 'books' not in request.files:
+            return jsonify({'error': 'No files provided'}), 400
+        
+        files = request.files.getlist('books')
+        if not files:
+            return jsonify({'error': 'No files provided'}), 400
+        
+        # Get current user
+        username = session.get('username', 'anonymous')
+        
+        # Generate session ID for this batch upload
+        session_id = str(uuid.uuid4())
+        
+        # Get uploads database manager
+        uploads_db = get_uploads_db_manager()
+        if not uploads_db:
+            logger.error("Uploads database not available")
+        
+        # Use the configured ingest directory from environment
+        ingest_dir = str(INGEST_DIR)
+        logger.info(f"Using ingest directory: {ingest_dir}")
+        
+        # Create ingest directory if it doesn't exist
+        os.makedirs(ingest_dir, exist_ok=True)
+        
+        uploaded_files = []
+        errors = []
+        upload_records = []
+        
+        for file in files:
+            if file.filename == '':
+                continue
+            
+            # Create upload record first
+            upload_id = None
+            if uploads_db:
+                try:
+                    # Get file info
+                    file.seek(0, 2)  # Seek to end
+                    file_size = file.tell()
+                    file.seek(0)  # Reset to beginning
+                    
+                    file_ext = os.path.splitext(file.filename)[1].lower()
+                    
+                    upload_id = uploads_db.create_upload_record(
+                        username=username,
+                        filename=file.filename,
+                        original_filename=file.filename,
+                        file_size=file_size,
+                        file_type=file_ext,
+                        session_id=session_id
+                    )
+                    upload_records.append({
+                        'id': upload_id,
+                        'filename': file.filename,
+                        'status': 'uploading'
+                    })
+                except Exception as e:
+                    logger.error(f"Failed to create upload record for {file.filename}: {e}")
+            
+            # Validate file extension
+            allowed_extensions = {'.epub', '.pdf', '.mobi', '.azw', '.azw3'}
+            file_ext = os.path.splitext(file.filename)[1].lower()
+            
+            if file_ext not in allowed_extensions:
+                error_msg = f'{file.filename}: Unsupported file type'
+                errors.append(error_msg)
+                if uploads_db and upload_id:
+                    uploads_db.update_upload_status(upload_id, 'failed', error_msg)
+                continue
+            
+            try:
+                # Save file to ingest directory
+                file_path = os.path.join(ingest_dir, file.filename)
+                file.save(file_path)
+                uploaded_files.append(file.filename)
+                logger.info(f"Uploaded book file to ingest: {file.filename}")
+                
+                # Update upload record as completed
+                if uploads_db and upload_id:
+                    uploads_db.update_upload_status(upload_id, 'completed')
+                    # Update record status
+                    for record in upload_records:
+                        if record['id'] == upload_id:
+                            record['status'] = 'completed'
+                
+            except Exception as e:
+                error_msg = f'{file.filename}: Failed to save file'
+                logger.error(f"Failed to save file {file.filename}: {e}")
+                errors.append(error_msg)
+                
+                # Update upload record as failed
+                if uploads_db and upload_id:
+                    uploads_db.update_upload_status(upload_id, 'failed', str(e))
+                    # Update record status
+                    for record in upload_records:
+                        if record['id'] == upload_id:
+                            record['status'] = 'failed'
+        
+        if not uploaded_files and errors:
+            return jsonify({'error': 'No files were uploaded', 'details': errors}), 400
+        
+        result = {
+            'message': f'Successfully uploaded {len(uploaded_files)} file(s)',
+            'uploaded': uploaded_files,
+            'session_id': session_id,
+            'upload_records': upload_records
+        }
+        
+        if errors:
+            result['warnings'] = errors
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Error in ingest upload: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/api/uploads/history', methods=['GET'])
+@login_required
+def api_upload_history():
+    """Get upload history for the current user."""
+    try:
+        username = session.get('username', 'anonymous')
+        limit = request.args.get('limit', 50, type=int)
+        
+        uploads_db = get_uploads_db_manager()
+        if not uploads_db:
+            return jsonify({'error': 'Uploads database not available'}), 503
+        
+        uploads = uploads_db.get_user_uploads(username, limit)
+        return jsonify({'uploads': uploads})
+        
+    except Exception as e:
+        logger.error(f"Error getting upload history: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/api/uploads/session/<session_id>', methods=['GET'])
+@login_required
+def api_upload_session(session_id):
+    """Get upload details for a specific session."""
+    try:
+        uploads_db = get_uploads_db_manager()
+        if not uploads_db:
+            return jsonify({'error': 'Uploads database not available'}), 503
+        
+        uploads = uploads_db.get_session_uploads(session_id)
+        return jsonify({'uploads': uploads, 'session_id': session_id})
+        
+    except Exception as e:
+        logger.error(f"Error getting session uploads: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/api/uploads/stats', methods=['GET'])
+@login_required
+def api_upload_stats():
+    """Get upload statistics for the current user."""
+    try:
+        username = session.get('username', 'anonymous')
+        
+        uploads_db = get_uploads_db_manager()
+        if not uploads_db:
+            return jsonify({'error': 'Uploads database not available'}), 503
+        
+        stats = uploads_db.get_upload_stats(username)
+        return jsonify(stats)
+        
+    except Exception as e:
+        logger.error(f"Error getting upload stats: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+logger.log_resource_usage()
+
+if __name__ == '__main__':
+    logger.info(f"Starting Flask application on {FLASK_HOST}:{FLASK_PORT} IN {APP_ENV} mode")
+    app.run(
+        host=FLASK_HOST,
+        port=FLASK_PORT,
+        debug=DEBUG 
+    )
