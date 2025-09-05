@@ -218,7 +218,8 @@ class DownloadsDBManager:
             # Add any additional fields from kwargs
             for field, value in kwargs.items():
                 if field in ['progress_percent', 'download_speed', 'eta_seconds', 'error_message', 
-                           'file_size', 'file_path', 'download_duration', 'wait_time', 'wait_start']:
+                           'file_size', 'file_path', 'download_duration', 'wait_time', 'wait_start',
+                           'book_title', 'book_author', 'book_publisher', 'book_year', 'book_language', 'book_format']:
                     update_fields.append(f"{field} = ?")
                     params.append(value)
             
@@ -577,3 +578,41 @@ class DownloadsDBManager:
             
             logger.info(f"Cleared {deleted_count} download history records for user: {username}")
             return deleted_count
+    
+    def cleanup_phantom_downloads(self, username: str = None) -> int:
+        """Clean up downloads with missing or invalid metadata"""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Build query to find phantom downloads
+            query = """
+                SELECT id, username, book_title, book_author, status 
+                FROM download_history 
+                WHERE (book_title IS NULL OR book_title = '' OR book_title = 'Unknown')
+                   OR (book_author IS NULL OR book_author = '' OR book_author = 'Unknown Author')
+            """
+            params = []
+            
+            if username:
+                query += " AND username = ?"
+                params.append(username)
+            
+            cursor.execute(query, params)
+            phantom_records = cursor.fetchall()
+            
+            if not phantom_records:
+                return 0
+            
+            # Delete phantom records
+            phantom_ids = [record[0] for record in phantom_records]
+            placeholders = ','.join(['?'] * len(phantom_ids))
+            cursor.execute(f"DELETE FROM download_history WHERE id IN ({placeholders})", phantom_ids)
+            conn.commit()
+            
+            # Update user stats for affected users
+            affected_users = set(record[1] for record in phantom_records)
+            for user in affected_users:
+                self._update_user_stats(user)
+            
+            logger.info(f"Cleaned up {len(phantom_records)} phantom download records")
+            return len(phantom_records)

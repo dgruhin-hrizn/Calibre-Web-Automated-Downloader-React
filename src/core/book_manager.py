@@ -138,24 +138,45 @@ def get_book_info(book_id: str) -> BookInfo:
 
     Returns:
         BookInfo: Detailed book information
+        
+    Raises:
+        Exception: If book info cannot be fetched or parsed
     """
     url = f"{AA_BASE_URL}/md5/{book_id}"
-    html = downloader.html_get_page(url)
+    logger.info(f"Fetching book info for {book_id} from {url}")
+    
+    try:
+        html = downloader.html_get_page(url)
 
-    if not html:
-        raise Exception(f"Failed to fetch book info for ID: {book_id}")
+        if not html:
+            logger.error(f"Failed to fetch HTML for book {book_id} - got empty response (likely 404/403/network error)")
+            raise Exception(f"Failed to fetch book info for ID: {book_id} - empty HTML response")
 
-    soup = BeautifulSoup(html, "html.parser")
+        if len(html.strip()) < 100:  # Sanity check for minimal HTML content
+            logger.error(f"Received suspiciously short HTML ({len(html)} chars) for book {book_id}")
+            raise Exception(f"Invalid HTML response for book {book_id} - too short")
 
-    return _parse_book_info_page(soup, book_id)
+        soup = BeautifulSoup(html, "html.parser")
+        logger.debug(f"Successfully parsed HTML for book {book_id}")
+
+        return _parse_book_info_page(soup, book_id)
+        
+    except Exception as e:
+        logger.error(f"PHANTOM PREVENTION: Failed to get book info for {book_id}: {e}")
+        # Don't create phantom entries - let the download fail properly
+        raise Exception(f"Cannot create BookInfo for {book_id}: {e}")
 
 
 def _parse_book_info_page(soup: BeautifulSoup, book_id: str) -> BookInfo:
     """Parse the book info page HTML into a BookInfo object."""
+    logger.debug(f"Parsing book info page for {book_id}")
+    
     data = soup.select_one("body > main > div:nth-of-type(1)")
 
     if not data:
-        raise Exception(f"Failed to parse book info for ID: {book_id}")
+        logger.error(f"PHANTOM PREVENTION: Failed to find main content div for book {book_id}")
+        logger.debug(f"HTML structure for {book_id}: {str(soup)[:500]}...")
+        raise Exception(f"Failed to parse book info for ID: {book_id} - main content div not found")
 
     preview: str = ""
 
@@ -223,14 +244,44 @@ def _parse_book_info_page(soup: BeautifulSoup, book_id: str) -> BookInfo:
 
     # Remove empty urls
     urls = [url for url in urls if url != ""]
+    
+    # Check if we have any download URLs - if not, this book cannot be downloaded
+    if len(urls) == 0:
+        logger.error(f"PHANTOM PREVENTION: No download URLs found for {book_id} - cannot download")
+        raise Exception(f"No download URLs available for {book_id}")
 
-    # Extract basic information
+    # Extract basic information with validation
+    try:
+        # Check if we have the expected page structure
+        if len(divs) < 14:
+            logger.error(f"PHANTOM PREVENTION: Insufficient page structure for {book_id} - only {len(divs)} divs found, expected at least 14")
+            raise Exception(f"Invalid page structure for {book_id} - cannot parse book info")
+            
+        title = divs[7].next.strip() if divs[7].next else ""
+        author = divs[9].text.strip() if divs[9].text else ""
+        publisher = divs[11].text.strip() if divs[11].text else ""
+        
+        logger.debug(f"Extracted metadata for {book_id}: title='{title}', author='{author}', publisher='{publisher}'")
+    except (IndexError, AttributeError) as e:
+        logger.error(f"PHANTOM PREVENTION: Failed to parse book metadata for {book_id}: {e}")
+        logger.error(f"Available divs: {len(divs) if 'divs' in locals() else 'undefined'}")
+        raise Exception(f"Invalid book metadata - cannot create phantom entry for {book_id}: {e}")
+    
+    # Validate required fields - clean up metadata but allow download attempts
+    if not title or title.strip() in ['', 'Unknown', 'N/A']:
+        logger.warning(f"Invalid title '{title}' for book {book_id} - using book ID as title")
+        title = f"Book {book_id[:8]}"  # Use first 8 chars of ID as fallback title
+    
+    if not author or author.strip() in ['', 'Unknown Author', 'Unknown', 'N/A']:
+        logger.warning(f"Invalid author '{author}' for book {book_id} - using 'Anonymous'")
+        author = "Anonymous"
+    
     book_info = BookInfo(
         id=book_id,
         preview=preview,
-        title=divs[7].next.strip(),
-        publisher=divs[11].text.strip(),
-        author=divs[9].text.strip(),
+        title=title,
+        publisher=publisher,
+        author=author,
         format=format,
         size=size,
         download_urls=urls,
@@ -355,21 +406,14 @@ def download_book(book_info: BookInfo, book_path: Path, progress_callback: Optio
                 with open(book_path, "wb") as f:
                     f.write(data.getbuffer())
                 
-                # Mark URL as verified working and update file info
+                # Mark URL as verified working - database status will be updated by queue
                 if hasattr(book_info, 'download_id') and book_info.download_id:
                     try:
                         downloads_db = get_downloads_db_manager()
                         if downloads_db:
-                            file_size = book_path.stat().st_size if book_path.exists() else None
-                            downloads_db.update_download_status(
-                                book_info.download_id, 
-                                'completed',
-                                file_path=str(book_path),
-                                file_size=file_size
-                            )
                             downloads_db.mark_url_verified(book_info.download_id, download_url)
                     except Exception as e:
-                        logger.warning(f"Failed to update download completion in DB: {e}")
+                        logger.warning(f"Failed to mark URL as verified in DB: {e}")
                         
                 logger.info(f"Writing `{book_info.title}` successfully")
                 return True

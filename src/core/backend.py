@@ -114,7 +114,12 @@ def get_book_data(book_id: str) -> Tuple[Optional[bytes], BookInfo]:
         logger.error_trace(f"Error getting book data: {e}")
         if book_info:
             book_info.download_path = None
-        return None, book_info if book_info else BookInfo(id=book_id, title="Unknown")
+        # NEVER create phantom entries - if we don't have valid book_info, fail completely
+        if book_info and hasattr(book_info, 'title') and book_info.title and book_info.title != "Unknown":
+            return None, book_info
+        else:
+            logger.error(f"PHANTOM PREVENTION: Refusing to create fallback BookInfo for {book_id}")
+            raise Exception(f"No valid book data available for {book_id}")
 
 def _book_info_to_dict(book: BookInfo) -> Dict[str, Any]:
     """Convert BookInfo object to dictionary representation."""
@@ -294,6 +299,10 @@ def clear_completed() -> int:
     """Clear all completed downloads from tracking."""
     return book_queue.clear_completed()
 
+def cleanup_phantom_entries() -> int:
+    """Clean up phantom queue entries with incomplete metadata."""
+    return book_queue.cleanup_phantom_entries()
+
 def _process_single_download(book_id: str, cancel_flag: Event) -> None:
     """Process a single download job."""
     try:
@@ -306,11 +315,21 @@ def _process_single_download(book_id: str, cancel_flag: Event) -> None:
             
         if download_path:
             book_queue.update_download_path(book_id, download_path)
-            new_status = QueueStatus.AVAILABLE
-        else:
-            new_status = QueueStatus.ERROR
+            # Get file size for database update
+            from pathlib import Path
+            file_size = None
+            try:
+                if Path(download_path).exists():
+                    file_size = Path(download_path).stat().st_size
+            except Exception as e:
+                logger.warning(f"Could not get file size for {download_path}: {e}")
             
-        book_queue.update_status(book_id, new_status)
+            # Update status with file information for database
+            book_queue.update_status(book_id, QueueStatus.AVAILABLE, 
+                                   file_path=download_path, 
+                                   file_size=file_size)
+        else:
+            book_queue.update_status(book_id, QueueStatus.ERROR)
         
         logger.info(
             f"Book {book_id} download {'successful' if download_path else 'failed'}"

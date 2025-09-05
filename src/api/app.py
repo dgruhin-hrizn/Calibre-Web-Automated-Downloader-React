@@ -1037,6 +1037,13 @@ def api_user_download_status():
         # Get global queue status for real-time progress data
         global_status = backend.queue_status()
         
+        # Get all active book IDs from the in-memory queue
+        # Include 'available' to handle the brief window before cleanup
+        active_queue_book_ids = set()
+        for queue_status in ['queued', 'downloading', 'processing', 'waiting', 'available']:
+            if queue_status in global_status:
+                active_queue_book_ids.update(global_status[queue_status].keys())
+        
         # Enrich user's active downloads with real-time data from global queue
         for status in ['queued', 'downloading', 'processing', 'waiting']:
             if status in downloads_by_status:
@@ -1060,6 +1067,13 @@ def api_user_download_status():
                     queue_status_key = status if status != 'error' else 'error'
                     if queue_status_key in global_status and book_id in global_status[queue_status_key]:
                         queue_data = global_status[queue_status_key][book_id]  # This is a BookInfo object
+                        
+                        # Only enrich with queue data if it has valid metadata
+                        # Prevent corrupted/incomplete queue data from overriding good database data
+                        queue_title = getattr(queue_data, 'title', None)
+                        queue_author = getattr(queue_data, 'author', None)
+                        
+                        # Update progress and real-time data regardless
                         enriched_record.update({
                             'progress': getattr(queue_data, 'progress', 0),
                             'download_speed': getattr(queue_data, 'download_speed', None),
@@ -1068,10 +1082,40 @@ def api_user_download_status():
                             'wait_start': getattr(queue_data, 'wait_start', None),
                             'error': getattr(queue_data, 'error', None)
                         })
+                        
+                        # Only override title/author if queue has better data than database
+                        if queue_title and queue_title.strip() and queue_title != 'Unknown':
+                            enriched_record['title'] = queue_title
+                        if queue_author and queue_author.strip() and queue_author != 'Unknown Author':
+                            enriched_record['author'] = queue_author
                     
                     enriched_downloads.append(enriched_record)
                 
                 downloads_by_status[status] = enriched_downloads
+        
+        # Filter out completed/error/cancelled downloads that are still active in the queue
+        # This prevents duplication during the brief window when items are transitioning
+        for status in ['completed', 'error', 'cancelled']:
+            if status in downloads_by_status:
+                filtered_downloads = []
+                for db_record in downloads_by_status[status]:
+                    book_id = db_record['book_id']
+                    
+                    # Only include if NOT still active in the queue
+                    if book_id not in active_queue_book_ids:
+                        enriched_record = {
+                            'id': book_id,
+                            'title': db_record['book_title'],
+                            'author': db_record['book_author'], 
+                            'format': db_record['book_format'],
+                            'cover_url': db_record['cover_url'],
+                            'preview': db_record['cover_url'],  # Alias for compatibility
+                            'progress': 100 if status == 'completed' else 0,
+                            'status': status
+                        }
+                        filtered_downloads.append(enriched_record)
+                
+                downloads_by_status[status] = filtered_downloads
         
         return jsonify(downloads_by_status)
         
@@ -1446,6 +1490,93 @@ def api_clear_completed() -> Union[Response, Tuple[Response, int]]:
         return jsonify({"status": "cleared", "removed_count": removed_count})
     except Exception as e:
         logger.error_trace(f"Clear completed error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/queue/cleanup-phantom', methods=['POST'])
+@login_required
+def api_cleanup_phantom_entries() -> Union[Response, Tuple[Response, int]]:
+    """
+    Clean up phantom queue entries with incomplete metadata.
+    
+    Returns:
+        flask.Response: JSON with count of cleaned entries.
+    """
+    try:
+        cleaned_count = backend.cleanup_phantom_entries()
+        return jsonify({
+            "status": "cleaned",
+            "cleaned_count": cleaned_count,
+            "message": f"Cleaned up {cleaned_count} phantom entries"
+        })
+    except Exception as e:
+        logger.error_trace(f"Cleanup phantom entries error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/downloads/cleanup-phantom', methods=['POST'])
+@login_required
+def api_cleanup_phantom_downloads() -> Union[Response, Tuple[Response, int]]:
+    """Clean up downloads with missing or invalid metadata"""
+    try:
+        username = get_current_user()
+        downloads_db = get_downloads_db_manager()
+        if not downloads_db:
+            return jsonify({'error': 'Downloads database not available'}), 500
+        
+        cleaned_count = downloads_db.cleanup_phantom_downloads(username)
+        return jsonify({
+            'status': 'cleaned',
+            'cleaned_count': cleaned_count,
+            'message': f'Cleaned up {cleaned_count} phantom download records'
+        })
+    except Exception as e:
+        logger.error_trace(f"Error cleaning up phantom downloads: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/debug/queue-status', methods=['GET'])
+@login_required  
+def api_debug_queue_status() -> Union[Response, Tuple[Response, int]]:
+    """Debug endpoint to see raw queue status"""
+    try:
+        username = get_current_user()
+        downloads_db = get_downloads_db_manager()
+        
+        # Get raw queue status
+        global_status = backend.queue_status()
+        
+        # Get database status
+        db_status = downloads_db.get_user_downloads_by_status(username) if downloads_db else {}
+        
+        return jsonify({
+            'queue_status': global_status,
+            'database_status': db_status,
+            'username': username
+        })
+    except Exception as e:
+        logger.error_trace(f"Error getting debug queue status: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/notifications/recent', methods=['GET'])
+@login_required
+def api_get_recent_notifications() -> Union[Response, Tuple[Response, int]]:
+    """
+    Get recent notifications for the current user.
+    
+    Returns:
+        flask.Response: JSON with recent notifications.
+    """
+    try:
+        from ..infrastructure.notification_manager import NotificationManager
+        
+        limit = int(request.args.get('limit', 10))
+        notification_manager = NotificationManager.get_instance()
+        notifications = notification_manager.get_recent_notifications(limit)
+        
+        return jsonify({
+            "notifications": notifications,
+            "count": len(notifications)
+        })
+    except Exception as e:
+        logger.error_trace(f"Get notifications error: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/downloads/history/clear', methods=['DELETE'])

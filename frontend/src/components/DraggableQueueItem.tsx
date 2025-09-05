@@ -138,7 +138,6 @@ export function DraggableQueueItem({
         onSetPriority={onSetPriority}
         showDragHandle={showDragHandle}
         showPosition={showPosition}
-        dragRef={showDragHandle && download.status === 'queued' ? drag : undefined}
       />
     </div>
   )

@@ -141,12 +141,31 @@ class BookQueue:
             
             # Update downloads database if book has download_id
             book_data = self._book_data.get(book_id)
+            db_update_success = False
             if book_data and hasattr(book_data, 'download_id') and book_data.download_id:
                 try:
                     from ..api.app import get_downloads_db_manager
                     downloads_db = get_downloads_db_manager()
                     if downloads_db:
-                        downloads_db.update_download_status(book_data.download_id, status.value, **kwargs)
+                        # Map queue status to database status
+                        db_status = self._map_queue_status_to_db_status(status)
+                        
+                        # Include book metadata in the update to ensure it's preserved
+                        update_kwargs = dict(kwargs)
+                        if status == QueueStatus.AVAILABLE:  # Completed downloads
+                            update_kwargs.update({
+                                'book_title': book_data.title,
+                                'book_author': book_data.author,
+                                'book_publisher': book_data.publisher,
+                                'book_year': book_data.year,
+                                'book_language': book_data.language,
+                                'book_format': book_data.format
+                            })
+                        
+                        downloads_db.update_download_status(book_data.download_id, db_status, **update_kwargs)
+                        db_update_success = True
+                        import logging
+                        logging.getLogger(__name__).info(f"Successfully updated download status to {db_status} for {book_id}")
                 except Exception as e:
                     import logging
                     logging.getLogger(__name__).warning(f"Failed to update download status in DB: {e}")
@@ -156,6 +175,35 @@ class BookQueue:
             if status in [QueueStatus.AVAILABLE, QueueStatus.ERROR, QueueStatus.DONE, QueueStatus.CANCELLED]:
                 self._active_downloads.pop(book_id, None)
                 self._cancel_flags.pop(book_id, None)
+                
+                # For completed downloads (AVAILABLE), trigger notification then clean up
+                # This ensures immediate notification with all data before cleanup
+                if status == QueueStatus.AVAILABLE:
+                    # Trigger completion notification immediately while we still have the data
+                    self._trigger_completion_notification(book_id, book_data)
+                    
+                    # Only clean up if database update was successful
+                    if db_update_success or not hasattr(book_data, 'download_id'):
+                        # Clean up immediately to prevent phantom entries in API responses
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        
+                        # Log what we're about to clean up
+                        book_data_before = self._book_data.get(book_id)
+                        status_before = self._status.get(book_id)
+                        
+                        self._status.pop(book_id, None)
+                        self._status_timestamps.pop(book_id, None)
+                        self._book_data.pop(book_id, None)
+                        
+                        logger.info(f"Cleaned up completed download from memory: {book_id} (was status: {status_before}, title: {getattr(book_data_before, 'title', 'N/A')})")
+                    else:
+                        import logging
+                        logging.getLogger(__name__).warning(f"Skipping cleanup for {book_id} due to database update failure")
+                
+                # For failed downloads, also trigger notification
+                elif status == QueueStatus.ERROR:
+                    self._trigger_failure_notification(book_id, book_data, kwargs.get('error_message'))
     
     def update_download_path(self, book_id: str, download_path: str) -> None:
         """Update the download path of a book in the queue."""
@@ -322,6 +370,91 @@ class BookQueue:
             # Put back non-matching items
             for item in temp_items:
                 self._queue.put(item)
+    
+    def cleanup_phantom_entries(self) -> int:
+        """Clean up phantom entries that have incomplete/corrupted metadata."""
+        with self._lock:
+            to_remove = []
+            
+            for book_id, book_data in self._book_data.items():
+                status = self._status.get(book_id)
+                
+                # Remove entries that are in error state and have missing critical metadata
+                if status == QueueStatus.ERROR:
+                    title = getattr(book_data, 'title', None)
+                    author = getattr(book_data, 'author', None)
+                    
+                    # If title is missing, empty, or just "Unknown", mark for removal
+                    if not title or title.strip() == '' or title.strip() == 'Unknown':
+                        to_remove.append(book_id)
+                    # If author is missing, empty, or just "Unknown Author", mark for removal  
+                    elif not author or author.strip() == '' or author.strip() == 'Unknown Author':
+                        to_remove.append(book_id)
+            
+            # Remove phantom entries
+            removed_count = 0
+            for book_id in to_remove:
+                self.remove_from_tracking(book_id)
+                removed_count += 1
+            
+            return removed_count
+    
+    def _map_queue_status_to_db_status(self, queue_status: QueueStatus) -> str:
+        """Map queue status to database status values."""
+        status_mapping = {
+            QueueStatus.QUEUED: 'queued',
+            QueueStatus.PROCESSING: 'processing', 
+            QueueStatus.WAITING: 'waiting',
+            QueueStatus.DOWNLOADING: 'downloading',
+            QueueStatus.AVAILABLE: 'completed',  # AVAILABLE means successfully downloaded
+            QueueStatus.ERROR: 'error',
+            QueueStatus.DONE: 'completed',  # DONE also means completed
+            QueueStatus.CANCELLED: 'cancelled'
+        }
+        return status_mapping.get(queue_status, 'error')
+    
+    def _trigger_completion_notification(self, book_id: str, book_data: BookInfo) -> None:
+        """Trigger a completion notification for immediate UI feedback."""
+        try:
+            # Import here to avoid circular imports
+            from ..infrastructure.notification_manager import NotificationManager
+            
+            # Get notification manager instance
+            notification_manager = NotificationManager.get_instance()
+            
+            # Send completion notification with book data
+            notification_manager.notify_download_completed(
+                book_id=book_id,
+                title=getattr(book_data, 'title', 'Unknown Title'),
+                author=getattr(book_data, 'author', 'Unknown Author'),
+                cover_url=getattr(book_data, 'preview', None)
+            )
+            
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to trigger completion notification: {e}")
+    
+    def _trigger_failure_notification(self, book_id: str, book_data: BookInfo, error_message: str = None) -> None:
+        """Trigger a failure notification for immediate UI feedback."""
+        try:
+            # Import here to avoid circular imports
+            from ..infrastructure.notification_manager import NotificationManager
+            
+            # Get notification manager instance
+            notification_manager = NotificationManager.get_instance()
+            
+            # Send failure notification with book data
+            notification_manager.notify_download_failed(
+                book_id=book_id,
+                title=getattr(book_data, 'title', 'Unknown Title'),
+                author=getattr(book_data, 'author', 'Unknown Author'),
+                error=error_message,
+                cover_url=getattr(book_data, 'preview', None)
+            )
+            
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to trigger failure notification: {e}")
             
     def set_priority(self, book_id: str, new_priority: int) -> bool:
         """Change the priority of a queued book.
@@ -424,6 +557,9 @@ class BookQueue:
         
     def refresh(self) -> None:
         """Remove any books that are done downloading or have stale status."""
+        # First cleanup phantom entries with bad metadata
+        self.cleanup_phantom_entries()
+        
         with self._lock:
             current_time = datetime.now()
             
@@ -445,6 +581,14 @@ class BookQueue:
                 last_update = self._status_timestamps.get(book_id)
                 if last_update and (current_time - last_update) > self._status_timeout:
                     if status in [QueueStatus.DONE, QueueStatus.ERROR, QueueStatus.AVAILABLE, QueueStatus.CANCELLED]:
+                        to_remove.append(book_id)
+                
+                # More aggressive cleanup for ERROR status - remove after shorter time
+                # to prevent "Unknown" entries from lingering in the UI
+                if status == QueueStatus.ERROR and last_update:
+                    # Remove error entries after 5 minutes instead of the full timeout
+                    error_timeout = timedelta(minutes=5)
+                    if (current_time - last_update) > error_timeout:
                         to_remove.append(book_id)
             
             # Remove stale entries

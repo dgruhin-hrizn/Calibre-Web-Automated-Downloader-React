@@ -1580,6 +1580,44 @@ def create_cwa_proxy_routes(app, cwa_proxy):
     @cwa_proxy.proxy_request('/download/<int:book_id>/<format>', methods=['GET'])
     def proxy_library_download_book(book_id, format):
         pass
+    
+    # Admin endpoints
+    @app.route('/api/cwa/admin/refresh-thumbnails', methods=['POST'])
+    def cwa_admin_refresh_thumbnails():
+        """Refresh thumbnail cache via CWA admin endpoint"""
+        from flask import session, jsonify
+        try:
+            username = session.get('username')
+            if not username:
+                return jsonify({"error": "Not authenticated"}), 401
+            
+            # Get user session
+            with cwa_proxy.sessions_lock:
+                user_session = cwa_proxy.user_sessions.get(username)
+            
+            if not user_session:
+                return jsonify({"error": "No CWA session found"}), 401
+            
+            # Make the request to CWA's refresh thumbnails endpoint
+            response = user_session.session.post(
+                f"{user_session.cwa_base_url}/ajax/updateThumbnails",
+                headers={
+                    'Content-Type': 'application/json; charset=utf-8',
+                    'Accept': 'application/json'
+                },
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                return jsonify({"success": True, "message": "Thumbnail refresh initiated"})
+            elif response.status_code == 403:
+                return jsonify({"error": "Admin access required"}), 403
+            else:
+                return jsonify({"error": f"CWA request failed with status {response.status_code}"}), 500
+                
+        except Exception as e:
+            logger.error(f"Error refreshing thumbnails: {e}")
+            return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     # Example usage

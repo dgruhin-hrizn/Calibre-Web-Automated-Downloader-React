@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { 
-  GripVertical, 
   Play, 
   Pause, 
   X, 
@@ -32,7 +31,6 @@ interface QueueItemProps {
   onSetPriority?: (id: string, priority: 'high' | 'normal' | 'low') => void
   showDragHandle?: boolean
   showPosition?: boolean
-  dragRef?: any
 }
 
 export function QueueItem({
@@ -46,8 +44,7 @@ export function QueueItem({
   onMoveDown,
   onSetPriority,
   showDragHandle = false,
-  showPosition = false,
-  dragRef
+  showPosition = false
 }: QueueItemProps) {
   const [isHovered, setIsHovered] = useState(false)
 
@@ -133,19 +130,9 @@ export function QueueItem({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Mobile: Top row with drag handle, position, and actions */}
+      {/* Mobile: Top row with position and actions */}
       <div className="flex sm:hidden items-center justify-between w-full">
         <div className="flex items-center gap-2">
-          {/* Drag Handle */}
-          {showDragHandle && (
-            <div 
-              ref={dragRef}
-              className="cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity"
-            >
-              <GripVertical className="h-4 w-4 text-muted-foreground" />
-            </div>
-          )}
-
           {/* Position Badge */}
           {showPosition && position && (
             <div className="flex-shrink-0">
@@ -239,16 +226,6 @@ export function QueueItem({
 
       {/* Main content row */}
       <div className="flex items-start sm:items-center gap-3 sm:gap-4 w-full">
-        {/* Desktop: Drag Handle */}
-        {showDragHandle && (
-          <div 
-            ref={dragRef}
-            className="hidden sm:block cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity"
-          >
-            <GripVertical className="h-4 w-4 text-muted-foreground" />
-          </div>
-        )}
-
         {/* Desktop: Position Badge */}
         {showPosition && position && (
           <div className="hidden sm:block flex-shrink-0">

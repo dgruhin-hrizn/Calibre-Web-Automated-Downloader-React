@@ -75,6 +75,7 @@ export interface StatusResponse {
 // Hook for getting download status (USER-SPECIFIC)
 export function useDownloadStatus() {
   const setDownloadStatus = useDownloadStore((state) => state.setDownloadStatus)
+  const cleanupStaleDownloads = useDownloadStore((state) => state.cleanupStaleDownloads)
   
   const query = useQuery({
     queryKey: ['userDownloadStatus'], // Changed key to reflect user-specific data
@@ -86,10 +87,12 @@ export function useDownloadStatus() {
   // Update download store when status changes (USER-SPECIFIC DATA)
   useEffect(() => {
     if (query.data) {
+      const activeDownloadIds: string[] = []
       
       // Update downloading items
       if (Array.isArray(query.data.downloading)) {
         query.data.downloading.forEach((item: any) => {
+          activeDownloadIds.push(item.id)
           setDownloadStatus(item.id, {
             status: 'downloading',
             progress: item.progress || 0,
@@ -103,6 +106,7 @@ export function useDownloadStatus() {
       // Update processing items  
       if (Array.isArray(query.data.processing)) {
         query.data.processing.forEach((item: any) => {
+          activeDownloadIds.push(item.id)
           setDownloadStatus(item.id, {
             status: 'processing',
             progress: 0,
@@ -116,6 +120,7 @@ export function useDownloadStatus() {
       // Update waiting items
       if (Array.isArray(query.data.waiting)) {
         query.data.waiting.forEach((item: any) => {
+          activeDownloadIds.push(item.id)
           setDownloadStatus(item.id, {
             status: 'waiting',
             progress: 0,
@@ -131,6 +136,7 @@ export function useDownloadStatus() {
       // Update queued items
       if (Array.isArray(query.data.queued)) {
         query.data.queued.forEach((item: any) => {
+          activeDownloadIds.push(item.id)
           setDownloadStatus(item.id, {
             status: 'processing', // Map 'queued' to 'processing' for UI consistency
             progress: 0,
@@ -140,8 +146,24 @@ export function useDownloadStatus() {
           })
         })
       }
+
+      // Update available items (just completed) - don't add to activeDownloadIds
+      if (Array.isArray(query.data.available)) {
+        query.data.available.forEach((item: any) => {
+          setDownloadStatus(item.id, {
+            status: 'completed',
+            progress: 100,
+            title: item.title,
+            author: item.author,
+            coverUrl: item.cover_url || item.preview,
+          })
+        })
+      }
+      
+      // Clean up stale downloads that are no longer active
+      cleanupStaleDownloads(activeDownloadIds)
     }
-  }, [query.data, setDownloadStatus])
+  }, [query.data, setDownloadStatus, cleanupStaleDownloads])
 
   return query
 }

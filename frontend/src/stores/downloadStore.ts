@@ -43,6 +43,7 @@ interface DownloadStore {
   getDownloadStatus: (id: string) => DownloadState | null
   getRecentDownloads: () => DownloadHistory[]
   getNotificationHistory: () => DownloadHistory[]
+  cleanupStaleDownloads: (activeDownloadIds: string[]) => void
 }
 
 export const useDownloadStore = create<DownloadStore>()(
@@ -162,6 +163,26 @@ export const useDownloadStore = create<DownloadStore>()(
 
       getNotificationHistory: () => {
         return get().notificationHistory.slice(0, 20) // Return last 20 notification items
+      },
+
+      cleanupStaleDownloads: (activeDownloadIds: string[]) => {
+        set((state) => {
+          const newDownloads = { ...state.downloads }
+          
+          // Remove downloads that are no longer active and are in downloading/processing state
+          Object.keys(newDownloads).forEach(id => {
+            const download = newDownloads[id]
+            if (!activeDownloadIds.includes(id) && 
+                (download.status === 'downloading' || download.status === 'processing' || download.status === 'waiting')) {
+              delete newDownloads[id]
+            }
+          })
+          
+          return {
+            ...state,
+            downloads: newDownloads
+          }
+        })
       }
     }),
     {

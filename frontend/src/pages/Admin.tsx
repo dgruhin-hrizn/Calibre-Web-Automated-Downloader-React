@@ -1,18 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Edit, Trash2, Shield, Download, Upload, BookOpen, Key, Archive, Eye } from 'lucide-react';
+import { Users, Plus, Edit, Trash2, Shield, Download, Upload, BookOpen, Key, Archive, Eye, RefreshCw } from 'lucide-react';
 import { useUserManagement } from '../hooks/useUserManagement';
+import { useRefreshThumbnails } from '../hooks/useAdminActions';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/card';
 import type { User, UserDetails } from '../types/user';
 import UserEditModal from '../components/UserEditModal';
 import CreateUserModal from '../components/CreateUserModal';
+import * as Dialog from '@radix-ui/react-dialog';
 
 const Admin: React.FC = () => {
   const { users, isLoading, error, fetchUsers, deleteUser, getUserDetails } = useUserManagement();
+  const refreshThumbnails = useRefreshThumbnails();
   const [selectedUser, setSelectedUser] = useState<UserDetails | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [deleteConfirmUser, setDeleteConfirmUser] = useState<User | null>(null);
+  const [showRefreshDialog, setShowRefreshDialog] = useState(false);
 
   useEffect(() => {
     fetchUsers();
@@ -37,6 +41,17 @@ const Admin: React.FC = () => {
       if (success) {
         setDeleteConfirmUser(null);
       }
+    }
+  };
+
+  const handleRefreshThumbnails = async () => {
+    try {
+      await refreshThumbnails.mutateAsync();
+      setShowRefreshDialog(false);
+      // Could add a toast notification here
+    } catch (error) {
+      console.error('Failed to refresh thumbnails:', error);
+      // Error handling is managed by the mutation
     }
   };
 
@@ -80,13 +95,24 @@ const Admin: React.FC = () => {
             Manage CWA users and their permissions
           </p>
         </div>
-        <Button
-          onClick={() => setIsCreateModalOpen(true)}
-          className="flex items-center gap-2 self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          Create User
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-2 self-start sm:self-auto">
+          <Button
+            onClick={() => setShowRefreshDialog(true)}
+            variant="outline"
+            className="flex items-center gap-2"
+            disabled={refreshThumbnails.isPending}
+          >
+            <RefreshCw className={`w-4 h-4 ${refreshThumbnails.isPending ? 'animate-spin' : ''}`} />
+            Refresh Thumbnails
+          </Button>
+          <Button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Create User
+          </Button>
+        </div>
       </div>
 
       {/* Error Display */}
@@ -331,6 +357,48 @@ const Admin: React.FC = () => {
           </Card>
         </div>
       )}
+
+      {/* Refresh Thumbnails Confirmation Dialog */}
+      <Dialog.Root open={showRefreshDialog} onOpenChange={setShowRefreshDialog}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-black/50 z-50" />
+          <Dialog.Content className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-card border border-border rounded-lg shadow-lg p-6 w-full max-w-md z-50">
+            <Dialog.Title className="text-lg font-semibold mb-4">
+              Refresh Thumbnail Cache
+            </Dialog.Title>
+            <Dialog.Description className="text-muted-foreground mb-6">
+              Calibre-Web Automated will search for updated covers and update cover thumbnails. This may take a while depending on your library size.
+            </Dialog.Description>
+            
+            {refreshThumbnails.error && (
+              <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md">
+                <p className="text-sm text-destructive">
+                  {refreshThumbnails.error.message || 'Failed to refresh thumbnails'}
+                </p>
+              </div>
+            )}
+            
+            <div className="flex justify-end space-x-3">
+              <Dialog.Close asChild>
+                <Button
+                  variant="outline"
+                  disabled={refreshThumbnails.isPending}
+                >
+                  Cancel
+                </Button>
+              </Dialog.Close>
+              <Button
+                onClick={handleRefreshThumbnails}
+                disabled={refreshThumbnails.isPending}
+                className="flex items-center gap-2"
+              >
+                <RefreshCw className={`w-4 h-4 ${refreshThumbnails.isPending ? 'animate-spin' : ''}`} />
+                {refreshThumbnails.isPending ? 'Refreshing...' : 'Start Refresh'}
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   );
 };
