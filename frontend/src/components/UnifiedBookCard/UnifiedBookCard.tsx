@@ -1,11 +1,11 @@
 import { useState, useCallback } from 'react'
-import { Card, CardContent } from './ui/card'
-import { HotBookIndicator } from './HotBookIndicator'
-import { ReadStatusDropdown } from './ReadStatusDropdown'
-import { useReadStatus } from '../hooks/useReadStatus'
-import { BookCover, BookInfo, SearchActions, LibraryActions } from './UnifiedBookCard/components'
-import { type UnifiedBookCardProps } from './UnifiedBookCard/types'
-import { convertHookStatusToDropdownStatus } from './UnifiedBookCard/utils'
+import { Card, CardContent } from '../ui/card'
+import { HotBookIndicator } from '../HotBookIndicator'
+import { ReadStatusDropdown, type ReadStatus } from '../ReadStatusDropdown'
+import { useReadStatus, type ReadStatus as HookReadStatus } from '../../hooks/useReadStatus'
+import { BookCover, BookInfo, SearchActions, LibraryActions } from './components'
+import { type UnifiedBookCardProps } from './types'
+import { convertHookStatusToDropdownStatus } from './utils'
 
 export function UnifiedBookCard({
   book,
