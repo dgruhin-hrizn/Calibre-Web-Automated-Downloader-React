@@ -7,6 +7,8 @@ import { useSearchBooks, useSearchCache } from '../../hooks/useSearchCache'
 import { useDownloadBook, useDownloadStatus, type Book } from '../../hooks/useDownloads'
 import { useDownloadStore } from '../../stores/downloadStore'
 import { useToast } from '../../hooks/useToast'
+import { useLibraryCheckMutation } from '../../hooks/useLibraryCheck'
+import { ExistingBooksModal } from '../../components/ExistingBooksModal'
 import { BookUpload } from './components/BookUpload'
 import { SearchForm } from './components/SearchForm'
 import { SearchResults } from './components/SearchResults'
@@ -26,6 +28,13 @@ export function Search() {
   const isUpdatingFromUrl = useRef(false)
   const { ToastContainer } = useToast()
   const [refreshHistoryTrigger, setRefreshHistoryTrigger] = useState(0)
+  
+  // Library check states
+  const [showExistingBooksModal, setShowExistingBooksModal] = useState(false)
+  const [existingBooks, setExistingBooks] = useState<any[]>([])
+  const [pendingSearchParams, setPendingSearchParams] = useState<any>(null)
+  const [isCheckingLibrary, setIsCheckingLibrary] = useState(false)
+  const checkLibraryMutation = useLibraryCheckMutation()
   
   // Create search params object for executed searches only
   const [executedSearchParams, setExecutedSearchParams] = useState<any>(null)
@@ -111,7 +120,7 @@ export function Search() {
     }
   }, [searchParams.get('q'), searchParams.get('fresh')]) // Only depend on the specific params we care about
   
-  const handleSearch = (e?: React.FormEvent) => {
+  const handleSearch = async (e?: React.FormEvent, skipLibraryCheck = false) => {
     e?.preventDefault()
     if (!query.trim() || isUpdatingFromUrl.current) return
     
@@ -123,13 +132,54 @@ export function Search() {
       format: format || undefined,
     }
     
-    // Execute the search by updating the executed search params
-    setExecutedSearchParams(searchParamsObj)
+    // If we should skip library check or already checked, proceed with search
+    if (skipLibraryCheck) {
+      setExecutedSearchParams(searchParamsObj)
+      
+      // Update URL to reflect current search (only if not updating from URL)
+      const currentUrlQuery = searchParams.get('q')
+      if (query.trim() !== currentUrlQuery) {
+        setSearchParams({ q: query.trim() }, { replace: true })
+      }
+      return
+    }
     
-    // Update URL to reflect current search (only if not updating from URL)
-    const currentUrlQuery = searchParams.get('q')
-    if (query.trim() !== currentUrlQuery) {
-      setSearchParams({ q: query.trim() }, { replace: true })
+    // Check library for existing books first
+    try {
+      setIsCheckingLibrary(true)
+      const libraryResult = await checkLibraryMutation({
+        query: query.trim(),
+        author: author.trim() || undefined,
+        title: undefined // We could add title field if needed
+      })
+      
+      if (libraryResult.books && libraryResult.books.length > 0) {
+        // Found existing books, show modal
+        setExistingBooks(libraryResult.books)
+        setPendingSearchParams(searchParamsObj)
+        setShowExistingBooksModal(true)
+      } else {
+        // No existing books found, proceed with search
+        setExecutedSearchParams(searchParamsObj)
+        
+        // Update URL to reflect current search
+        const currentUrlQuery = searchParams.get('q')
+        if (query.trim() !== currentUrlQuery) {
+          setSearchParams({ q: query.trim() }, { replace: true })
+        }
+      }
+    } catch (error) {
+      console.warn('Library check failed, proceeding with search:', error)
+      // If library check fails, proceed with search anyway
+      setExecutedSearchParams(searchParamsObj)
+      
+      // Update URL to reflect current search
+      const currentUrlQuery = searchParams.get('q')
+      if (query.trim() !== currentUrlQuery) {
+        setSearchParams({ q: query.trim() }, { replace: true })
+      }
+    } finally {
+      setIsCheckingLibrary(false)
     }
   }
   
@@ -158,6 +208,27 @@ export function Search() {
     if (e.key === 'Enter') {
       handleSearch()
     }
+  }
+  
+  const handleProceedWithSearch = () => {
+    setShowExistingBooksModal(false)
+    if (pendingSearchParams) {
+      setExecutedSearchParams(pendingSearchParams)
+      
+      // Update URL to reflect current search
+      const currentUrlQuery = searchParams.get('q')
+      if (pendingSearchParams.query !== currentUrlQuery) {
+        setSearchParams({ q: pendingSearchParams.query }, { replace: true })
+      }
+      
+      setPendingSearchParams(null)
+    }
+  }
+  
+  const handleCancelSearch = () => {
+    setShowExistingBooksModal(false)
+    setPendingSearchParams(null)
+    setExistingBooks([])
   }
 
   const handleSortChange = (newSort: SearchSortParam) => {
@@ -222,7 +293,7 @@ export function Search() {
             format={format}
             setFormat={setFormat}
             onSearch={handleSearch}
-            isLoading={searchBooks.isPending && !!executedSearchParams}
+            isLoading={isCheckingLibrary || (searchBooks.isPending && !!executedSearchParams)}
             onKeyDown={handleKeyDown}
           />
 
@@ -256,6 +327,18 @@ export function Search() {
           <UploadHistory key={refreshHistoryTrigger} />
         </div>
       </div>
+
+      {/* Existing Books Modal */}
+      <ExistingBooksModal
+        isOpen={showExistingBooksModal}
+        onClose={handleCancelSearch}
+        onProceedWithSearch={handleProceedWithSearch}
+        existingBooks={existingBooks}
+        searchQuery={query}
+        searchAuthor={author}
+        searchTitle=""
+        isLoading={searchBooks.isPending && !!executedSearchParams}
+      />
 
       {/* Search Result Details Modal */}
       <SearchResultModal 
