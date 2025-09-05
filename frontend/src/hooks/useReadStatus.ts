@@ -21,7 +21,7 @@ export interface ReadingStats {
 }
 
 // Hook for managing individual book read status
-export function useReadStatus(bookId: string | number) {
+export function useReadStatus(bookId: string | number | null | undefined) {
   const queryClient = useQueryClient()
 
   // Get read status for a single book

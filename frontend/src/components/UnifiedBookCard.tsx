@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { Download, Eye, Star, Send, Check, X, Loader2 } from 'lucide-react'
+import { Download, Eye, Star, Send, Check, X, Loader2, CircleCheckBig, Clock, Heart } from 'lucide-react'
 import { Button } from './ui/Button'
 import { Card, CardContent } from './ui/card'
 import { Badge } from './ui/badge'
@@ -8,7 +8,7 @@ import { CircularProgress } from './ui/CircularProgress'
 import { AuthorFormatter } from '../utils/authorFormatter'
 import { HotBookIndicator } from './HotBookIndicator'
 import { ReadStatusDropdown, type ReadStatus } from './ReadStatusDropdown'
-import { useReadStatus } from '../hooks/useReadStatus'
+import { useReadStatus, type ReadStatus as HookReadStatus } from '../hooks/useReadStatus'
 
 // Common book interface that works for both search and library books
 export interface UnifiedBook {
@@ -78,6 +78,81 @@ const isToday = (dateString?: string): boolean => {
          date.getFullYear() === today.getFullYear()
 }
 
+// Helper function to convert hook ReadStatus to dropdown ReadStatus
+const convertHookStatusToDropdownStatus = (hookStatus: HookReadStatus | undefined): ReadStatus | undefined => {
+  if (!hookStatus) return undefined
+  
+  return {
+    is_read: hookStatus.is_read,
+    is_in_progress: hookStatus.is_in_progress,
+    is_want_to_read: hookStatus.is_want_to_read,
+    status_code: hookStatus.read_status, // Map read_status to status_code
+    last_modified: hookStatus.last_modified,
+    times_started_reading: hookStatus.times_started_reading
+  }
+}
+
+// Helper function to get the appropriate blur class based on status
+const getBlurEffectClass = (bookReadStatus: ReadStatus | undefined, hookReadStatus: HookReadStatus | undefined): string => {
+  const convertedStatus = convertHookStatusToDropdownStatus(hookReadStatus)
+  
+  const isRead = bookReadStatus?.is_read || convertedStatus?.is_read
+  const isInProgress = bookReadStatus?.is_in_progress || convertedStatus?.is_in_progress
+  
+  if (isRead) {
+    return 'grayscale blur-[1px]' // Grayscale with light blur for completed books
+  } else if (isInProgress) {
+    return 'blur-[1px]' // Light blur for books in progress
+  }
+  
+  return ''
+}
+
+// Helper function to render reading status overlay
+const renderReadingStatusOverlay = (bookReadStatus: ReadStatus | undefined, hookReadStatus: HookReadStatus | undefined) => {
+  const convertedStatus = convertHookStatusToDropdownStatus(hookReadStatus)
+  
+  // Check read status from either source
+  const isRead = bookReadStatus?.is_read || convertedStatus?.is_read
+  const isInProgress = bookReadStatus?.is_in_progress || convertedStatus?.is_in_progress
+  const isWantToRead = bookReadStatus?.is_want_to_read || convertedStatus?.is_want_to_read
+  
+  if (isRead) {
+    // Consistent style overlay for completed books
+    return (
+      <div className="absolute inset-0 bg-black/10">
+        <div className="absolute top-2 right-2 bg-green-600/40 backdrop-blur-sm rounded-full p-2 border-2 border-green-600/60">
+          <CircleCheckBig className="h-6 w-6 text-white" />
+        </div>
+      </div>
+    )
+  }
+  
+  if (isInProgress) {
+    // Subtle overlay with transparent background for books in progress
+    return (
+      <div className="absolute inset-0 bg-black/10">
+        <div className="absolute top-2 right-2 bg-blue-600/40 backdrop-blur-sm rounded-full p-2 border-2 border-blue-600/60">
+          <Clock className="h-6 w-6 text-white" />
+        </div>
+      </div>
+    )
+  }
+  
+  if (isWantToRead) {
+    // Subtle overlay with transparent background for want-to-read books
+    return (
+      <div className="absolute inset-0 bg-black/10">
+        <div className="absolute top-2 right-2 bg-pink-600/40 backdrop-blur-sm rounded-full p-2 border-2 border-pink-600/60">
+          <Heart className="h-6 w-6 text-white" />
+        </div>
+      </div>
+    )
+  }
+  
+  return null
+}
+
 export function UnifiedBookCard({
   book,
   cardType = 'library',
@@ -97,13 +172,13 @@ export function UnifiedBookCard({
   // State for send-to-kindle button
   const [kindleState, setKindleState] = useState<'idle' | 'sending' | 'success' | 'failed'>('idle')
   
-  // Read status hook (only for library books when showReadStatus is true)
+  // Read status hook (for library books - used both for display and auto-updating on Kindle send)
   const { readStatus, updateStatus } = useReadStatus(
-    showReadStatus && cardType === 'library' ? book.id : null
+    cardType === 'library' ? book.id : undefined
   )
 
   // Wrapper function to match ReadStatusDropdown's expected signature
-  const handleStatusChange = useCallback(async (bookId: string | number, action: 'toggle' | 'mark_read' | 'mark_unread' | 'mark_in_progress' | 'mark_want_to_read') => {
+  const handleStatusChange = useCallback(async (_bookId: string | number, action: 'toggle' | 'mark_read' | 'mark_unread' | 'mark_in_progress' | 'mark_want_to_read') => {
     if (updateStatus) {
       await updateStatus(action)
     }
@@ -119,11 +194,20 @@ export function UnifiedBookCard({
       const result = await onSendToKindle(book)
       
       // Check if onSendToKindle returns a result object with success/failure
-      if (typeof result === 'object' && result !== null && 'success' in result) {
-        setKindleState(result.success ? 'success' : 'failed')
-      } else {
-        // Assume success if no result object is returned
-        setKindleState('success')
+      const wasSuccessful = typeof result === 'object' && result !== null && 'success' in result 
+        ? result.success 
+        : true // Assume success if no result object is returned
+      
+      setKindleState(wasSuccessful ? 'success' : 'failed')
+      
+      // If successful and we have read status functionality, mark as "Want To Read"
+      if (wasSuccessful && updateStatus && cardType === 'library') {
+        try {
+          await updateStatus('mark_want_to_read')
+        } catch (statusError) {
+          // Don't fail the whole operation if read status update fails
+          console.warn('Failed to update read status after sending to Kindle:', statusError)
+        }
       }
       
       // Reset button state after 3 seconds
@@ -133,7 +217,7 @@ export function UnifiedBookCard({
       // Reset button state after 3 seconds
       setTimeout(() => setKindleState('idle'), 3000)
     }
-  }, [onSendToKindle, kindleState])
+  }, [onSendToKindle, kindleState, updateStatus, cardType])
   const [imageLoaded, setImageLoaded] = useState(false)
   const [imageError, setImageError] = useState(false)
   
@@ -368,7 +452,7 @@ export function UnifiedBookCard({
   const isNewBook = cardType === 'library' && isToday(book.timestamp)
 
   // Render cover image
-  const renderCover = (aspectClass: string, iconSize: string) => {
+  const renderCover = (aspectClass: string, _iconSize: string) => {
     const coverContent = () => {
       if (!coverUrl) {
         return (
@@ -396,12 +480,14 @@ export function UnifiedBookCard({
             <img
               src={coverUrl}
               alt={book.title}
-              className="w-full h-full object-cover"
+              className={`w-full h-full object-cover ${getBlurEffectClass(book.read_status, readStatus)}`}
               onError={(e) => {
                 const target = e.target as HTMLImageElement
                 target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjI2NyIgdmlld0JveD0iMCAwIDIwMCAyNjciIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMjY3IiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0xMDAgMTMzLjVMMTAwIDEzMy41WiIgc3Ryb2tlPSIjOUNBM0FGIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4K'
               }}
             />
+            {/* Reading Status Overlay */}
+            {renderReadingStatusOverlay(book.read_status, readStatus)}
           </div>
         )
       } else {
@@ -422,31 +508,39 @@ export function UnifiedBookCard({
                 <CachedImage 
                   src={coverUrl} 
                   alt={book.title}
-                  className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                  className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'} ${getBlurEffectClass(book.read_status, readStatus)}`}
+                  style={{ display: imageError ? 'none' : 'block' }}
                   onLoad={handleImageLoad}
                   onError={handleImageError}
-                  style={{ display: imageError ? 'none' : 'block' }}
                 />
+                {/* Reading Status Overlay */}
+                {renderReadingStatusOverlay(book.read_status, readStatus)}
                 {imageError && (
-                  <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center">
-                    <img 
-                      src="/droplet.png" 
-                      alt="No cover available" 
-                      className="w-12 h-12 mb-2 opacity-60"
-                    />
-                    <span className="text-xs text-muted-foreground font-medium">
-                      No Available Cover
-                    </span>
-                  </div>
+                  <>
+                    <div className={`w-full h-full flex flex-col items-center justify-center p-4 text-center ${getBlurEffectClass(book.read_status, readStatus)}`}>
+                      <img 
+                        src="/droplet.png" 
+                        alt="No cover available" 
+                        className="w-12 h-12 mb-2 opacity-60"
+                      />
+                      <span className="text-xs text-muted-foreground font-medium">
+                        No Available Cover
+                      </span>
+                    </div>
+                    {/* Reading Status Overlay for error state */}
+                    {renderReadingStatusOverlay(book.read_status, readStatus)}
+                  </>
                 )}
               </>
             ) : (
               <div className="w-full h-full relative">
-                <div className="animate-pulse bg-muted-foreground/20 w-full h-full" />
+                <div className={`animate-pulse bg-muted-foreground/20 w-full h-full ${getBlurEffectClass(book.read_status, readStatus)}`} />
                 {/* Centered spinner */}
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
                 </div>
+                {/* Reading Status Overlay for loading state */}
+                {renderReadingStatusOverlay(book.read_status, readStatus)}
               </div>
             )}
             {isNewBook && (
@@ -529,7 +623,7 @@ export function UnifiedBookCard({
               {showReadStatus && (
                 <ReadStatusDropdown
                   bookId={book.id}
-                  readStatus={book.read_status || readStatus}
+                  readStatus={book.read_status || convertHookStatusToDropdownStatus(readStatus)}
                   onStatusChange={handleStatusChange}
                   size="sm"
                 />
@@ -609,7 +703,7 @@ export function UnifiedBookCard({
             {showReadStatus && cardType === 'library' && (
               <ReadStatusDropdown
                 bookId={book.id}
-                readStatus={book.read_status || readStatus}
+                readStatus={book.read_status || convertHookStatusToDropdownStatus(readStatus)}
                 onStatusChange={handleStatusChange}
                 size="sm"
               />

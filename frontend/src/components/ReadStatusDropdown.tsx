@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { BookOpen, BookCheck, Clock, Loader2, Heart } from 'lucide-react'
+import { BookOpen, CircleCheckBig, Clock, Loader2, Heart } from 'lucide-react'
 import { Button } from './ui/Button'
 import { cn } from '../lib/utils'
 
@@ -32,10 +32,10 @@ const STATUS_CONFIG = {
     buttonClass: 'text-muted-foreground hover:text-foreground',
   },
   read: {
-    icon: BookCheck,
+    icon: CircleCheckBig,
     label: 'Mark as Unread',
     action: 'mark_unread' as const,
-    buttonIcon: BookCheck,
+    buttonIcon: CircleCheckBig,
     buttonLabel: 'Read',
     buttonClass: 'text-green-600 hover:text-green-700',
   },
@@ -136,37 +136,7 @@ export function ReadStatusDropdown({
           avoidCollisions={true}
           collisionPadding={8}
         >
-          {/* Mark as Read */}
-          <DropdownMenu.Item
-            className={cn(
-              "flex items-center px-2 py-2 text-sm rounded-sm cursor-pointer",
-              "hover:bg-accent hover:text-accent-foreground",
-              "focus:bg-accent focus:text-accent-foreground focus:outline-none",
-              currentStatus === 'read' && "text-muted-foreground"
-            )}
-            disabled={currentStatus === 'read'}
-            onSelect={() => handleStatusChange('mark_read')}
-          >
-            <BookCheck className="w-4 h-4 mr-2 text-green-600" />
-            <span>Mark as Read</span>
-          </DropdownMenu.Item>
-
-          {/* Mark as Reading */}
-          <DropdownMenu.Item
-            className={cn(
-              "flex items-center px-2 py-2 text-sm rounded-sm cursor-pointer",
-              "hover:bg-accent hover:text-accent-foreground",
-              "focus:bg-accent focus:text-accent-foreground focus:outline-none",
-              currentStatus === 'in_progress' && "text-muted-foreground"
-            )}
-            disabled={currentStatus === 'in_progress'}
-            onSelect={() => handleStatusChange('mark_in_progress')}
-          >
-            <Clock className="w-4 h-4 mr-2 text-blue-600" />
-            <span>Mark as Reading</span>
-          </DropdownMenu.Item>
-
-          {/* Mark as Want to Read */}
+          {/* Want to Read */}
           <DropdownMenu.Item
             className={cn(
               "flex items-center px-2 py-2 text-sm rounded-sm cursor-pointer",
@@ -179,6 +149,36 @@ export function ReadStatusDropdown({
           >
             <Heart className="w-4 h-4 mr-2 text-pink-600" />
             <span>Want to Read</span>
+          </DropdownMenu.Item>
+
+          {/* Reading It */}
+          <DropdownMenu.Item
+            className={cn(
+              "flex items-center px-2 py-2 text-sm rounded-sm cursor-pointer",
+              "hover:bg-accent hover:text-accent-foreground",
+              "focus:bg-accent focus:text-accent-foreground focus:outline-none",
+              currentStatus === 'in_progress' && "text-muted-foreground"
+            )}
+            disabled={currentStatus === 'in_progress'}
+            onSelect={() => handleStatusChange('mark_in_progress')}
+          >
+            <Clock className="w-4 h-4 mr-2 text-blue-600" />
+            <span>Reading It</span>
+          </DropdownMenu.Item>
+
+          {/* Read It */}
+          <DropdownMenu.Item
+            className={cn(
+              "flex items-center px-2 py-2 text-sm rounded-sm cursor-pointer",
+              "hover:bg-accent hover:text-accent-foreground",
+              "focus:bg-accent focus:text-accent-foreground focus:outline-none",
+              currentStatus === 'read' && "text-muted-foreground"
+            )}
+            disabled={currentStatus === 'read'}
+            onSelect={() => handleStatusChange('mark_read')}
+          >
+            <CircleCheckBig className="w-4 h-4 mr-2 text-green-600" />
+            <span>Read It</span>
           </DropdownMenu.Item>
 
           {/* Mark as Unread */}
@@ -194,23 +194,6 @@ export function ReadStatusDropdown({
           >
             <BookOpen className="w-4 h-4 mr-2 text-muted-foreground" />
             <span>Mark as Unread</span>
-          </DropdownMenu.Item>
-
-          <DropdownMenu.Separator className="h-px bg-border my-1" />
-
-          {/* Quick Toggle */}
-          <DropdownMenu.Item
-            className={cn(
-              "flex items-center px-2 py-2 text-sm rounded-sm cursor-pointer",
-              "hover:bg-accent hover:text-accent-foreground",
-              "focus:bg-accent focus:text-accent-foreground focus:outline-none"
-            )}
-            onSelect={() => handleStatusChange('toggle')}
-          >
-            <div className="w-4 h-4 mr-2 flex items-center justify-center">
-              <div className="w-3 h-3 border-2 border-current rounded-sm" />
-            </div>
-            <span>Quick Toggle</span>
           </DropdownMenu.Item>
 
           {/* Reading Stats (if available) */}
