@@ -58,17 +58,6 @@ function App() {
     // Check if we're on mobile (screen width < 1024px)
     return window.innerWidth >= 1024
   })
-  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system')
-  const [systemDark, setSystemDark] = useState(window.matchMedia('(prefers-color-scheme: dark)').matches)
-
-  // Listen for system theme changes
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-    const handleChange = (e: MediaQueryListEvent) => setSystemDark(e.matches)
-    
-    mediaQuery.addEventListener('change', handleChange)
-    return () => mediaQuery.removeEventListener('change', handleChange)
-  }, [])
 
   // Listen for window resize to adjust sidebar behavior
   useEffect(() => {
@@ -82,8 +71,6 @@ function App() {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  // Determine if dark mode should be applied
-  const isDarkMode = theme === 'dark' || (theme === 'system' && systemDark)
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -92,7 +79,7 @@ function App() {
           <ProtectedRoute>
             <DragDropProvider>
               <ToastProvider>
-                <div className={`min-h-screen h-screen bg-background overflow-hidden ${isDarkMode ? 'dark' : ''}`}>
+                <div className="min-h-screen h-screen bg-background overflow-hidden">
                 <div className="flex h-full">
                   {/* Fixed Sidebar */}
                   <div className="flex-shrink-0">
@@ -104,8 +91,6 @@ function App() {
                     {/* Fixed Header - Now positioned fixed */}
                     <Header 
                       onMenuClick={() => setSidebarOpen(!sidebarOpen)}
-                      theme={theme}
-                      onThemeChange={setTheme}
                       sidebarOpen={sidebarOpen}
                     />
                     

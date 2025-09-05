@@ -173,8 +173,8 @@ export function Stats() {
         <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6 hover:shadow-md transition-shadow">
           <div className="flex flex-row items-center justify-between space-y-0 pb-2">
             <h3 className="tracking-tight text-sm font-medium text-foreground">Total Downloads</h3>
-            <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center">
-              <BookOpen className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
+              <BookOpen className="h-4 w-4 text-blue-600" />
             </div>
           </div>
           <div className="text-2xl font-bold text-foreground">{stats.totalBooks}</div>
@@ -187,8 +187,8 @@ export function Stats() {
         <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6 hover:shadow-md transition-shadow">
           <div className="flex flex-row items-center justify-between space-y-0 pb-2">
             <h3 className="tracking-tight text-sm font-medium text-foreground">Active Downloads</h3>
-            <div className="h-8 w-8 rounded-full bg-orange-100 dark:bg-orange-900/20 flex items-center justify-center">
-              <Activity className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+            <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center">
+              <Activity className="h-4 w-4 text-orange-600" />
             </div>
           </div>
           <div className="text-2xl font-bold text-foreground">{stats.activeDownloads}</div>
@@ -200,8 +200,8 @@ export function Stats() {
         <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6 hover:shadow-md transition-shadow">
           <div className="flex flex-row items-center justify-between space-y-0 pb-2">
             <h3 className="tracking-tight text-sm font-medium text-foreground">Recent Completed</h3>
-            <div className="h-8 w-8 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center">
-              <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+            <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center">
+              <CheckCircle className="h-4 w-4 text-green-600" />
             </div>
           </div>
           <div className="text-2xl font-bold text-foreground">{stats.completedToday}</div>
@@ -214,8 +214,8 @@ export function Stats() {
         <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6 hover:shadow-md transition-shadow">
           <div className="flex flex-row items-center justify-between space-y-0 pb-2">
             <h3 className="tracking-tight text-sm font-medium text-foreground">Failed Downloads</h3>
-            <div className="h-8 w-8 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center">
-              <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+            <div className="h-8 w-8 rounded-full bg-red-100 flex items-center justify-center">
+              <AlertCircle className="h-4 w-4 text-destructive" />
             </div>
           </div>
           <div className="text-2xl font-bold text-foreground">{stats.failedDownloads}</div>
@@ -294,7 +294,7 @@ export function Stats() {
                     {/* Status and Progress */}
                     <div className="flex items-center gap-3">
                       {download.status === 'completed' && (
-                        <div className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
+                        <div className="flex items-center gap-1.5 text-green-600">
                           <CheckCircle className="w-4 h-4" />
                           <span className="text-xs font-medium">Completed</span>
                         </div>
@@ -302,7 +302,7 @@ export function Stats() {
                       
                       {download.status === 'downloading' && (
                         <>
-                          <div className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
+                          <div className="flex items-center gap-1.5 text-green-600">
                             <CircularProgress
                               progress={download.progress || 0}
                               status="downloading"
@@ -317,7 +317,7 @@ export function Stats() {
                       )}
                       
                       {download.status === 'queued' && (
-                        <div className="flex items-center gap-1.5 text-yellow-600 dark:text-yellow-400">
+                        <div className="flex items-center gap-1.5 text-yellow-600">
                           <Clock className="w-4 h-4" />
                           <span className="text-xs font-medium">Queued</span>
                         </div>

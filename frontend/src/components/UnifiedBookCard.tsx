@@ -563,7 +563,7 @@ export function UnifiedBookCard({
                         ? 'fill-yellow-400 text-yellow-400'
                         : isHalfFilled
                         ? 'fill-yellow-200 text-yellow-400'
-                        : 'fill-gray-200 text-gray-200 dark:fill-gray-700 dark:text-gray-700'
+                        : 'fill-muted-foreground text-muted-foreground'
                     }`}
                   />
                 )

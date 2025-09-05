@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { Sun, Moon, Monitor, ChevronDown, Menu, LogOut, User, Settings } from 'lucide-react'
+import { ChevronDown, Menu, LogOut, User, Settings } from 'lucide-react'
 import { Button } from './ui/Button'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { cn } from '../lib/utils'
@@ -8,22 +8,13 @@ import { HeaderQueueWidget } from './HeaderQueueWidget'
 
 interface HeaderProps {
   onMenuClick: () => void
-  theme: 'light' | 'dark' | 'system'
-  onThemeChange: (theme: 'light' | 'dark' | 'system') => void
   sidebarOpen?: boolean
 }
 
-export function Header({ onMenuClick, theme, onThemeChange, sidebarOpen = false }: HeaderProps) {
+export function Header({ onMenuClick, sidebarOpen = false }: HeaderProps) {
   const navigate = useNavigate()
   const { logout, user } = useAuth()
 
-  const themeOptions = [
-    { value: 'light', label: '', icon: Sun },
-    { value: 'dark', label: '', icon: Moon },
-    { value: 'system', label: '', icon: Monitor },
-  ]
-
-  const currentTheme = themeOptions.find(option => option.value === theme)
 
   return (
     <header className={cn(
@@ -54,37 +45,7 @@ export function Header({ onMenuClick, theme, onThemeChange, sidebarOpen = false 
           {/* Queue Widget */}
           <HeaderQueueWidget />
 
-          {/* Theme Selector */}
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger asChild>
-              <Button variant="ghost" size="sm" className="flex items-center space-x-1 sm:space-x-2 text-foreground">
-                {currentTheme && <currentTheme.icon className="w-4 h-4" />}
-                <ChevronDown className="w-3 h-3 hidden sm:block" />
-              </Button>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Portal>
-              <DropdownMenu.Content
-                className="min-w-[3rem] bg-popover border border-border rounded-md shadow-md p-1 z-50"
-                sideOffset={5}
-              >
-                {themeOptions.map((option) => (
-                  <DropdownMenu.Item
-                    key={option.value}
-                    className={cn(
-                      "flex items-center justify-center px-2 py-1.5 text-sm rounded-sm cursor-pointer outline-none text-popover-foreground",
-                      "hover:bg-accent hover:text-accent-foreground",
-                      theme === option.value && "bg-accent text-accent-foreground"
-                    )}
-                    onClick={() => onThemeChange(option.value as any)}
-                  >
-                    <option.icon className="w-4 h-4" />
-                  </DropdownMenu.Item>
-                ))}
-              </DropdownMenu.Content>
-            </DropdownMenu.Portal>
-          </DropdownMenu.Root>
-
-          {/* User Menu */}
+{/* User Menu */}
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
               <Button variant="ghost" size="sm" className="flex items-center space-x-1 sm:space-x-2 text-foreground">
@@ -109,7 +70,9 @@ export function Header({ onMenuClick, theme, onThemeChange, sidebarOpen = false 
                 <DropdownMenu.Separator className="h-px bg-border my-1" />
                 <DropdownMenu.Item
                   className="flex items-center space-x-2 px-2 py-1.5 text-sm rounded-sm cursor-pointer outline-none text-popover-foreground hover:bg-accent hover:text-accent-foreground"
-                  onClick={logout}
+                  onClick={() => {
+                    logout(() => navigate('/'))
+                  }}
                 >
                   <LogOut className="w-4 h-4" />
                   <span>Sign Out</span>

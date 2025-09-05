@@ -44,10 +44,10 @@ const Admin: React.FC = () => {
     const iconMap: Record<string, React.ReactNode> = {
       'Admin': <Shield className="w-4 h-4 text-destructive" title="Admin" />,
       'Download': <Download className="w-4 h-4 text-primary" title="Download" />,
-      'Upload': <Upload className="w-4 h-4 text-green-600 dark:text-green-400" title="Upload" />,
-      'Edit': <Edit className="w-4 h-4 text-yellow-600 dark:text-yellow-400" title="Edit" />,
-      'Change Password': <Key className="w-4 h-4 text-purple-600 dark:text-purple-400" title="Change Password" />,
-      'Edit Public Shelfs': <Archive className="w-4 h-4 text-indigo-600 dark:text-indigo-400" title="Edit Shelfs" />,
+      'Upload': <Upload className="w-4 h-4 text-green-600" title="Upload" />,
+      'Edit': <Edit className="w-4 h-4 text-yellow-600" title="Edit" />,
+      'Change Password': <Key className="w-4 h-4 text-purple-600" title="Change Password" />,
+      'Edit Public Shelfs': <Archive className="w-4 h-4 text-indigo-600" title="Edit Shelfs" />,
       'Delete Books': <Trash2 className="w-4 h-4 text-destructive" title="Delete Books" />,
       'Viewer': <Eye className="w-4 h-4 text-muted-foreground" title="Viewer" />
     };

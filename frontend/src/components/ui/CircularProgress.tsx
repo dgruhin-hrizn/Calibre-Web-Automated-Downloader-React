@@ -25,12 +25,12 @@ export function CircularProgress({
     return (
       <div className="flex items-center gap-2">
         <div 
-          className="flex items-center justify-center bg-green-100 dark:bg-green-900/30 rounded-full"
+          className="flex items-center justify-center bg-green-100 rounded-full"
           style={{ width: size, height: size }}
         >
-          <Check className="text-green-600 dark:text-green-400" style={{ width: size * 0.6, height: size * 0.6 }} />
+          <Check className="text-green-600" style={{ width: size * 0.6, height: size * 0.6 }} />
         </div>
-        {showText && <span className="text-sm font-medium text-green-600 dark:text-green-400">Complete</span>}
+        {showText && <span className="text-sm font-medium text-green-600">Complete</span>}
       </div>
     )
   }
@@ -39,12 +39,12 @@ export function CircularProgress({
     return (
       <div className="flex items-center gap-2">
         <div 
-          className="flex items-center justify-center bg-red-100 dark:bg-red-900/30 rounded-full"
+          className="flex items-center justify-center bg-destructive/10 rounded-full"
           style={{ width: size, height: size }}
         >
-          <X className="text-red-600 dark:text-red-400" style={{ width: size * 0.6, height: size * 0.6 }} />
+          <X className="text-destructive" style={{ width: size * 0.6, height: size * 0.6 }} />
         </div>
-        {showText && <span className="text-sm font-medium text-red-600 dark:text-red-400">Failed</span>}
+        {showText && <span className="text-sm font-medium text-destructive">Failed</span>}
       </div>
     )
   }
@@ -77,11 +77,11 @@ export function CircularProgress({
               strokeWidth={strokeWidth}
               strokeDasharray={circumference}
               strokeDashoffset={circumference * 0.75}
-              className="text-purple-600 dark:text-purple-400"
+              className="text-purple-600"
             />
           </svg>
         </div>
-        {showText && <span className="text-sm font-medium text-purple-600 dark:text-purple-400">Processing...</span>}
+        {showText && <span className="text-sm font-medium text-purple-600">Processing...</span>}
       </div>
     )
   }
@@ -114,11 +114,11 @@ export function CircularProgress({
               strokeWidth={strokeWidth}
               strokeDasharray={circumference}
               strokeDashoffset={circumference * 0.5}
-              className="text-blue-600 dark:text-blue-400"
+              className="text-blue-600"
             />
           </svg>
         </div>
-        {showText && <span className="text-sm font-medium text-blue-600 dark:text-blue-400">Waiting...</span>}
+        {showText && <span className="text-sm font-medium text-blue-600">Waiting...</span>}
       </div>
     )
   }

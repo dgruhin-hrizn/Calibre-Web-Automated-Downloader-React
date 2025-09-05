@@ -74,8 +74,8 @@ export function QueueWidget() {
                         <div className="text-xs text-primary font-medium">
                           {activeDownloads.length}
                         </div>
-                        <div className="w-5 h-5 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center">
-                          <Download className="h-3 w-3 text-green-600 dark:text-green-400" />
+                        <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center">
+                          <Download className="h-3 w-3 text-green-600" />
                         </div>
                       </div>
                     )}
@@ -107,25 +107,25 @@ export function QueueWidget() {
                     
                     let bgColor, iconColor, badgeColor, icon
                     if (isDownloading) {
-                      bgColor = 'bg-green-50 dark:bg-green-900/20'
-                      iconColor = 'text-green-600 dark:text-green-400'
-                      badgeColor = 'bg-green-100 dark:bg-green-900/40'
+                      bgColor = 'bg-green-50'
+                      iconColor = 'text-green-600'
+                      badgeColor = 'bg-green-100'
                       icon = <Play className={`h-4 w-4 ${iconColor}`} />
                     } else if (isProcessing) {
-                      bgColor = 'bg-purple-50 dark:bg-purple-900/20'
-                      iconColor = 'text-purple-600 dark:text-purple-400'
-                      badgeColor = 'bg-purple-100 dark:bg-purple-900/40'
+                      bgColor = 'bg-purple-50'
+                      iconColor = 'text-purple-600'
+                      badgeColor = 'bg-purple-100'
                       icon = <Cog className={`h-4 w-4 ${iconColor} animate-spin`} />
                     } else if (isWaiting) {
-                      bgColor = 'bg-blue-50 dark:bg-blue-900/20'
-                      iconColor = 'text-blue-600 dark:text-blue-400'
-                      badgeColor = 'bg-blue-100 dark:bg-blue-900/40'
+                      bgColor = 'bg-blue-50'
+                      iconColor = 'text-blue-600'
+                      badgeColor = 'bg-blue-100'
                       icon = <Timer className={`h-4 w-4 ${iconColor} animate-pulse`} />
                     } else {
                       // Fallback for any other status
-                      bgColor = 'bg-gray-50 dark:bg-gray-900/20'
-                      iconColor = 'text-gray-600 dark:text-gray-400'
-                      badgeColor = 'bg-gray-100 dark:bg-gray-900/40'
+                      bgColor = 'bg-background/20'
+                      iconColor = 'text-muted-foreground'
+                      badgeColor = 'bg-gray-100'
                       icon = <Timer className={`h-4 w-4 ${iconColor}`} />
                     }
                     
@@ -166,7 +166,7 @@ export function QueueWidget() {
                               <div className="flex-1 bg-secondary rounded-full h-1.5">
                                 <div className="bg-purple-500 h-1.5 rounded-full animate-pulse" style={{ width: '100%' }} />
                               </div>
-                              <span className="text-xs text-purple-600 dark:text-purple-400 font-medium">
+                              <span className="text-xs text-purple-600 font-medium">
                                 Processing...
                               </span>
                             </>
@@ -175,7 +175,7 @@ export function QueueWidget() {
                               <div className="flex-1 bg-secondary rounded-full h-1.5">
                                 <div className="bg-blue-500 h-1.5 rounded-full animate-pulse" style={{ width: '100%' }} />
                               </div>
-                              <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                              <span className="text-xs text-blue-600 font-medium">
                                 Waiting...
                               </span>
                             </>
@@ -190,7 +190,7 @@ export function QueueWidget() {
                                   }}
                                 />
                               </div>
-                              <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                              <span className="text-xs text-blue-600 font-medium">
                                 {download.wait_time && download.wait_start ? formatCountdown(download.wait_time, download.wait_start) : 'Waiting...'}
                               </span>
                             </>
@@ -210,9 +210,9 @@ export function QueueWidget() {
                 <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   Up Next
                 </div>
-                <div className="flex items-center gap-3 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-                  <div className="h-6 w-6 rounded-full bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center">
-                    <span className="text-xs font-bold text-orange-600 dark:text-orange-400">1</span>
+                <div className="flex items-center gap-3 p-3 bg-orange-50 rounded-lg">
+                  <div className="h-6 w-6 rounded-full bg-orange-100 flex items-center justify-center">
+                    <span className="text-xs font-bold text-orange-600">1</span>
                   </div>
                   <BookCover
                     src={nextInQueue.preview}
@@ -225,7 +225,7 @@ export function QueueWidget() {
                     <div className="text-xs text-muted-foreground truncate">
                       by {nextInQueue.author || 'Unknown Author'}
                     </div>
-                    <div className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                    <div className="text-xs text-orange-600 mt-1">
                       Position #1 in queue
                     </div>
                   </div>

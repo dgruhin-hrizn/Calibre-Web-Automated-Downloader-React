@@ -32,8 +32,6 @@ const swiperStyles = `
     flex-shrink: 0;
   }
   
-
-  
   .swiper-button-prev-custom:hover,
   .swiper-button-next-custom:hover {
     transform: translateY(-50%) scale(1.1);
@@ -508,10 +506,10 @@ export function Series() {
           {seriesWithBooksArray.length === 0 ? (
             <div className="text-center py-12">
               <BookOpen className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-medium text-foreground mb-2">
                 {searchTerm ? 'No series found' : 'No multi-book series available'}
               </h3>
-              <p className="text-gray-600 dark:text-gray-400">
+              <p className="text-muted-foreground">
                 {searchTerm 
                   ? `No series match "${searchTerm}". Try a different search term.`
                   : 'No series with multiple books found in your library. Series need at least 2 books to be displayed.'
@@ -580,8 +578,8 @@ function SeriesCarousel({ series, onBookDetails, onSendToKindle }: SeriesCarouse
       <div className="border border-border rounded-lg bg-card p-6">
         {/* Series Header */}
         <div className="mb-4">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">{series.name}</h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
+          <h2 className="text-xl font-bold text-foreground">{series.name}</h2>
+          <p className="text-sm text-muted-foreground">
             {booksLoaded ? 'No books found' : `Loading ${series.book_count} books...`}
           </p>
         </div>
@@ -598,8 +596,8 @@ function SeriesCarousel({ series, onBookDetails, onSendToKindle }: SeriesCarouse
     <div className="border border-border rounded-lg bg-card p-6">
       {/* Series Header */}
       <div className="mb-6">
-        <h2 className="text-xl font-bold text-gray-900 dark:text-white">{series.name}</h2>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
+        <h2 className="text-xl font-bold text-foreground">{series.name}</h2>
+        <p className="text-sm text-muted-foreground">
           {sortedBooks.length} book{sortedBooks.length !== 1 ? 's' : ''} in series
         </p>
       </div>

@@ -62,7 +62,7 @@ export function LibraryListView({
                     ref={(el) => registerBookRef?.(book.id, el)}
                     className={`border-b border-border transition-all duration-300 hover:bg-muted/30 ${
                       isDeleting 
-                        ? 'opacity-50 bg-red-50 dark:bg-red-900/10' 
+                        ? 'opacity-50 bg-red-50' 
                         : 'opacity-100'
                     }`}
                     style={{
@@ -131,7 +131,7 @@ export function LibraryListView({
                                   ? 'fill-yellow-400 text-yellow-400'
                                   : isHalfFilled
                                   ? 'fill-yellow-200 text-yellow-400'
-                                  : 'fill-gray-200 text-gray-200 dark:fill-gray-700 dark:text-gray-700'
+                                  : 'fill-gray-200 text-gray-200'
                               }`}
                             />
                           )

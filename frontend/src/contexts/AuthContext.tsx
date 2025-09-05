@@ -39,7 +39,7 @@ interface AuthContextType {
   isLoading: boolean
   isAdmin: boolean
   login: (username: string, password: string) => Promise<boolean>
-  logout: () => void
+  logout: (onLogout?: () => void) => void
   refreshUserInfo: () => Promise<void>
   recordActivity: () => void
   user?: { username: string }
@@ -241,7 +241,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       
       if (timeSinceActivity >= INACTIVITY_TIMEOUT) {
         console.log('User inactive for 30 minutes, logging out')
-        logout()
+        logout(() => {
+          // Navigate to root route on automatic logout
+          if (typeof window !== 'undefined') {
+            window.location.href = '/'
+          }
+        })
       }
     }
 
@@ -288,7 +293,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }
 
-  const logout = () => {
+  const logout = (onLogout?: () => void) => {
     // Clear all auth state
     setIsAuthenticated(false)
     setIsAdmin(false)
@@ -312,6 +317,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }).catch(() => {
       // Ignore errors on logout
     })
+    
+    // Execute callback if provided (for navigation or other cleanup)
+    if (onLogout) {
+      onLogout()
+    }
   }
 
   const value: AuthContextType = {

@@ -73,43 +73,43 @@ export function QueueItem({
         return {
           icon: <CircularProgress progress={download.progress || 0} status="downloading" size={16} />,
           label: 'Downloading',
-          color: 'text-green-600 dark:text-green-400',
-          bgColor: 'bg-green-50 dark:bg-green-900/20'
+          color: 'text-green-600',
+          bgColor: 'bg-green-50'
         }
       case 'processing':
         return {
           icon: <Cog className="h-4 w-4 animate-spin" />,
           label: 'Processing',
-          color: 'text-purple-600 dark:text-purple-400',
-          bgColor: 'bg-purple-50 dark:bg-purple-900/20'
+          color: 'text-purple-600',
+          bgColor: 'bg-purple-50'
         }
       case 'waiting':
         return {
           icon: <Timer className="h-4 w-4 animate-pulse" />,
           label: 'Waiting',
-          color: 'text-blue-600 dark:text-blue-400',
-          bgColor: 'bg-blue-50 dark:bg-blue-900/20'
+          color: 'text-blue-600',
+          bgColor: 'bg-blue-50'
         }
       case 'queued':
         return {
           icon: <Clock className="h-4 w-4" />,
           label: 'Queued',
-          color: 'text-orange-600 dark:text-orange-400',
-          bgColor: 'bg-orange-50 dark:bg-orange-900/20'
+          color: 'text-orange-600',
+          bgColor: 'bg-orange-50'
         }
       case 'completed':
         return {
           icon: <CheckCircle className="h-4 w-4" />,
           label: 'Completed',
-          color: 'text-green-600 dark:text-green-400',
-          bgColor: 'bg-green-50 dark:bg-green-900/20'
+          color: 'text-green-600',
+          bgColor: 'bg-green-50'
         }
       case 'error':
         return {
           icon: <AlertCircle className="h-4 w-4" />,
           label: 'Failed',
           color: 'text-destructive',
-          bgColor: 'bg-red-50 dark:bg-red-900/20'
+          bgColor: 'bg-red-50'
         }
       default:
         return {
@@ -296,7 +296,7 @@ export function QueueItem({
             )}
             
             {download.status === 'waiting' && countdown && (
-              <div className="text-xs font-medium text-blue-600 dark:text-blue-400">
+              <div className="text-xs font-medium text-blue-600">
                 {countdown} remaining
               </div>
             )}

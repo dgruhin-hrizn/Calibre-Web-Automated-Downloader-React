@@ -141,18 +141,18 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({
       onClick={onClose}
     >
       <div 
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col"
+        className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header - Fixed */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
+          <h2 className="text-xl font-semibold text-foreground flex items-center">
             <UserPlus className="w-6 h-6 mr-2 text-blue-600" />
             Create New User
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            className="text-gray-400 hover:text-gray-600:text-gray-300"
           >
             <X className="w-6 h-6" />
           </button>
@@ -161,7 +161,7 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({
         {/* Content - Scrollable */}
         <div className="p-6 flex-1 overflow-y-auto">
           {error && (
-            <div className="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-300 px-4 py-3 rounded mb-4">
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
               {error}
             </div>
           )}
@@ -169,72 +169,72 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({
           <div className="space-y-6">
             {/* Basic Information */}
             <div className="space-y-4">
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white">Basic Information</h3>
+              <h3 className="text-lg font-medium text-foreground">Basic Information</h3>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Username <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     value={formData.username}
                     onChange={(e) => handleInputChange('username', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Username"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Email <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="email"
                     value={formData.email}
                     onChange={(e) => handleInputChange('email', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="user@example.com"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Password <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="password"
                     value={formData.password}
                     onChange={(e) => handleInputChange('password', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Password"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Kindle Email
                   </label>
                   <input
                     type="email"
                     value={formData.kindle_email}
                     onChange={(e) => handleInputChange('kindle_email', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="user@kindle.com"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Locale
                   </label>
                   <select
                     value={formData.locale}
                     onChange={(e) => handleInputChange('locale', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="en">English</option>
                     <option value="de">Deutsch</option>
@@ -247,13 +247,13 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Default Language
                   </label>
                   <select
                     value={formData.default_language}
                     onChange={(e) => handleInputChange('default_language', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="en">English</option>
                     <option value="de">Deutsch</option>
@@ -269,30 +269,30 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({
 
             {/* Permissions */}
             <div className="space-y-4">
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white">Permissions</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
+              <h3 className="text-lg font-medium text-foreground">Permissions</h3>
+              <p className="text-sm text-muted-foreground">
                 Select the permissions this user should have. Download and Change Password are recommended for most users.
               </p>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {permissionConfig.map(({ key, label, icon: Icon, description, color }) => (
-                  <div key={key} className="flex items-start space-x-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg">
+                  <div key={key} className="flex items-start space-x-3 p-3 border border-gray-200 rounded-lg">
                     <div className="flex items-center h-5">
                       <input
                         type="checkbox"
                         checked={formData.permissions[key]}
                         onChange={(e) => handlePermissionChange(key, e.target.checked)}
-                        className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                        className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500:ring-blue-600 focus:ring-2"
                       />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center space-x-2">
                         <Icon className={`w-4 h-4 ${color}`} />
-                        <label className="text-sm font-medium text-gray-900 dark:text-white">
+                        <label className="text-sm font-medium text-foreground">
                           {label}
                         </label>
                       </div>
-                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                      <p className="text-xs text-muted-foreground mt-1">
                         {description}
                       </p>
                     </div>
@@ -304,11 +304,11 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({
         </div>
 
         {/* Footer - Fixed */}
-        <div className="flex items-center justify-end space-x-3 p-6 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
+        <div className="flex items-center justify-end space-x-3 p-6 border-t border-gray-200 flex-shrink-0">
           <button
             onClick={onClose}
             disabled={isSaving}
-            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
           >
             Cancel
           </button>

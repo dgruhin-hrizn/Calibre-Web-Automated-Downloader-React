@@ -182,13 +182,13 @@ export function QueueNotifications() {
   const getNotificationColor = (type: QueueNotification['type']) => {
     switch (type) {
       case 'download_started':
-        return 'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20'
+        return 'border-blue-200 bg-blue-50'
       case 'download_completed':
-        return 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20'
+        return 'border-green-200 bg-green-50'
       case 'download_failed':
-        return 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20'
+        return 'border-red-200 bg-red-50'
       default:
-        return 'border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-900/20'
+        return 'border-gray-200 bg-gray-50'
     }
   }
 
@@ -246,7 +246,7 @@ export function QueueNotifications() {
             
             {/* Progress Bar for Auto-Hide Notifications */}
             {notification.autoHide && (
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/10 dark:bg-white/10">
+              <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/10">
                 <div 
                   className="h-full bg-current opacity-50 transition-all duration-100 ease-linear"
                   style={{ width: `${progressPercentage}%` }}

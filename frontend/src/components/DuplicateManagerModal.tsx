@@ -530,7 +530,7 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
                           onCheckedChange={(checked) => handleSelectGroup(group.books, checked as boolean)}
                           className="!h-8 !w-8 !min-h-0 !min-w-0"
                         />
-                        <span className="text-sm text-gray-600 dark:text-gray-400">
+                        <span className="text-sm text-muted-foreground">
                           Select Duplicates
                         </span>
                       </div>
@@ -577,7 +577,7 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
                           </div>
                           
                           {/* Cover */}
-                          <div className="aspect-[2/3] bg-gray-100 dark:bg-gray-700 relative">
+                          <div className="aspect-[2/3] bg-muted relative">
                             <img 
                               src={`/api/metadata/books/${book.id}/cover`}
                               alt={book.title}
@@ -591,7 +591,7 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
                                 const target = e.target as HTMLImageElement;
                                 target.style.display = 'none';
                                 const fallback = document.createElement('div');
-                                fallback.className = 'w-full h-full flex items-center justify-center bg-gray-200 dark:bg-gray-600';
+                                fallback.className = 'w-full h-full flex items-center justify-center bg-muted';
                                 fallback.innerHTML = '<svg class="w-12 h-12 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd"></path></svg>';
                                 target.parentElement?.appendChild(fallback);
                               }}
@@ -609,7 +609,7 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
                             {book.formats && book.formats.length > 0 && (
                               <div className="flex flex-wrap gap-1">
                                 {book.formats.slice(0, 2).map((format) => (
-                                  <span key={format} className="inline-block px-2 py-1 text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded">
+                                  <span key={format} className="inline-block px-2 py-1 text-xs font-medium bg-primary/10 text-primary rounded">
                                     {format}
                                   </span>
                                 ))}
@@ -634,7 +634,7 @@ export const DuplicateManagerModal: React.FC<DuplicateManagerModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between p-6 border-t bg-gray-50 dark:bg-gray-800">
+        <div className="flex items-center justify-between p-6 border-t bg-muted/30">
           <div className="flex items-center gap-2">
             <Button 
               variant="outline" 

@@ -311,7 +311,7 @@ const MetadataEditModal: React.FC<MetadataEditModalProps> = ({
                       <label className="text-sm font-medium text-foreground">
                         Description
                       </label>
-                      <div className="border border-input rounded-md overflow-hidden [&_.rsww-editor]:bg-background [&_.rsww-editor]:text-foreground [&_.rsww-toolbar]:bg-muted [&_.rsww-toolbar]:border-border">
+                      <div className="border border-input rounded-md overflow-hidden [&_.rsww-editor]:bg-background [&_.rsww-editor]:text-foreground [&_.rsww-editor]:border-none [&_.rsww-toolbar]:bg-muted [&_.rsww-toolbar]:border-border [&_.rsww-toolbar]:text-foreground [&_.rsww-toolbar_button]:text-muted-foreground [&_.rsww-toolbar_button:hover]:text-foreground [&_.rsww-toolbar_button:hover]:bg-accent [&_.rsww-toolbar_select]:bg-background [&_.rsww-toolbar_select]:text-foreground [&_.rsww-toolbar_select]:border-input">
                         <Editor
                           value={metadata.comments}
                           onChange={(e) => handleInputChange('comments', e.target.value)}
