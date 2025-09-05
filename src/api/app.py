@@ -455,6 +455,16 @@ def series_page():
     """Serve React app for /series page"""
     return serve_react_app()
 
+@app.route('/my-books')
+def my_books_page():
+    """Serve React app for /my-books page"""
+    return serve_react_app()
+
+@app.route('/top10')
+def top10_page():
+    """Serve React app for /top10 page"""
+    return serve_react_app()
+
 @app.route('/hot')
 def hot_page():
     """Serve React app for /hot page"""

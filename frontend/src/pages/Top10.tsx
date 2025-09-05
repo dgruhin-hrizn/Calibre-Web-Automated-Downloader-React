@@ -28,7 +28,7 @@ export function Top10() {
 
       console.log('🔥 Fetching hot books based on download statistics...')
       
-      const response = await fetch('/api/metadata/hot-books?per_page=50', {
+      const response = await fetch('/api/metadata/hot-books?per_page=10', {
         credentials: 'include'
       })
 
