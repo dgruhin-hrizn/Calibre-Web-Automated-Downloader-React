@@ -5,7 +5,7 @@ import { Swiper, SwiperSlide } from 'swiper/react'
 import { Navigation, FreeMode } from 'swiper/modules'
 import { UnifiedBookCard, type UnifiedBook } from '../components/UnifiedBookCard'
 import { Input } from '../components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+import { Card, CardContent } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { useToast } from '../hooks/useToast'
 import { useInfiniteScroll } from './Library/hooks/useInfiniteScroll'
@@ -21,15 +21,104 @@ const swiperStyles = `
     overflow: hidden;
     width: 100%;
     position: relative;
+    margin: 0;
+    padding: 0;
   }
   
   .series-swiper .swiper-wrapper {
-    width: fit-content;
-    max-width: 100%;
+    display: flex;
+    align-items: stretch;
   }
   
   .series-swiper .swiper-slide {
     flex-shrink: 0;
+    height: auto;
+  }
+  
+  /* Force full-width breakout on mobile */
+  @media (max-width: 640px) {
+    /* Make the entire series card break out on mobile but keep header within margins */
+    .series-card-container {
+      margin-left: calc(-50vw + 50%) !important;
+      margin-right: calc(-50vw + 50%) !important;
+      width: 100vw !important;
+      max-width: 100vw !important;
+      border-radius: 0 !important;
+      border: none !important;
+      padding: 0 !important;
+    }
+    
+    /* Keep the header section within page margins */
+    .series-header-container {
+      margin-left: 1rem !important;
+      margin-right: 1rem !important;
+      padding: 10px !important;
+      padding-bottom: 0 !important;
+      width: auto !important;
+      position: static !important;
+      left: auto !important;
+      transform: none !important;
+      box-sizing: border-box;
+    }
+    
+    .series-carousel-container {
+      position: relative;
+      width: 100vw;
+      margin: 0;
+      padding: 0;
+    }
+    
+    .series-swiper {
+      overflow: hidden;
+      width: 100vw;
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+    
+    .series-swiper .swiper-slide:first-child {
+      margin-left: 0;
+    }
+    
+    .series-swiper .swiper-wrapper {
+      width: 100vw;
+    }
+    
+    /* Ensure centered slides work properly with edge-to-edge layout */
+    .series-swiper.swiper-centered .swiper-slide {
+      flex-shrink: 0;
+    }
+    
+    /* Maintain proper spacing for centered slides */
+    .series-swiper.swiper-centered .swiper-wrapper {
+      justify-content: flex-start;
+    }
+  }
+  
+  /* Desktop styles remain normal */
+  @media (min-width: 641px) {
+    .series-card-container {
+      margin-left: 0;
+      margin-right: 0;
+      width: auto;
+      padding: auto;
+    }
+    
+    .series-header-container {
+      position: static;
+      left: auto;
+      transform: none;
+      margin: 0;
+      width: auto;
+      max-width: none;
+      padding: 1rem 1.5rem;
+    }
+    
+    .series-carousel-container {
+      position: relative;
+      width: auto;
+      margin-left: 0;
+      margin-right: 0;
+    }
   }
   
   .swiper-button-prev-custom:hover,
@@ -462,35 +551,30 @@ export function Series() {
         </Badge>
       </div>
       
-      {/* Search Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Search Series</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-              <Input
-                type="text"
-                placeholder="Search series..."
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                onKeyPress={handleSearchKeyPress}
-                className="pl-10"
-              />
-            </div>
-            <Button onClick={handleSearch} variant="default">
-              Search
+      {/* Search Bar - Compact Mobile Design */}
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+          <Input
+            type="text"
+            placeholder="Search series..."
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            onKeyPress={handleSearchKeyPress}
+            className="pl-10 h-9 sm:h-10"
+          />
+        </div>
+        <div className="flex gap-2 sm:gap-3">
+          <Button onClick={handleSearch} variant="default" size="sm" className="flex-1 sm:flex-none h-9 sm:h-10">
+            Search
+          </Button>
+          {searchTerm && (
+            <Button onClick={handleClearSearch} variant="outline" size="sm" className="flex-1 sm:flex-none h-9 sm:h-10">
+              Clear
             </Button>
-            {searchTerm && (
-              <Button onClick={handleClearSearch} variant="outline">
-                Clear
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+          )}
+        </div>
+      </div>
 
       {/* Content */}
       <div className="space-y-8">
@@ -552,6 +636,20 @@ interface SeriesCarouselProps {
 function SeriesCarousel({ series, onBookDetails, onSendToKindle }: SeriesCarouselProps) {
   const { books, booksLoaded } = series
   
+  // Check if we're on mobile
+  const [isMobile, setIsMobile] = useState(false)
+  
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 640)
+    }
+    
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
+  
   // Sort books by series index
   const sortedBooks = useMemo(() => {
     if (!books || books.length === 0) return books
@@ -565,48 +663,53 @@ function SeriesCarousel({ series, onBookDetails, onSendToKindle }: SeriesCarouse
   // Show loading state if books aren't loaded yet
   if (!booksLoaded || sortedBooks.length === 0) {
     return (
-      <div className="border border-border rounded-lg bg-card p-6">
-        {/* Series Header */}
-        <div className="mb-4">
-          <h2 className="text-xl font-bold text-foreground">{series.name}</h2>
-          <p className="text-sm text-muted-foreground">
-            {booksLoaded ? 'No books found' : `Loading ${series.book_count} books...`}
-          </p>
-        </div>
-        
-        {/* Loading placeholder */}
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="series-card-container border-0 sm:border sm:border-border rounded-none sm:rounded-lg bg-card overflow-hidden">
+        <div className="series-header-container p-4 sm:p-6">
+          {/* Series Header */}
+          <div className="mb-4">
+            <h2 className="text-xl font-bold text-foreground">{series.name}</h2>
+            <p className="text-sm text-muted-foreground">
+              {booksLoaded ? 'No books found' : `Loading ${series.book_count} books...`}
+            </p>
+          </div>
+          
+          {/* Loading placeholder */}
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="border border-border rounded-lg bg-card p-6">
-      {/* Series Header */}
-      <div className="mb-6">
-        <h2 className="text-xl font-bold text-foreground">{series.name}</h2>
-        <p className="text-sm text-muted-foreground">
-          {sortedBooks.length} book{sortedBooks.length !== 1 ? 's' : ''} in series
-        </p>
+    <div className="series-card-container border-0 sm:border sm:border-border rounded-none sm:rounded-lg bg-card overflow-hidden">
+      <div className="series-header-container p-4 sm:p-6">
+        {/* Series Header */}
+        <div className="mb-6">
+          <h2 className="text-xl font-bold text-foreground">{series.name}</h2>
+          <p className="text-sm text-muted-foreground">
+            {sortedBooks.length} book{sortedBooks.length !== 1 ? 's' : ''} in series
+          </p>
+        </div>
       </div>
 
       {/* Swiper Carousel */}
-      <div className="relative px-[calc(50%-140px)] sm:px-5">
+      <div className="series-carousel-container relative px-0 sm:px-2 overflow-hidden">
         <Swiper
           modules={[Navigation, FreeMode]}
-          spaceBetween={16}
+          spaceBetween={12}
           slidesPerView="auto"
+          loop={sortedBooks.length > 2}
           freeMode={{
-            enabled: true,
-            sticky: true,
+            enabled: !isMobile, // Disable on mobile to prevent horizontal scroll
+            sticky: false,
             momentumRatio: 0.25,
             momentumVelocityRatio: 0.25,
           }}
-          centeredSlides={true}
-          centeredSlidesBounds={true}
-          initialSlide={1}
+          centeredSlides={isMobile}
+          centeredSlidesBounds={false}
+          initialSlide={0}
           roundLengths={true}
           navigation={{
             nextEl: '.swiper-button-next-custom',
@@ -617,7 +720,7 @@ function SeriesCarousel({ series, onBookDetails, onSendToKindle }: SeriesCarouse
           className="series-swiper"
         >
           {sortedBooks.map((book) => (
-            <SwiperSlide key={book.id} className="!w-[225px]">
+            <SwiperSlide key={book.id} className="!w-[180px] sm:!w-[200px] md:!w-[225px]">
               <UnifiedBookCard
                 book={book}
                 cardType="library"
@@ -633,12 +736,12 @@ function SeriesCarousel({ series, onBookDetails, onSendToKindle }: SeriesCarouse
         {/* Custom Navigation Buttons */}
         {sortedBooks.length > 1 && (
           <>
-            <div className="swiper-button-prev-custom absolute left-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full shadow-lg bg-background/80 backdrop-blur-sm hover:bg-background/90 border border-border flex items-center justify-center cursor-pointer transition-colors">
+            <div className="swiper-button-prev-custom absolute left-2 sm:-left-6 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full shadow-lg bg-background/80 backdrop-blur-sm hover:bg-background/90 border border-border flex items-center justify-center cursor-pointer transition-colors">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </div>
-            <div className="swiper-button-next-custom absolute right-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full shadow-lg bg-background/80 backdrop-blur-sm hover:bg-background/90 border border-border flex items-center justify-center cursor-pointer transition-colors">
+            <div className="swiper-button-next-custom absolute right-2 sm:-right-6 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full shadow-lg bg-background/80 backdrop-blur-sm hover:bg-background/90 border border-border flex items-center justify-center cursor-pointer transition-colors">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
