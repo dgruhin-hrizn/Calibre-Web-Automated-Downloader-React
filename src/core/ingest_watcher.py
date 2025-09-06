@@ -81,8 +81,8 @@ class IngestEventHandler(FileSystemEventHandler):
             # Mark as processing
             self.processing_files.add(file_path)
             
-            # Process the file asynchronously
-            asyncio.create_task(self._process_file_async(path))
+            # Process the file synchronously (like CWA reference)
+            self._process_file_sync(path)
             
         except Exception as e:
             logger.error(f"Error handling file event for {file_path}: {e}")
@@ -134,14 +134,16 @@ class IngestEventHandler(FileSystemEventHandler):
         # File exists but may still be growing - proceed anyway
         return True
     
-    async def _process_file_async(self, path: Path):
-        """Process a file asynchronously"""
+    def _process_file_sync(self, path: Path):
+        """Process a file synchronously (following CWA reference pattern)"""
         try:
+            logger.info(f"Starting processing of: {path.name}")
+            
             # Extract basic book info from filename
             book_info = self._extract_book_info_from_filename(path)
             
-            # Process the file
-            success = await process_ingest_file(path, book_info)
+            # Process the file using synchronous methods (like CWA reference)
+            success = self._process_book_sync(path, book_info)
             
             if success:
                 logger.info(f"Successfully processed: {path.name}")
@@ -153,6 +155,92 @@ class IngestEventHandler(FileSystemEventHandler):
         finally:
             # Remove from processing set
             self.processing_files.discard(str(path))
+    
+    def _process_book_sync(self, file_path: Path, book_info) -> bool:
+        """Process a book file synchronously (similar to CWA reference approach)"""
+        try:
+            from ..infrastructure.env import CALIBRE_LIBRARY_PATH
+            from ..infrastructure.app_settings import get_app_settings
+            
+            logger.info(f"Starting ingestion process for: {file_path.name}")
+            
+            # Check if library directory exists
+            if not CALIBRE_LIBRARY_PATH.exists():
+                logger.error(f"Calibre library path does not exist: {CALIBRE_LIBRARY_PATH}")
+                return False
+            
+            # For now, skip conversion and import directly (like CWA reference basic flow)
+            success = self._add_to_library_sync(file_path, book_info)
+            
+            if success:
+                # Remove original file from ingest directory (like CWA reference)
+                try:
+                    file_path.unlink()
+                    logger.info(f"Removed processed file from ingest: {file_path.name}")
+                except Exception as e:
+                    logger.warning(f"Failed to remove ingest file: {e}")
+            
+            return success
+            
+        except Exception as e:
+            logger.error(f"Error processing book {file_path.name}: {e}")
+            return False
+    
+    def _add_to_library_sync(self, file_path: Path, book_info) -> bool:
+        """Add book to Calibre library using calibredb synchronously"""
+        try:
+            from ..infrastructure.env import CALIBRE_LIBRARY_PATH
+            import subprocess
+            
+            # Build calibredb add command
+            cmd = [
+                'calibredb', 'add',
+                str(file_path),
+                f'--library-path={CALIBRE_LIBRARY_PATH}',
+                '--automerge', 'overwrite',  # Handle duplicates by overwriting
+            ]
+            
+            # Add metadata if available
+            if book_info.author:
+                cmd.extend(['--authors', book_info.author])
+            if book_info.title:
+                cmd.extend(['--title', book_info.title])
+            
+            logger.debug(f"Running calibredb command: {' '.join(cmd)}")
+            
+            # Get environment for Calibre
+            env = self._get_calibre_env()
+            
+            # Run calibredb add synchronously
+            result = subprocess.run(
+                cmd,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=300  # 5 minute timeout
+            )
+            
+            if result.returncode == 0:
+                logger.info(f"Successfully added {file_path.name} to Calibre library")
+                logger.debug(f"calibredb output: {result.stdout.strip()}")
+                return True
+            else:
+                logger.error(f"Failed to add {file_path.name} to library: {result.stderr}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error adding book to library: {e}")
+            return False
+    
+    def _get_calibre_env(self):
+        """Get environment variables for Calibre commands"""
+        import os
+        env = os.environ.copy()
+        # Ensure Calibre can find its binaries
+        calibre_path = "/opt/calibre/bin"
+        if os.path.exists(calibre_path):
+            env["PATH"] = f"{calibre_path}:{env.get('PATH', '')}"
+        return env
     
     def _extract_book_info_from_filename(self, path: Path) -> BookInfo:
         """Extract basic book information from filename"""
@@ -175,11 +263,11 @@ class IngestEventHandler(FileSystemEventHandler):
         format_ext = path.suffix.lower().lstrip('.')
         
         return BookInfo(
+            id=f"ingest_{path.stem}_{int(time.time())}",  # Generate unique ID
             title=title.strip(),
             author=author.strip(),
             format=format_ext,
-            source_url="",  # Not available from filename
-            cover_url=None
+            preview=None  # No cover available from filename
         )
 
 
