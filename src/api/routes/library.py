@@ -12,6 +12,21 @@ from ...infrastructure.logger import setup_logger
 
 logger = setup_logger(__name__)
 
+def _format_date_for_input(date_string: str) -> str:
+    """Convert ISO date string to YYYY-MM-DD format for HTML date input"""
+    if not date_string:
+        return ''
+    
+    try:
+        # Extract just the date part from ISO string (avoid timezone conversion)
+        date_part = date_string.split('T')[0]
+        # Validate it's in YYYY-MM-DD format
+        if len(date_part) == 10 and date_part[4] == '-' and date_part[7] == '-':
+            return date_part
+        return ''
+    except Exception:
+        return ''
+
 def get_calibre_db_manager():
     """Get Calibre database manager instance"""
     from ...integrations.calibre.db_manager import CalibreDBManager
@@ -68,43 +83,85 @@ def register_routes(app):
         try:
             username = session.get('username')
             if not username:
-                return jsonify({'error': 'Not authenticated'}), 401
+                return jsonify({'error': 'User not authenticated'}), 401
             
-            from ...core.kindle_sender import get_kindle_sender
-            kindle_sender = get_kindle_sender()
+            data = request.get_json() or {}
+            user_message = data.get('message', '')
             
-            if not kindle_sender:
-                return jsonify({'error': 'Kindle sender not available'}), 503
-            
-            # Get user's Kindle email
-            user_kindle_email = kindle_sender.get_user_kindle_email(username)
-            if not user_kindle_email:
-                return jsonify({'error': 'No Kindle email configured'}), 400
-            
-            # Get book details
+            # Get book from Calibre library
             calibre_db = get_calibre_db_manager()
             if not calibre_db:
-                return jsonify({'error': 'Library database not available'}), 503
+                return jsonify({'error': 'Library not available'}), 503
             
             book = calibre_db.get_book_details(book_id)
             if not book:
                 return jsonify({'error': 'Book not found'}), 404
             
-            # Send to Kindle
-            success = kindle_sender.send_library_book_to_kindle(
-                book_id=book_id,
-                book_title=book['title'],
-                book_author=book['authors'],
-                recipient_email=user_kindle_email
-            )
+            # Find best format for Kindle (prefer EPUB, then MOBI, then any)
+            formats = book.get('formats', [])  # formats is a list of {'format': 'EPUB', 'size': 123}
+            preferred_formats = ['EPUB', 'MOBI', 'AZW3', 'PDF']
             
-            if success:
-                return jsonify({
-                    'success': True,
-                    'message': f"Book sent to {user_kindle_email} successfully"
-                })
-            else:
-                return jsonify({'error': 'Failed to send book to Kindle'}), 500
+            book_file_data = None
+            book_format = None
+            
+            # Convert formats list to available format names
+            available_formats = [fmt['format'] for fmt in formats]
+            
+            # Try preferred formats first
+            for fmt in preferred_formats:
+                if fmt in available_formats:
+                    book_file_data = calibre_db.get_book_file(book_id, fmt)
+                    if book_file_data:
+                        book_format = fmt
+                        break
+            
+            # If preferred formats didn't work, try any available format
+            if not book_file_data:
+                for fmt_info in formats:
+                    fmt = fmt_info['format']
+                    book_file_data = calibre_db.get_book_file(book_id, fmt)
+                    if book_file_data:
+                        book_format = fmt
+                        break
+            
+            if not book_file_data:
+                return jsonify({'error': 'No readable book file found'}), 404
+            
+            # Write the book data to a temporary file for sending
+            import tempfile
+            from pathlib import Path
+            
+            with tempfile.NamedTemporaryFile(delete=False, suffix=f'.{book_format.lower()}') as temp_file:
+                temp_file.write(book_file_data)
+                book_path = Path(temp_file.name)
+            
+            book_title = book.get('title', f'Book {book_id}')
+            
+            # Send to Kindle using our direct implementation
+            from ...core.kindle_sender import get_kindle_sender
+            kindle_sender = get_kindle_sender()
+            
+            try:
+                result = kindle_sender.send_book_to_kindle(
+                    username=username,
+                    book_path=book_path,
+                    book_title=book_title,
+                    user_message=user_message
+                )
+                
+                if result['success']:
+                    result['format'] = book_format
+                    return jsonify(result)
+                else:
+                    return jsonify(result), 400
+                    
+            finally:
+                # Clean up temporary file
+                import os
+                try:
+                    os.unlink(book_path)
+                except:
+                    pass  # Ignore cleanup errors
                 
         except Exception as e:
             logger.error(f"Library send to Kindle error: {e}")
@@ -156,14 +213,65 @@ def register_routes(app):
             if not book:
                 return jsonify({'error': 'Book not found'}), 404
             
-            # Return book metadata in editable format
+            
+            # Helper function to safely extract string values from various data types
+            def safe_join(data, default=''):
+                if not data:
+                    return default
+                if isinstance(data, str):
+                    return data
+                if isinstance(data, list):
+                    # Handle list of strings or list of dicts
+                    result = []
+                    for item in data:
+                        if isinstance(item, str):
+                            result.append(item)
+                        elif isinstance(item, dict):
+                            # Extract name/title/code from dict if available
+                            if 'code' in item:  # Language objects have 'code' field
+                                result.append(item.get('code', str(item)))
+                            else:
+                                result.append(item.get('name', item.get('title', str(item))))
+                        else:
+                            result.append(str(item))
+                    return ', '.join(result)
+                if isinstance(data, dict):
+                    # If it's a dict, try to get code (for languages) or name/title
+                    if 'code' in data:  # Language objects have 'code' field
+                        return data.get('code', str(data))
+                    else:
+                        return data.get('name', data.get('title', str(data)))
+                return str(data)
+            
+            # Format metadata for frontend (matching the expected BookMetadata interface)
+            # Handle series specially since it's a single object, not a list
+            series_name = ''
+            series_index = ''
+            if book.get('series'):
+                if isinstance(book['series'], dict):
+                    series_name = book['series'].get('name', '')
+                    series_index = str(book['series'].get('index', ''))
+                else:
+                    series_name = str(book['series'])
+            
+            metadata = {
+                'title': book.get('title', ''),
+                'authors': safe_join(book.get('authors')),
+                'comments': book.get('comments', ''),
+                'tags': safe_join(book.get('tags')),
+                'series': series_name,
+                'series_index': series_index,
+                'publisher': safe_join(book.get('publishers', '')),
+                'rating': str(int(book.get('rating', 0) / 2)) if book.get('rating') else '',  # Convert to match display logic (0-5 to 0-2.5)
+                'pubdate': _format_date_for_input(book.get('pubdate', '')),  # Convert to YYYY-MM-DD format for date input
+                'language': safe_join(book.get('languages')),
+                'isbn': book.get('identifiers', {}).get('isbn', '') or book.get('isbn', '')
+            }
+            
+            # Return in the format expected by MetadataEditModal
             return jsonify({
-                'book': book,
-                'editable_fields': [
-                    'title', 'authors', 'series', 'series_index', 
-                    'tags', 'rating', 'published', 'publisher',
-                    'isbn', 'comments', 'languages'
-                ]
+                'metadata': metadata,
+                'csrf_token': 'dummy_token'  # Not needed for our implementation but expected by frontend
             })
             
         except Exception as e:

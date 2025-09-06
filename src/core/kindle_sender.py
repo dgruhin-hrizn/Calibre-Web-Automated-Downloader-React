@@ -256,6 +256,60 @@ Sent via Inkdrop Book Downloader
                 'success': False,
                 'error': f'SMTP connection failed: {str(e)}'
             }
+    
+    def send_test_email(self, test_email: str) -> Dict[str, Any]:
+        """Send a test email to verify SMTP settings"""
+        try:
+            smtp_settings = self.settings_manager.get_smtp_settings()
+            
+            if not self.validate_smtp_settings(smtp_settings):
+                return {
+                    'success': False,
+                    'error': 'SMTP settings validation failed'
+                }
+            
+            # Create test email message
+            msg = MIMEMultipart()
+            msg['From'] = smtp_settings.mail_from
+            msg['To'] = test_email
+            msg['Subject'] = 'Inkdrop SMTP Test Email'
+            
+            # Email body
+            body = """
+This is a test email from your Inkdrop Book Downloader application.
+
+If you receive this email, your SMTP settings are configured correctly!
+
+Server: {}
+Port: {}
+Security: {}
+            """.format(
+                smtp_settings.mail_server,
+                smtp_settings.mail_port,
+                "SSL/TLS" if smtp_settings.mail_use_ssl else "STARTTLS"
+            )
+            
+            msg.attach(MIMEText(body, 'plain'))
+            
+            # Send the email
+            if self.send_email(smtp_settings, msg):
+                return {
+                    'success': True,
+                    'message': f'Test email sent successfully to {test_email}',
+                    'recipient': test_email
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': 'Failed to send test email'
+                }
+                
+        except Exception as e:
+            logger.error(f"Test email sending failed: {e}")
+            return {
+                'success': False,
+                'error': f'Test email failed: {str(e)}'
+            }
 
 # Global instance
 _kindle_sender: Optional[KindleSender] = None

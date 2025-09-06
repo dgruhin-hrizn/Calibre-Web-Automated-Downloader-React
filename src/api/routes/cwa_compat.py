@@ -115,7 +115,7 @@ def register_routes(app):
             page = int(request.args.get('page', 1))
             per_page = min(int(request.args.get('per_page', 20)), 100)
             
-            result = calibre_db.search_books(query, page=page, per_page=per_page)
+            result = calibre_db.get_books(search=query, page=page, per_page=per_page)
             
             return jsonify({
                 'books': result['books'],

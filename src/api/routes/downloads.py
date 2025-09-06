@@ -16,6 +16,16 @@ from ...core import backend
 
 logger = setup_logger(__name__)
 
+class SearchFilters:
+    def __init__(self, isbn=None, author=None, title=None, lang=None, sort=None, content=None, format=None):
+        self.isbn = isbn or []
+        self.author = author or []
+        self.title = title or []
+        self.lang = lang or []
+        self.sort = sort
+        self.content = content or []
+        self.format = format or []
+
 def get_downloads_db_manager():
     """Get downloads database manager instance"""
     from ...infrastructure.downloads_db import DownloadsDBManager
@@ -32,6 +42,117 @@ def get_current_user():
 
 def register_routes(app):
     """Register download routes with the Flask app"""
+    
+    @app.route('/api/search', methods=['GET'])
+    @app.login_required
+    def api_search():
+        """
+        Search for books matching the provided query.
+
+        Query Parameters:
+            query (str): Search term (ISBN, title, author, etc.)
+            isbn (str): Book ISBN
+            author (str): Book Author
+            title (str): Book Title
+            lang (str): Book Language
+            sort (str): Order to sort results
+            content (str): Content type of book
+            format (str): File format filter (pdf, epub, mobi, azw3, fb2, djvu, cbz, cbr)
+
+        Returns:
+            flask.Response: JSON array of matching books or error response.
+        """
+        query = request.args.get('query', '')
+
+        filters = SearchFilters(
+            isbn = request.args.getlist('isbn'),
+            author = request.args.getlist('author'),
+            title = request.args.getlist('title'),
+            lang = request.args.getlist('lang'),
+            sort = request.args.get('sort'),
+            content = request.args.getlist('content'),
+            format = request.args.getlist('format'),
+        )
+
+        if not query and not any(vars(filters).values()):
+            return jsonify([])
+
+        try:
+            books = backend.search_books(query, filters)
+            return jsonify(books)
+        except Exception as e:
+            logger.error(f"Search error: {e}")
+            return jsonify({"error": str(e)}), 500
+    
+    @app.route('/api/download', methods=['GET'])
+    @app.login_required
+    def api_download():
+        """
+        Queue a book for download.
+
+        Query Parameters:
+            id (str): Book identifier (MD5 hash)
+            cover_url (str, optional): Book cover image URL from search results
+            priority (int, optional): Download priority (default: 0)
+            search_url (str, optional): Original search URL
+
+        Returns:
+            flask.Response: JSON status object indicating success or failure.
+        """
+        book_id = request.args.get('id', '')
+        if not book_id:
+            return jsonify({"error": "No book ID provided"}), 400
+
+        try:
+            priority = int(request.args.get('priority', 0))
+            username = session.get('username')  # Get current user
+            search_url = request.args.get('search_url', '')  # Optional search URL
+            cover_url = request.args.get('cover_url', '')  # Optional cover URL from frontend
+            
+            success = backend.queue_book(book_id, priority, username, search_url, cover_url)
+            if success:
+                return jsonify({"status": "queued", "priority": priority})
+            return jsonify({"error": "Failed to queue book"}), 500
+        except Exception as e:
+            logger.error(f"Download error: {e}")
+            return jsonify({"error": str(e)}), 500
+    
+    @app.route('/api/localdownload', methods=['GET'])
+    @app.login_required
+    def api_local_download():
+        """
+        Download an EPUB file from local storage if available.
+
+        Query Parameters:
+            id (str): Book identifier (MD5 hash)
+
+        Returns:
+            flask.Response: The EPUB file if found, otherwise an error response.
+        """
+        book_id = request.args.get('id', '')
+        if not book_id:
+            return jsonify({"error": "No book ID provided"}), 400
+
+        try:
+            file_data, book_info = backend.get_book_data(book_id)
+            if file_data is None:
+                # Book data not found or not available
+                return jsonify({"error": "File not found"}), 404
+            # Sanitize the file name
+            file_name = book_info.title
+            file_name = re.sub(r'[\\/:*?"<>|]', '_', file_name.strip())[:245]
+            file_extension = book_info.format
+            # Prepare the file for sending to the client
+            data = io.BytesIO(file_data)
+            return send_file(
+                data,
+                download_name=f"{file_name}.{file_extension}",
+                as_attachment=True
+            )
+
+        except Exception as e:
+            logger.error(f"Local download error: {e}")
+            return jsonify({"error": str(e)}), 500
     
     @app.route('/api/downloads/history', methods=['GET'])
     @app.login_required
@@ -260,34 +381,6 @@ def register_routes(app):
             logger.error(f"Status error: {e}")
             return jsonify({"error": str(e)}), 500
 
-    @app.route('/api/localdownload', methods=['GET'])
-    @app.login_required
-    def api_local_download() -> Union[Response, Tuple[Response, int]]:
-        """Download an EPUB file from local storage if available"""
-        book_id = request.args.get('id', '')
-        if not book_id:
-            return jsonify({"error": "No book ID provided"}), 400
-
-        try:
-            file_data, book_info = backend.get_book_data(book_id)
-            if file_data is None:
-                # Book data not found or not available
-                return jsonify({"error": "File not found"}), 404
-            # Sanitize the file name
-            file_name = book_info.title
-            file_name = re.sub(r'[\\/:*?"<>|]', '_', file_name.strip())[:245]
-            file_extension = book_info.format
-            # Prepare the file for sending to the client
-            data = io.BytesIO(file_data)
-            return send_file(
-                data,
-                download_name=f"{file_name}.{file_extension}",
-                as_attachment=True
-            )
-
-        except Exception as e:
-            logger.error(f"Local download error: {e}")
-            return jsonify({"error": str(e)}), 500
 
     @app.route('/api/download/<book_id>/cancel', methods=['DELETE'])
     @app.login_required

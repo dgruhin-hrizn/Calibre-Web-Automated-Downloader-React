@@ -5,3 +5,7 @@ export { DownloadSettings } from './DownloadSettings';
 export { ConversionStatus } from './ConversionStatus';
 export { UserPermissionIcons } from './UserPermissionIcons';
 export { UsersTable } from './UsersTable';
+export { default as SMTPSettings } from './SMTPSettings';
+export { default as GoogleBooksSettings } from './GoogleBooksSettings';
+export { default as SystemSettings } from './SystemSettings';
+export { default as UserManagement } from './UserManagement';

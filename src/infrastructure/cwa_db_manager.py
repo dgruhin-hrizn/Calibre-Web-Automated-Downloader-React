@@ -321,6 +321,35 @@ class CWADBManager:
             logger.error(f"Error checking if user exists {username}: {e}")
             return False
     
+    def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
+        """Get user info by username"""
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT id, name, email, kindle_mail, role, locale, default_language 
+                    FROM user WHERE name = ?
+                """, (username,))
+                row = cursor.fetchone()
+                
+                if row:
+                    return {
+                        'id': row['id'],
+                        'username': row['name'],
+                        'email': row['email'],
+                        'kindle_email': row['kindle_mail'] or '',
+                        'role': row['role'],
+                        'locale': row['locale'] or 'en',
+                        'default_language': row['default_language'] or 'en',
+                        'permissions': self._role_to_permissions(row['role'])
+                    }
+                else:
+                    return None
+                    
+        except Exception as e:
+            logger.error(f"Error getting user by username {username}: {e}")
+            return None
+
     def get_user_permissions(self, username: str) -> Dict[str, bool]:
         """Get user permissions by username"""
         try:

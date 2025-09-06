@@ -93,7 +93,7 @@ class BookQueue:
             # Record in downloads database if username provided
             if username:
                 try:
-                    from ..api.app import get_downloads_db_manager
+                    from ..api.routes.downloads import get_downloads_db_manager
                     downloads_db = get_downloads_db_manager()
                     if downloads_db:
                         download_id = downloads_db.record_download_queued(username, book_data, search_url)
@@ -144,7 +144,7 @@ class BookQueue:
             db_update_success = False
             if book_data and hasattr(book_data, 'download_id') and book_data.download_id:
                 try:
-                    from ..api.app import get_downloads_db_manager
+                    from ..api.routes.downloads import get_downloads_db_manager
                     downloads_db = get_downloads_db_manager()
                     if downloads_db:
                         # Map queue status to database status
@@ -227,7 +227,7 @@ class BookQueue:
                 book_data = self._book_data[book_id]
                 if hasattr(book_data, 'download_id') and book_data.download_id:
                     try:
-                        from ..api.app import get_downloads_db_manager
+                        from ..api.routes.downloads import get_downloads_db_manager
                         downloads_db = get_downloads_db_manager()
                         if downloads_db:
                             kwargs = {'progress_percent': int(progress)}

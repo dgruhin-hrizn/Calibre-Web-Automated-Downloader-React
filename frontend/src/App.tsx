@@ -11,7 +11,6 @@ import { DragDropProvider } from './components/DragDropProvider'
 import { Stats } from './pages/Stats'
 import { Search } from './pages/Search'
 import { Downloads } from './pages/Downloads'
-import { Settings } from './pages/Settings'
 import Library from './pages/Library'
 import Top10 from './pages/Top10'
 import Series from './pages/Series'
@@ -106,7 +105,6 @@ function App() {
                           <Route path="/series" element={<Series />} />
                           <Route path="/top10" element={<Top10 />} />
                           <Route path="/downloads" element={<Downloads />} />
-                          <Route path="/settings" element={<Settings />} />
                           <Route path="/profile" element={<UserProfile />} />
                           <Route path="/admin" element={<Admin />} />
                         </Routes>

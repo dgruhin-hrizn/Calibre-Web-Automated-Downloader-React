@@ -32,6 +32,13 @@ class SMTPSettings:
     mail_server_type: int = 0  # 0=SMTP, 1=Gmail OAuth
 
 @dataclass
+class GoogleBooksSettings:
+    """Google Books API settings (stored in inkdrop-config.db)"""
+    api_key: str = ""
+    is_valid: bool = False
+    last_checked: str = ""
+
+@dataclass
 class ConversionSettings:
     """Book conversion settings (stored in inkdrop-config.db)"""
     enabled: bool = False
@@ -67,6 +74,7 @@ class SystemSettings:
 class InkdropSettings:
     """Complete Inkdrop application settings"""
     smtp: SMTPSettings = field(default_factory=SMTPSettings)
+    google_books: GoogleBooksSettings = field(default_factory=GoogleBooksSettings)
     conversion: ConversionSettings = field(default_factory=ConversionSettings)
     downloads: DownloadSettings = field(default_factory=DownloadSettings)
     system: SystemSettings = field(default_factory=SystemSettings)
@@ -135,10 +143,22 @@ class InkdropSettingsManager:
                 );
             """)
             
+            # Google Books settings table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS google_books_settings (
+                    id INTEGER PRIMARY KEY DEFAULT 1,
+                    api_key TEXT DEFAULT '',
+                    is_valid BOOLEAN DEFAULT 0,
+                    last_checked TEXT DEFAULT '',
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            
             # Insert default values if tables are empty
             cursor.execute("INSERT OR IGNORE INTO conversion_settings (id) VALUES (1)")
             cursor.execute("INSERT OR IGNORE INTO download_settings (id) VALUES (1)")
             cursor.execute("INSERT OR IGNORE INTO system_settings (id) VALUES (1)")
+            cursor.execute("INSERT OR IGNORE INTO google_books_settings (id) VALUES (1)")
             
             conn.commit()
             logger.info("Inkdrop config database initialized")
@@ -372,10 +392,53 @@ class InkdropSettingsManager:
             logger.error(f"Error updating system settings: {e}")
             return False
     
+    def get_google_books_settings(self) -> GoogleBooksSettings:
+        """Get Google Books API settings from inkdrop-config.db"""
+        try:
+            with self._get_inkdrop_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM google_books_settings WHERE id = 1")
+                row = cursor.fetchone()
+                
+                if row:
+                    return GoogleBooksSettings(
+                        api_key=row['api_key'],
+                        is_valid=bool(row['is_valid']),
+                        last_checked=row['last_checked']
+                    )
+                else:
+                    return GoogleBooksSettings()
+        except Exception as e:
+            logger.error(f"Error loading Google Books settings: {e}")
+            return GoogleBooksSettings()
+    
+    def update_google_books_settings(self, settings: GoogleBooksSettings) -> bool:
+        """Update Google Books API settings in inkdrop-config.db"""
+        try:
+            with self._get_inkdrop_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE google_books_settings SET
+                        api_key = ?, is_valid = ?, last_checked = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = 1
+                """, (
+                    settings.api_key,
+                    int(settings.is_valid),
+                    settings.last_checked
+                ))
+                conn.commit()
+                logger.info("Google Books settings updated")
+                return True
+        except Exception as e:
+            logger.error(f"Error updating Google Books settings: {e}")
+            return False
+
     def get_all_settings(self) -> InkdropSettings:
         """Get all application settings"""
         return InkdropSettings(
             smtp=self.get_smtp_settings(),
+            google_books=self.get_google_books_settings(),
             conversion=self.get_conversion_settings(),
             downloads=self.get_download_settings(),
             system=self.get_system_settings()
@@ -385,6 +448,7 @@ class InkdropSettingsManager:
         """Update all application settings"""
         success = True
         success &= self.update_smtp_settings(settings.smtp)
+        success &= self.update_google_books_settings(settings.google_books)
         success &= self.update_conversion_settings(settings.conversion)
         success &= self.update_download_settings(settings.downloads)
         success &= self.update_system_settings(settings.system)

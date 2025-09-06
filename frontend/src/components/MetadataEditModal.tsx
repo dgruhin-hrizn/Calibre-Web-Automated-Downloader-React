@@ -401,11 +401,51 @@ const MetadataEditModal: React.FC<MetadataEditModalProps> = ({
                         <label className="text-sm font-medium text-foreground">
                           Language
                         </label>
-                        <Input
+                        <select
                           value={metadata.language}
                           onChange={(e) => handleInputChange('language', e.target.value)}
-                          placeholder="e.g., English, Spanish, French"
-                        />
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <option value="">Select Language</option>
+                          <option value="eng">English</option>
+                          <option value="spa">Spanish</option>
+                          <option value="fra">French</option>
+                          <option value="deu">German</option>
+                          <option value="ita">Italian</option>
+                          <option value="por">Portuguese</option>
+                          <option value="rus">Russian</option>
+                          <option value="jpn">Japanese</option>
+                          <option value="kor">Korean</option>
+                          <option value="chi">Chinese</option>
+                          <option value="ara">Arabic</option>
+                          <option value="hin">Hindi</option>
+                          <option value="ben">Bengali</option>
+                          <option value="nld">Dutch</option>
+                          <option value="swe">Swedish</option>
+                          <option value="nor">Norwegian</option>
+                          <option value="dan">Danish</option>
+                          <option value="fin">Finnish</option>
+                          <option value="pol">Polish</option>
+                          <option value="cze">Czech</option>
+                          <option value="hun">Hungarian</option>
+                          <option value="tur">Turkish</option>
+                          <option value="gre">Greek</option>
+                          <option value="heb">Hebrew</option>
+                          <option value="tha">Thai</option>
+                          <option value="vie">Vietnamese</option>
+                          <option value="ind">Indonesian</option>
+                          <option value="msa">Malay</option>
+                          <option value="ukr">Ukrainian</option>
+                          <option value="bul">Bulgarian</option>
+                          <option value="hrv">Croatian</option>
+                          <option value="srp">Serbian</option>
+                          <option value="slv">Slovenian</option>
+                          <option value="slk">Slovak</option>
+                          <option value="ron">Romanian</option>
+                          <option value="cat">Catalan</option>
+                          <option value="eus">Basque</option>
+                          <option value="glg">Galician</option>
+                        </select>
                       </div>
 
                       {/* ISBN */}

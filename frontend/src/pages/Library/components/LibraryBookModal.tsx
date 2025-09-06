@@ -332,9 +332,25 @@ export function LibraryBookModal({ book, onClose, onSendToKindle, onBookDeleted,
                       {data.averageRating > 0 && (
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Rating:</span>
-                          <div className="flex items-center gap-1">
-                            <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                            <span className="text-foreground">{data.averageRating}</span>
+                          <div className="flex items-center gap-0.5">
+                            {[1, 2, 3, 4, 5].map((starIndex) => {
+                              const rating = data.averageRating || 0
+                              const isFilled = rating >= starIndex
+                              const isHalfFilled = rating >= starIndex - 0.5 && rating < starIndex
+                              
+                              return (
+                                <Star
+                                  key={starIndex}
+                                  className={`w-4 h-4 ${
+                                    isFilled
+                                      ? 'fill-yellow-400 text-yellow-400'
+                                      : isHalfFilled
+                                      ? 'fill-yellow-200 text-yellow-400'
+                                      : 'fill-muted-foreground text-muted-foreground'
+                                  }`}
+                                />
+                              )
+                            })}
                           </div>
                         </div>
                       )}

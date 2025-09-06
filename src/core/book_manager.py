@@ -387,7 +387,7 @@ def download_book(book_info: BookInfo, book_path: Path, progress_callback: Optio
                 # Store the discovered URL in downloads database
                 if hasattr(book_info, 'download_id') and book_info.download_id:
                     try:
-                        from ..api.app import get_downloads_db_manager
+                        from ..api.routes.downloads import get_downloads_db_manager
                         downloads_db = get_downloads_db_manager()
                         if downloads_db:
                             downloads_db.update_download_urls(
@@ -409,6 +409,7 @@ def download_book(book_info: BookInfo, book_path: Path, progress_callback: Optio
                 # Mark URL as verified working - database status will be updated by queue
                 if hasattr(book_info, 'download_id') and book_info.download_id:
                     try:
+                        from ..api.routes.downloads import get_downloads_db_manager
                         downloads_db = get_downloads_db_manager()
                         if downloads_db:
                             downloads_db.mark_url_verified(book_info.download_id, download_url)
@@ -424,6 +425,7 @@ def download_book(book_info: BookInfo, book_path: Path, progress_callback: Optio
             # Mark URL as failed in database
             if hasattr(book_info, 'download_id') and book_info.download_id:
                 try:
+                    from ..api.routes.downloads import get_downloads_db_manager
                     downloads_db = get_downloads_db_manager()
                     if downloads_db:
                         downloads_db.mark_url_failed(book_info.download_id, str(e))

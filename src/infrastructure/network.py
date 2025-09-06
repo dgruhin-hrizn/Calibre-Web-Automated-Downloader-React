@@ -201,8 +201,9 @@ def create_custom_getaddrinfo(
         results: list[Tuple[AddressFamily, SocketKind, int, str, Tuple[Any, ...]]] = []
         
         try:
-            # Try IPv6 first if family allows it
-            if family == 0 or family == socket.AF_INET6:
+            # Skip IPv6 resolution for faster DNS lookups - most SMTP servers work fine with IPv4
+            # Only try IPv6 if explicitly requested
+            if family == socket.AF_INET6:
                 logger.debug(f"Resolving IPv6 address for {host_str}")
                 ipv6_answers = resolve_ipv6(host_str)
                 for answer in ipv6_answers:
@@ -210,7 +211,7 @@ def create_custom_getaddrinfo(
                 if ipv6_answers:
                     logger.debug(f"Found {len(ipv6_answers)} IPv6 addresses for {host_str}")
             
-            # Then try IPv4
+            # Try IPv4 (default for family == 0 or explicitly requested)
             if family == 0 or family == socket.AF_INET:
                 logger.debug(f"Resolving IPv4 address for {host_str}")
                 ipv4_answers = resolve_ipv4(host_str)

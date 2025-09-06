@@ -484,35 +484,41 @@ logger.info(f"Download system initialized with {MAX_CONCURRENT_DOWNLOADS} concur
 GOOGLE_BOOKS_SETTINGS_FILE = Path(__file__).parent / "google_books_settings.json"
 
 def get_google_books_settings() -> Dict[str, Any]:
-    """Get current Google Books API settings."""
+    """Get current Google Books API settings from database."""
     try:
-        if GOOGLE_BOOKS_SETTINGS_FILE.exists():
-            with open(GOOGLE_BOOKS_SETTINGS_FILE, 'r') as f:
-                settings = json.load(f)
-                return {
-                    "apiKey": settings.get("apiKey", ""),
-                    "isValid": settings.get("isValid", False),
-                    "lastChecked": settings.get("lastChecked", "")
-                }
+        from ..infrastructure.inkdrop_settings_manager import get_inkdrop_settings_manager
+        settings_manager = get_inkdrop_settings_manager()
+        settings = settings_manager.get_google_books_settings()
+        return {
+            "apiKey": settings.api_key,
+            "isValid": settings.is_valid,
+            "lastChecked": settings.last_checked
+        }
     except Exception as e:
-        logger.error_trace(f"Error loading Google Books settings: {e}")
+        logger.error_trace(f"Error loading Google Books settings from database: {e}")
     
     return {"apiKey": "", "isValid": False, "lastChecked": ""}
 
 def save_google_books_settings(api_key: str, is_valid: bool) -> None:
-    """Save Google Books API settings."""
+    """Save Google Books API settings to database."""
     try:
-        logger.info(f"Attempting to save Google Books settings to: {GOOGLE_BOOKS_SETTINGS_FILE}")
-        settings = {
-            "apiKey": api_key,
-            "isValid": is_valid,
-            "lastChecked": time.strftime("%Y-%m-%d %H:%M:%S")
-        }
-        with open(GOOGLE_BOOKS_SETTINGS_FILE, 'w') as f:
-            json.dump(settings, f, indent=2)
-        logger.info(f"Google Books API settings saved successfully to: {GOOGLE_BOOKS_SETTINGS_FILE}")
+        from ..infrastructure.inkdrop_settings_manager import get_inkdrop_settings_manager, GoogleBooksSettings
+        
+        logger.info("Attempting to save Google Books settings to database")
+        settings_manager = get_inkdrop_settings_manager()
+        google_settings = GoogleBooksSettings(
+            api_key=api_key,
+            is_valid=is_valid,
+            last_checked=time.strftime("%Y-%m-%d %H:%M:%S") if is_valid else ""
+        )
+        
+        success = settings_manager.update_google_books_settings(google_settings)
+        if success:
+            logger.info("Google Books API settings saved successfully to database")
+        else:
+            raise Exception("Failed to save settings to database")
     except Exception as e:
-        logger.error_trace(f"Error saving Google Books settings to {GOOGLE_BOOKS_SETTINGS_FILE}: {e}")
+        logger.error_trace(f"Error saving Google Books settings to database: {e}")
         raise
 
 def test_google_books_api_key(api_key: str) -> bool:

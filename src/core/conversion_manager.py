@@ -390,7 +390,7 @@ class ConversionManager:
             file_size = Path(file_path).stat().st_size if Path(file_path).exists() else 0
             
             # Get the global downloads DB manager
-            from ..api.app import get_downloads_db_manager
+            from ..api.routes.downloads import get_downloads_db_manager
             downloads_db = get_downloads_db_manager()
             
             if downloads_db:

@@ -344,6 +344,8 @@ class CalibreDBManager:
             
             tags = [{'id': tag.id, 'name': tag.name} for tag in book.tags]
             languages = [{'id': lang.id, 'code': lang.lang_code} for lang in book.languages]
+            publishers = [{'id': publisher.id, 'name': publisher.name} for publisher in book.publishers]
+            identifiers = {identifier.type: identifier.val for identifier in book.identifiers}
             formats = [{'format': data.format.upper(), 'size': data.uncompressed_size} for data in book.data]
             
             # Get rating (from ratings relationship)
@@ -365,6 +367,8 @@ class CalibreDBManager:
                 'last_modified': book.last_modified.isoformat() if book.last_modified else None,
                 'tags': tags,
                 'languages': languages,
+                'publishers': publishers,
+                'identifiers': identifiers,
                 'formats': formats,
                 'path': book.path,
                 'has_cover': has_cover,
@@ -1399,6 +1403,132 @@ class CalibreDBManager:
         except Exception as e:
             logger.error(f"Error fetching formats for book {book_id}: {e}")
             return []
+        finally:
+            self.close_session(session)
+    
+    def get_book_file(self, book_id: int, format: str) -> Optional[bytes]:
+        """Get book file data in specified format"""
+        session = self.get_session()
+        try:
+            # Get the book and its data
+            book = session.query(Books).filter(Books.id == book_id).first()
+            if not book:
+                return None
+            
+            # Find the data entry for the requested format
+            data_entry = session.query(Data).filter(
+                Data.book == book_id,
+                Data.format == format.upper()
+            ).first()
+            
+            if not data_entry:
+                return None
+            
+            # Construct the file path
+            library_root = self.db_path.parent  # metadata.db is in the library root
+            book_path = library_root / book.path
+            file_path = book_path / f"{data_entry.name}.{format.lower()}"
+            
+            if file_path.exists():
+                with open(file_path, 'rb') as f:
+                    return f.read()
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error getting book file for book {book_id}, format {format}: {e}")
+            return None
+        finally:
+            self.close_session(session)
+    
+    def update_book_metadata(self, book_id: int, metadata: dict) -> bool:
+        """Update book metadata"""
+        session = self.get_session()
+        try:
+            # Get the book
+            book = session.query(Books).filter(Books.id == book_id).first()
+            if not book:
+                return False
+            
+            # Update basic fields
+            if 'title' in metadata:
+                book.title = metadata['title']
+            if 'sort' in metadata:
+                book.sort = metadata['sort']
+            if 'isbn' in metadata:
+                book.isbn = metadata['isbn']
+            if 'pubdate' in metadata and metadata['pubdate']:
+                from datetime import datetime
+                if isinstance(metadata['pubdate'], str):
+                    book.pubdate = datetime.fromisoformat(metadata['pubdate'])
+                else:
+                    book.pubdate = metadata['pubdate']
+            
+            # Update comments
+            if 'comments' in metadata:
+                # Clear existing comments
+                for comment in book.comments:
+                    session.delete(comment)
+                # Add new comment if provided
+                if metadata['comments']:
+                    from .models import Comments
+                    new_comment = Comments(book=book_id, text=metadata['comments'])
+                    session.add(new_comment)
+            
+            # Update authors (this is more complex due to many-to-many relationship)
+            if 'authors' in metadata:
+                # Clear existing author relationships
+                book.authors.clear()
+                # Add new authors
+                from .models import Authors
+                for author_name in metadata['authors']:
+                    author = session.query(Authors).filter(Authors.name == author_name).first()
+                    if not author:
+                        author = Authors(name=author_name, sort=author_name)
+                        session.add(author)
+                    book.authors.append(author)
+            
+            session.commit()
+            return True
+            
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Error updating book metadata for book {book_id}: {e}")
+            return False
+        finally:
+            self.close_session(session)
+    
+    def update_book_cover(self, book_id: int, cover_data: bytes) -> bool:
+        """Update book cover image"""
+        session = self.get_session()
+        try:
+            # Get the book
+            book = session.query(Books).filter(Books.id == book_id).first()
+            if not book:
+                return False
+            
+            # Construct the cover file path
+            library_root = self.db_path.parent  # metadata.db is in the library root
+            book_path = library_root / book.path
+            cover_path = book_path / "cover.jpg"
+            
+            # Ensure the book directory exists
+            book_path.mkdir(parents=True, exist_ok=True)
+            
+            # Write the cover file
+            with open(cover_path, 'wb') as f:
+                f.write(cover_data)
+            
+            # Update the has_cover flag
+            book.has_cover = True
+            session.commit()
+            
+            return True
+            
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Error updating book cover for book {book_id}: {e}")
+            return False
         finally:
             self.close_session(session)
     

@@ -97,7 +97,7 @@ app.admin_required = admin_required
 # ============================================================================
 
 # Import all route modules to register them with the Flask app
-from .routes import auth, downloads, metadata, admin, kindle, read_status, cwa_compat, library
+from .routes import auth, downloads, metadata, admin, kindle, read_status, cwa_compat, library, uploads
 
 # Register route modules with the app
 auth.register_routes(app)
@@ -108,6 +108,7 @@ kindle.register_routes(app)
 read_status.register_routes(app)
 cwa_compat.register_routes(app)
 library.register_routes(app)
+uploads.register_routes(app)
 
 # ============================================================================
 # Basic Routes

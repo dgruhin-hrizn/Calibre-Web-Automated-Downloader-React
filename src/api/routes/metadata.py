@@ -32,17 +32,38 @@ def enrich_books_with_read_status(books, username):
         if not read_status_manager:
             return books
             
-        # Get read status for all books
-        book_ids = [book['id'] for book in books]
-        read_statuses = read_status_manager.get_read_statuses(username, book_ids)
+        # Get user ID
+        user_id = read_status_manager.get_or_create_user(username)
         
-        # Enrich each book with its read status
+        # Extract book IDs
+        book_ids = [book['id'] for book in books if 'id' in book]
+        if not book_ids:
+            return books
+        
+        # Get read status for all books
+        read_statuses = read_status_manager.get_multiple_books_read_status(book_ids, user_id)
+        
+        # Enrich each book with read status
         for book in books:
-            book_id = book['id']
-            if book_id in read_statuses:
-                book['read_status'] = read_statuses[book_id]
+            book_id = book.get('id')
+            if book_id and book_id in read_statuses:
+                status_info = read_statuses[book_id]
+                book['read_status'] = {
+                    'is_read': status_info['is_read'],
+                    'is_in_progress': status_info['is_in_progress'],
+                    'status_code': status_info['read_status'],
+                    'last_modified': status_info['last_modified'],
+                    'times_started_reading': status_info['times_started_reading']
+                }
             else:
-                book['read_status'] = {'status': 'unread', 'progress': 0}
+                # Default to unread if no status found
+                book['read_status'] = {
+                    'is_read': False,
+                    'is_in_progress': False,
+                    'status_code': 0,
+                    'last_modified': None,
+                    'times_started_reading': 0
+                }
                 
         return books
     except Exception as e:
@@ -409,3 +430,74 @@ def register_routes(app):
         except Exception as e:
             logger.error(f"Error fetching books by tag: {e}")
             return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/metadata/hot-books', methods=['GET'])
+    @app.login_required
+    def api_get_hot_books():
+        """Get hot books based on actual download statistics"""
+        try:
+            from ...infrastructure.cwa_db_manager import get_cwa_db_manager
+            cwa_db = get_cwa_db_manager()
+            if not cwa_db:
+                return jsonify({"error": "CWA database not available"}), 503
+            
+            # Get query parameters
+            limit = min(int(request.args.get('per_page', 50)), 100)  # Max 100 books
+            
+            # Get hot books from download statistics
+            hot_books_data = cwa_db.get_hot_books(limit)
+            
+            if not hot_books_data:
+                # Return empty result if no download data
+                return jsonify({
+                    'books': [],
+                    'total': 0,
+                    'page': 1,
+                    'per_page': limit,
+                    'total_pages': 0
+                })
+            
+            # Get book metadata for each hot book
+            enriched_books = []
+            
+            for book_data in hot_books_data:
+                book_id = book_data['book_id']
+                download_count = book_data['download_count']
+                
+                try:
+                    # Fetch book metadata from the direct metadata API
+                    import requests
+                    metadata_response = requests.get(
+                        f'http://localhost:8084/api/metadata/books/{book_id}',
+                        headers={'User-Agent': 'Inkdrop-HotBooks/1.0'},
+                        timeout=5
+                    )
+                    
+                    if metadata_response.status_code == 200:
+                        book_metadata = metadata_response.json()
+                        
+                        # Enrich with download count
+                        book_metadata['download_count'] = download_count
+                        book_metadata['popularity_rank'] = len(enriched_books) + 1
+                        
+                        enriched_books.append(book_metadata)
+                    else:
+                        logger.warning(f"Failed to get metadata for book {book_id}: {metadata_response.status_code}")
+                        
+                except Exception as e:
+                    logger.warning(f"Error fetching metadata for book {book_id}: {e}")
+                    continue
+            
+            logger.info(f"Successfully enriched {len(enriched_books)} hot books with metadata")
+            
+            return jsonify({
+                'books': enriched_books,
+                'total': len(enriched_books),
+                'page': 1,
+                'per_page': limit,
+                'total_pages': 1
+            })
+            
+        except Exception as e:
+            logger.error(f"Error fetching hot books: {e}")
+            return jsonify({"error": str(e)}), 500
