@@ -308,6 +308,9 @@ def _add_original_to_library(book_id: str, book_path: Path, book_info: BookInfo,
         os.rename(intermediate_path, final_path)
         logger.info(f"Download completed successfully: {book_info.title}")
         
+        # The ingest watcher will automatically detect and process the new file
+        logger.info(f"Book moved to ingest directory, watcher will process: {final_path}")
+        
         return str(final_path)
         
     except Exception as e:

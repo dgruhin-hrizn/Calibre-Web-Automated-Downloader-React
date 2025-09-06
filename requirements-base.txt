@@ -8,3 +8,4 @@ dnspython
 gunicorn
 psutil
 emoji
+watchdog

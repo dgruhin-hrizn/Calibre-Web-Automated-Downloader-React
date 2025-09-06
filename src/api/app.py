@@ -152,9 +152,37 @@ def internal_error(error):
 # Application Startup
 # ============================================================================
 
+async def initialize_services():
+    """Initialize background services"""
+    try:
+        # Start the ingest watcher
+        from ..core.ingest_watcher import start_ingest_watcher
+        await start_ingest_watcher()
+        logger.info("Ingest watcher started")
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize services: {e}")
+
+def startup_services():
+    """Startup wrapper for async services"""
+    import asyncio
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(initialize_services())
+    except Exception as e:
+        logger.error(f"Failed to start services: {e}")
+
+# Start services when the module is imported (for gunicorn/production)
+if 'gunicorn' in os.environ.get('SERVER_SOFTWARE', ''):
+    startup_services()
+
 if __name__ == '__main__':
     logger.info(f"Starting Inkdrop Book Downloader v{BUILD_VERSION}")
     logger.info(f"Debug mode: {DEBUG}")
+    
+    # Start services for development server
+    startup_services()
     
     app.run(
         host=FLASK_HOST,
